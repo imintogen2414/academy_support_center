@@ -296,7 +296,7 @@ function requestsPage() {
 
 /* ================= 원장 · 학생·학부모 관리 ================= */
 function leadsPage() {
-  return head('상담·등록', '카드를 다음 단계로 끌어다 놓거나 버튼으로 옮기세요. 등록으로 옮기면 원생 명단에 추가돼요.', `<button class="btn primary" data-act="addLead">${ic('plus')}새 문의 추가</button>`) + `
+  return head('상담·등록', `카드를 다음 단계로 끌어다 놓거나 버튼으로 옮기세요. 등록으로 옮기면 원생 명단에 추가돼요.${REAL ? ' 학생 이름을 누르면 고칠 수 있어요.' : ''}`, `<button class="btn primary" data-act="addLead">${ic('plus')}새 문의 추가</button>`) + `
   <div class="board">
     ${DATA.stages.map((st, si) => {
       const items = DATA.leads.filter(l => l.stage === st.id);
@@ -305,10 +305,11 @@ function leadsPage() {
         <div class="col-head"><b>${st.name}</b><span class="cnt">${items.length}</span></div>
         ${items.map(l => `
           <div class="lead" draggable="true" data-id="${l.id}">
-            <div class="top"><span class="nm">${esc(l.name)} <span class="muted small">${esc(l.grade)}</span></span>${l.urgent ? '<span class="chip crit">오늘</span>' : ''}</div>
+            <div class="top"><span class="nm" ${REAL ? `data-edit-lead="${l.id}" role="button" tabindex="0"` : ''}>${esc(l.name)} <span class="muted small">${esc(l.grade)}</span></span>${l.urgent ? '<span class="chip crit">오늘</span>' : ''}</div>
             <div class="d">${esc(l.want)} · ${esc(l.src)}</div>
             <div class="bot"><span class="next">${esc(l.next)}</span>${si < 3 ? `<button class="mv" data-move="${l.id}">${DATA.stages[si + 1].name} →</button>` : '<span class="chip good">원생 등록</span>'}</div>
           </div>`).join('')}
+        ${REAL && !items.length ? '<p class="col-empty">비어 있어요</p>' : ''}
       </div>`;
     }).join('')}
   </div>`;
@@ -375,39 +376,86 @@ function invitePage() {
   </section>`;
 }
 
-// 원생 추가·수정 창
-function studentDialog(s) {
+/* ---------- 입력 창 (원생 · 상담 등에서 함께 씀) ----------
+   fields: [이름, 라벨, { type, placeholder, max, required, half, options }]
+   half: 두 칸을 한 줄에. type: text(기본) · tel · date · number · select · check */
+function formDialog({ title, table, fields, row, extra = {}, okText, label, after }) {
   const d = $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
-  const v = k => esc((s && s[k]) || '');
+  const val = k => esc(row && row[k] != null ? row[k] : '');
+  const input = ([k, lab, o = {}]) => {
+    if (o.type === 'check') return `<label class="chk-line"><input type="checkbox" name="${k}" ${row && row[k] ? 'checked' : ''}><span>${lab}</span></label>`;
+    const ctl = o.type === 'select'
+      ? `<select name="${k}"><option value="">선택 안 함</option>${o.options.map(x => `<option ${row && row[k] === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`
+      : `<input name="${k}" type="${o.type || 'text'}" value="${val(k)}" ${o.max ? `maxlength="${o.max}"` : ''} placeholder="${o.placeholder || ''}">`;
+    return `<label class="f">${lab}${o.required ? ' *' : ''}${ctl}</label>`;
+  };
+  // half 표시된 칸은 둘씩 묶어 한 줄로
+  let html = '', pair = [];
+  fields.forEach(f => {
+    if (f[2] && f[2].half) { pair.push(input(f)); if (pair.length === 2) { html += `<div class="two">${pair.join('')}</div>`; pair = []; } }
+    else { if (pair.length) { html += `<div class="two">${pair.join('')}</div>`; pair = []; } html += input(f); }
+  });
+  if (pair.length) html += `<div class="two">${pair.join('')}</div>`;
   d.innerHTML = `
-  <form method="dialog" class="dlg" id="stuForm" novalidate>
-    <h2>${s ? '원생 정보 고치기' : '원생 추가'}</h2>
-    <div class="two"><label class="f">이름 *<input name="name" value="${v('name')}" maxlength="50" required></label><label class="f">학년<input name="grade" value="${v('grade')}" maxlength="20" placeholder="예: 초5"></label></div>
-    <label class="f">반<input name="class_name" value="${v('class_name')}" maxlength="50" placeholder="예: 초등 B반"></label>
-    <div class="two"><label class="f">학부모 이름<input name="parent_name" value="${v('parent_name')}" maxlength="50"></label><label class="f">학부모 연락처<input name="parent_phone" value="${v('parent_phone')}" maxlength="30" type="tel" placeholder="010-0000-0000"></label></div>
-    <label class="f">메모<input name="memo" value="${v('memo')}" maxlength="500"></label>
-    <p class="msg" id="stuMsg" hidden></p>
-    <div class="acts">${s ? '<button type="button" class="btn danger" id="stuDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="stuCancel">취소</button><button class="btn primary">저장</button></div>
+  <form method="dialog" class="dlg" id="dlgForm" novalidate>
+    <h2>${title}</h2>${html}
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts">${row ? '<button type="button" class="btn danger" id="dlgDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${okText || '저장'}</button></div>
   </form>`;
   d.showModal();
-  $('#stuCancel').onclick = () => d.close();
-  $('#stuForm').onsubmit = async e => {
+  const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  $('#dlgCancel').onclick = () => d.close();
+  $('#dlgForm').onsubmit = async e => {
     e.preventDefault();
-    const el = e.target.elements, row = {};
-    ['name', 'grade', 'class_name', 'parent_name', 'parent_phone', 'memo'].forEach(k => row[k] = el[k].value.trim() || null);
-    const msg = $('#stuMsg');
-    if (!row.name) { msg.textContent = '이름을 적어 주세요.'; msg.hidden = false; return; }
-    const q = s ? SB.from('students').update(row).eq('id', s.id) : SB.from('students').insert({ ...row, academy_id: REAL.academy.id });
+    const el = e.target.elements, data = {};
+    for (const [k, lab, o = {}] of fields) {
+      if (o.type === 'check') { data[k] = el[k].checked; continue; }
+      const v = el[k].value.trim();
+      if (o.required && !v) return fail(`${lab}을(를) 적어 주세요.`);
+      data[k] = v === '' ? null : o.type === 'number' ? Number(v) : v;
+    }
+    const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, academy_id: REAL.academy.id });
     const { error } = await q;
-    if (error) { msg.textContent = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; msg.hidden = false; return; }
-    d.close(); await loadStudents(); render(); toast(s ? '원생 정보를 고쳤어요' : `${row.name} 학생을 추가했어요`);
+    if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
+    d.close(); await after(); render(); toast(row ? '고쳤어요' : `${label(data)} 추가했어요`);
   };
-  if (s) $('#stuDel').onclick = async () => {
-    if (!confirm(`${s.name} 학생을 명단에서 삭제할까요?`)) return;
-    const { error } = await SB.from('students').delete().eq('id', s.id);
+  if (row) $('#dlgDel').onclick = async () => {
+    if (!confirm(`${label(row)} 삭제할까요?`)) return;
+    const { error } = await SB.from(table).delete().eq('id', row.id);
     if (error) { toast('삭제하지 못했어요'); return; }
-    d.close(); await loadStudents(); render(); toast('삭제했어요');
+    d.close(); await after(); render(); toast('삭제했어요');
   };
+}
+
+// 원생 추가·수정
+function studentDialog(s) {
+  formDialog({
+    title: s ? '원생 정보 고치기' : '원생 추가', table: 'students', row: s, after: loadStudents,
+    label: r => `${r.name} 학생을`,
+    fields: [
+      ['name', '이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초5', half: true }],
+      ['class_name', '반', { max: 50, placeholder: '예: 초등 B반' }],
+      ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
+      ['memo', '메모', { max: 500 }]
+    ]
+  });
+}
+
+// 상담 카드 추가·수정
+const LEAD_SOURCES = ['네이버 플레이스', '인스타그램', '블로그', '재원생 추천', '전단지', '지자체·기관', '직접 방문', '전화', '기타'];
+function leadDialog(l) {
+  formDialog({
+    title: l ? '상담 정보 고치기' : '새 문의 추가', table: 'leads', row: l && l.raw, after: loadLeads,
+    label: r => `${r.student_name} 학생 문의를`,
+    fields: [
+      ['student_name', '학생 이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초3', half: true }],
+      ['want', '희망 반', { max: 50, placeholder: '예: 초등 A반', half: true }], ['source', '문의 경로', { type: 'select', options: LEAD_SOURCES, half: true }],
+      ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
+      ['next_action', '다음 할 일', { max: 100, placeholder: '예: 상담 10/28 16:00' }],
+      ['memo', '메모', { max: 500 }],
+      ['urgent', '오늘 꼭 연락해야 해요', { type: 'check' }]
+    ]
+  });
 }
 
 function noticesPage() {
@@ -662,10 +710,10 @@ function render() {
   const crumbs = r.crumbs.length ? `<nav class="crumbs">${r.crumbs.map(([l, h], i) =>
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
-  const realPages = ['members/students', 'members/invite'];
+  const realPages = ['members/students', 'members/invite', 'members/leads'];
   const isReal = realPages.includes(parts.slice(0, 2).join('/'));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
-    ? '원생 명단 · 초대 코드는 실제 데이터예요. 나머지 화면은 아직 예시예요.'
+    ? '상담·등록 · 원생 명단 · 초대 코드는 실제 데이터예요. 나머지 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
   bind();
@@ -715,14 +763,16 @@ function bind() {
     DATA.notices.unshift({ title, to: '전체 학부모', at: '10/25', read: 0, total: DATA.academy.students });
     render(); toast('학부모 앱으로 공지를 보냈어요');
   });
+  on('[data-edit-lead]', b => leadDialog(DATA.leads.find(x => String(x.id) === b.dataset.editLead)));
   on('[data-act="addLead"]', () => {
+    if (REAL) return leadDialog(null);
     const name = prompt('학생 이름을 입력하세요');
     if (!name) return;
     DATA.leads.unshift({ id: Date.now(), name, grade: '-', want: '희망 반 미정', src: '직접 입력', stage: 'inquiry', next: '오늘 전화 필요', urgent: true });
     render(); toast('새 문의를 추가했어요');
   });
   on('[data-move]', b => {
-    const l = DATA.leads.find(x => x.id === +b.dataset.move);
+    const l = DATA.leads.find(x => String(x.id) === b.dataset.move);
     moveLead(l.id, DATA.stages[DATA.stages.findIndex(s => s.id === l.stage) + 1].id);
   });
   document.querySelectorAll('.lead').forEach(c => {
@@ -739,12 +789,19 @@ function bind() {
   document.querySelectorAll('[data-hw]').forEach(c => c.onchange = () => { DATA.child.homework[c.dataset.hw].done = c.checked; render(); });
 }
 
-function moveLead(id, stage) {
-  const l = DATA.leads.find(x => x.id === +id);
+async function moveLead(id, stage) {
+  const l = DATA.leads.find(x => String(x.id) === String(id));
   if (!l || l.stage === stage) return;
+  const before = { stage: l.stage, urgent: l.urgent, next: l.next };
   l.stage = stage; l.urgent = false;
   l.next = stage === 'enrolled' ? '첫 수업 일정 잡기' : stage === 'trial' ? '체험수업 일정 잡기' : '상담 일정 잡기';
   render();
+  if (REAL) {
+    const { error } = await SB.from('leads').update({ stage, urgent: false, next_action: l.next }).eq('id', l.id);
+    if (error) { Object.assign(l, before); render(); toast('옮기지 못했어요. 다시 시도해 주세요.'); return; }
+    if (stage === 'enrolled' && ROLE === 'owner') await loadStudents(); // 등록하면 원생 명단에 자동 추가돼요
+    render();
+  }
   toast(stage === 'enrolled' ? `${l.name} 학생이 원생으로 등록됐어요` : `${l.name} → ${DATA.stages.find(s => s.id === stage).name} 단계로 옮겼어요`);
 }
 
@@ -800,6 +857,14 @@ async function loadStudents() {
   const { data } = await SB.from('students').select('*').eq('academy_id', REAL.academy.id).order('created_at');
   REAL.students = data || [];
   DATA.academy.students = REAL.students.length;
+}
+// 상담 카드: 화면이 쓰는 모양(name · src · next)으로 바꿔 DATA.leads에 넣어요
+async function loadLeads() {
+  const { data } = await SB.from('leads').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false });
+  DATA.leads = (data || []).map(r => ({
+    id: r.id, raw: r, name: r.student_name, grade: r.grade || '', want: r.want || '희망 반 미정',
+    src: r.source || '경로 미입력', stage: r.stage, next: r.next_action || '', urgent: r.urgent
+  }));
 }
 async function loadInvite() {
   const [c, m] = await Promise.all([
@@ -891,7 +956,7 @@ async function boot() {
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [] };
     useAcademy();
-    if (ROLE === 'owner' || ROLE === 'teacher') await loadStudents();
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads()]);
     if (ROLE === 'owner') await loadInvite();
   }
   render();
