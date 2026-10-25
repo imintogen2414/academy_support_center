@@ -11,7 +11,7 @@
   - 행정 지원: 출결, 수납·청구, 재정, 서류·교육청 행정
   - 강사 관리: 센터 본부가 강사 교육 영상을 배부 → 강사가 시청하고 리플렉션 작성. 강사 채용(원장은 공고, 강사는 지원)도 센터 안에서.
   - 학생·학부모 관리: 상담·등록, 원생 명단, 학부모 공지, 학부모·학생 앱
-  - 제휴(MOU): 원장이 직접 맺는 게 아니라 센터가 미리 맺어 둔 제휴처에 신청만 하면 연결
+  - 제휴(MOU): 원장이 직접 맺는 게 아니라 센터가 미리 맺어 둔 제휴처에 신청만 하면 연결. 중심은 유학 제휴(인투어브로드 https://intoabroad.com): 방학 영어캠프, 조기유학, 어학연수, 해외 대학 진학, 유학 설명회. 교재·결제·보험은 "그 밖의 제휴"로 뒤에 둔다.
   - 홍보 지원: 인투마케팅(https://intomarketing.co.kr)에 연결. 블로그·디자인·영상·SNS 광고
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
 - 디자인: 남색·파란 계열(진한 남색 배경, 세로 빛줄기, 반투명 카드, 밝은 파란 버튼). 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
@@ -19,7 +19,12 @@
 - 화면 수치는 모두 예시 데이터(`assets/data.js`)다.
 
 # 파일 구조
-- `index.html`: 첫 화면(소개), `service.html?area=admin|teachers|members|mou|promo`: 지원 분야 상세. 내용은 `assets/areas.js`, 스타일은 `assets/site.css`
-- `login.html`: 로그인·회원가입, 데모 계정 입장
+- `index.html`: 첫 화면. 홈페이지가 아니라 프로그램 입구처럼 반반으로 나눈다.
+  - 왼쪽(남색) "지원받기": 분야 고르기 → `#area/admin` 분야 상세 → `#apply/admin` 지원 신청 → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
+  - 오른쪽(흰색) "프로그램 쓰기": 로그인·회원가입(`?signup=1`), 데모 계정 입장
+  - 휴대폰에서는 위쪽 탭(지원받기 / 프로그램 이용하기)으로 바로 오간다.
+  - 스타일은 `assets/site.css`
+- `login.html`, `service.html`: 예전 주소. 첫 화면으로 넘겨 주기만 한다.
+- 공유 미리보기: 각 페이지의 og 메타 태그 + `assets/og.png`(1200×630), 탭 아이콘 `assets/favicon.svg`
 - `app.html` + `assets/app.js`: 로그인 후 화면. `?role=owner|teacher|parent|student`, 페이지는 `#home` → `#admin` → `#admin/attend` 같은 해시로 바뀐다. 메뉴 구조는 `app.js`의 `AREAS`.
 - `assets/base.css`: 공통 색·버튼, `assets/app.css`: 로그인 후 화면 스타일

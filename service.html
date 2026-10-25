@@ -3,69 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>지원 분야 — 학원지원센터</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
-<link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/site.css">
-</head>
-<body>
-
-<header class="site-head">
-  <div class="in">
-    <a href="index.html" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>
-      학원지원센터
-    </a>
-    <nav class="site-nav">
-      <a href="index.html#areas" class="on">지원 분야</a>
-      <a href="index.html#how">이용 방법</a>
-    </nav>
-    <div class="head-actions">
-      <a href="login.html" class="btn ghost sm">로그인</a>
-      <a href="login.html?signup=1" class="btn primary sm">시작하기</a>
-    </div>
-  </div>
-</header>
-
-<div id="page"></div>
-
-<footer>© 2026 학원지원센터 · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</footer>
-
-<script src="assets/areas.js"></script>
+<title>학원지원센터</title>
+<meta property="og:title" content="학원지원센터 — 원장님은 가르치는 일에만, 나머지는 저희가 지원합니다">
+<meta property="og:description" content="행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.">
+<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png">
+<meta property="og:url" content="https://academysupportcenter.vercel.app/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://academysupportcenter.vercel.app/">
+<meta http-equiv="refresh" content="0; url=index.html">
 <script>
-// service.html?area=admin 처럼 분야를 골라 보여줘요
-const id = new URLSearchParams(location.search).get('area');
-const a = SITE_AREAS.find(x => x.id === id) || SITE_AREAS[0];
-document.title = `${a.name} — 학원지원센터`;
-document.getElementById('page').innerHTML = `
-<section class="hero sub">
-  <div class="hero-copy">
-    <nav class="crumbs"><a href="index.html">홈</a><span>›</span><a href="index.html#areas">지원 분야</a><span>›</span><b>${a.name}</b></nav>
-    <div class="big-ic">${sic(a.icon)}</div>
-    <h1>${a.title}</h1>
-    <p class="lede">${a.lede}</p>
-    <div class="hero-cta">
-      <a href="${a.demo}" class="btn primary">데모 화면으로 보기</a>
-      ${a.partner ? `<a href="${MARKETING_URL}" target="_blank" rel="noopener" class="btn outline">인투마케팅 바로가기 ${sic('ext')}</a>` : '<a href="login.html?signup=1" class="btn outline">시작하기</a>'}
-    </div>
-  </div>
-</section>
-
-<section class="block">
-  <div class="sec-head"><span class="pill">이런 걸 지원해요</span></div>
-  <div class="items">${a.items.map(([t, d]) => `<div class="item"><h3>${t}</h3><p>${d}</p></div>`).join('')}</div>
-</section>
-
-${a.partner ? `
-<div class="partner"><div class="box">
-  <div><h3>공식 홍보 파트너 · 인투마케팅</h3><p>학원 홍보를 전문으로 하는 마케팅 회사예요. 의뢰하면 학원 정보가 함께 전달돼 상담이 빨라요.</p></div>
-  <a class="btn primary" href="${MARKETING_URL}" target="_blank" rel="noopener">intomarketing.co.kr ${sic('ext')}</a>
-</div></div>` : ''}
-
-<section class="block">
-  <div class="sec-head"><span class="pill">다른 지원 분야</span></div>
-  <div class="others">${SITE_AREAS.filter(x => x.id !== a.id).map(x => `<a href="service.html?area=${x.id}">${sic(x.icon)}${x.name}</a>`).join('')}</div>
-</section>`;
+// 첫 화면(index.html)으로 합쳐졌어요. 예전 주소로 들어와도 같은 곳으로 보내 줍니다.
+const a = new URLSearchParams(location.search).get('area');
+location.replace('index.html' + (a ? '#area/' + a : ''));
 </script>
-</body>
+</head>
+<body><a href="index.html">학원지원센터로 이동</a></body>
 </html>
