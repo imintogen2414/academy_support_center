@@ -250,3 +250,13 @@ dialog::backdrop { background: rgba(7,10,61,.45); }
 .dlg input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
 .dlg .acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 .btn.danger { color: var(--crit); border-color: var(--crit-soft); }
+
+/* 입력 창: 선택 상자 · 체크 */
+.dlg select { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+.chk-line { display: flex; gap: 10px; align-items: center; font-size: 14px; font-weight: 600; }
+.chk-line input { width: 18px; height: 18px; accent-color: var(--blue-600); }
+
+/* 상담 칸반 (실제 데이터) */
+.lead [data-edit-lead] { cursor: pointer; }
+.lead [data-edit-lead]:hover { color: var(--blue-600); text-decoration: underline; }
+.col-empty { margin: 4px; font-size: 12.5px; color: var(--muted); text-align: center; padding: 18px 0; border: 1px dashed var(--line); border-radius: 12px; }
