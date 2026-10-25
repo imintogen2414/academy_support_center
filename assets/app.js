@@ -34,6 +34,7 @@ const DEMO = params.has('demo') || params.has('role');
 let ROLE = DATA.users[params.get('role')] ? params.get('role') : 'owner';
 let ME = DATA.users[ROLE];
 let PROFILE = null; // 실제로 로그인한 회원의 프로필 (데모면 null)
+let REAL = null;    // 실제 학원 데이터 { academy, role, students, codes, members } (데모면 null)
 const MK = DATA.marketingUrl;
 
 function toast(msg) {
@@ -314,12 +315,99 @@ function leadsPage() {
 }
 
 function studentsPage() {
+  if (REAL) return realStudentsPage();
   return head('원생 명단', `원생 ${DATA.academy.students}명 중 일부 · 학부모 연락처와 출석률, 수납 상태를 함께 봐요.`) + `
   <section class="card"><div class="table">
     <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>10월 수납</span></div>
     ${DATA.students.map(s => `
       <div class="tr"><span><b>${s.name}</b> <span class="muted small">${s.grade}</span></span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${s.phone}</span></span><span class="num">${s.attend}%</span><span>${s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
   </div></section>`;
+}
+
+/* ---------- 실제 데이터: 원생 명단 (Supabase students) ---------- */
+function realStudentsPage() {
+  const list = REAL.students, canEdit = ROLE === 'owner';
+  const add = canEdit ? `<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>` : '';
+  const body = list.length ? `
+  <section class="card"><div class="table">
+    <div class="tr th sv"><span>학생</span><span>반</span><span>학부모</span><span>메모</span><span></span></div>
+    ${list.map(s => `
+      <div class="tr sv">
+        <span><b>${esc(s.name)}</b> <span class="muted small">${esc(s.grade || '')}</span></span>
+        <span>${esc(s.class_name || '-')}</span>
+        <span>${esc(s.parent_name || '-')} <span class="muted small">${esc(s.parent_phone || '')}</span></span>
+        <span class="muted small">${esc(s.memo || '')}</span>
+        <span>${canEdit ? `<button class="btn sm" data-edit-student="${s.id}">수정</button>` : ''}</span>
+      </div>`).join('')}
+  </div></section>` : `
+  <section class="card empty">
+    <span class="tile-ic">${ic('users')}</span>
+    <h2>아직 원생이 없어요</h2>
+    <p class="muted">원생을 추가하면 여기에 모여요. 학부모님은 초대 코드로 학부모 앱에 들어올 수 있어요.</p>
+    ${add}
+  </section>`;
+  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.`, list.length ? add : '') + body +
+    (canEdit ? `<a class="hint" href="#members/invite">${ic('users')}<span>강사님·학부모님을 학원에 초대하려면 초대 코드를 보내 주세요</span><b>초대 코드 →</b></a>` : '');
+}
+
+const CODE_INFO = {
+  owner: ['원장용', '다른 원장님·부원장님이 가입할 때 넣는 코드예요. 꼭 필요한 분께만 알려 주세요.'],
+  teacher: ['강사용', '강사님이 가입할 때 넣는 코드예요.'],
+  family: ['학부모·학생용', '학부모님과 학생이 가입할 때 넣는 코드예요. 공지에 함께 보내면 편해요.']
+};
+function invitePage() {
+  const codes = REAL ? REAL.codes : [{ kind: 'owner', code: 'DEMO0WNR' }, { kind: 'teacher', code: 'DEMOTCHR' }, { kind: 'family', code: 'DEMOFAMY' }];
+  const people = REAL ? REAL.members : [{ name: ME.name, role: 'owner' }, { name: '김민지', role: 'teacher' }, { name: '김은정', role: 'parent' }];
+  return head('초대 코드', '사이트에서 가입할 때 이 코드를 넣으면 우리 학원에 합류해요. 어떤 코드로 들어오는지에 따라 역할이 정해져요.') + `
+  <div class="codes">${codes.map(c => `
+    <div class="code-card">
+      <span class="who">${CODE_INFO[c.kind][0]}</span>
+      <b class="num">${esc(c.code)}</b>
+      <p>${CODE_INFO[c.kind][1]}</p>
+      <button class="btn sm" data-copy="${esc(c.code)}">코드 복사</button>
+    </div>`).join('')}
+  </div>
+  <section class="card" style="margin-top:16px">
+    <div class="card-head"><h2>우리 학원 사람들</h2><span class="sub">${people.length}명</span></div>
+    <div class="list">${people.map(p => `
+      <div class="li"><span class="av" style="background:var(--navy-700)">${esc(p.name[0])}</span><div class="t">${esc(p.name)}</div><div class="r"><span class="chip ${p.role === 'owner' ? 'info' : 'mute'}">${ROLE_NAMES[p.role]}</span></div></div>`).join('')}
+    </div>
+  </section>`;
+}
+
+// 원생 추가·수정 창
+function studentDialog(s) {
+  const d = $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
+  const v = k => esc((s && s[k]) || '');
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="stuForm" novalidate>
+    <h2>${s ? '원생 정보 고치기' : '원생 추가'}</h2>
+    <div class="two"><label class="f">이름 *<input name="name" value="${v('name')}" maxlength="50" required></label><label class="f">학년<input name="grade" value="${v('grade')}" maxlength="20" placeholder="예: 초5"></label></div>
+    <label class="f">반<input name="class_name" value="${v('class_name')}" maxlength="50" placeholder="예: 초등 B반"></label>
+    <div class="two"><label class="f">학부모 이름<input name="parent_name" value="${v('parent_name')}" maxlength="50"></label><label class="f">학부모 연락처<input name="parent_phone" value="${v('parent_phone')}" maxlength="30" type="tel" placeholder="010-0000-0000"></label></div>
+    <label class="f">메모<input name="memo" value="${v('memo')}" maxlength="500"></label>
+    <p class="msg" id="stuMsg" hidden></p>
+    <div class="acts">${s ? '<button type="button" class="btn danger" id="stuDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="stuCancel">취소</button><button class="btn primary">저장</button></div>
+  </form>`;
+  d.showModal();
+  $('#stuCancel').onclick = () => d.close();
+  $('#stuForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, row = {};
+    ['name', 'grade', 'class_name', 'parent_name', 'parent_phone', 'memo'].forEach(k => row[k] = el[k].value.trim() || null);
+    const msg = $('#stuMsg');
+    if (!row.name) { msg.textContent = '이름을 적어 주세요.'; msg.hidden = false; return; }
+    const q = s ? SB.from('students').update(row).eq('id', s.id) : SB.from('students').insert({ ...row, academy_id: REAL.academy.id });
+    const { error } = await q;
+    if (error) { msg.textContent = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; msg.hidden = false; return; }
+    d.close(); await loadStudents(); render(); toast(s ? '원생 정보를 고쳤어요' : `${row.name} 학생을 추가했어요`);
+  };
+  if (s) $('#stuDel').onclick = async () => {
+    if (!confirm(`${s.name} 학생을 명단에서 삭제할까요?`)) return;
+    const { error } = await SB.from('students').delete().eq('id', s.id);
+    if (error) { toast('삭제하지 못했어요'); return; }
+    d.close(); await loadStudents(); render(); toast('삭제했어요');
+  };
 }
 
 function noticesPage() {
@@ -415,6 +503,7 @@ const AREAS = {
       subs: {
         leads: { name: '상담·등록', icon: 'leads', desc: '문의 → 상담 → 체험수업 → 등록', stat: () => `진행 중 ${DATA.leads.filter(l => l.stage !== 'enrolled').length}명`, render: leadsPage },
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
+        invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => `이번 달 ${DATA.notices.length}건`, render: noticesPage }
       } },
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청', stat: () => `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
@@ -550,7 +639,8 @@ function renderChrome(area) {
   $('#acad').innerHTML = ROLE === 'parent' || ROLE === 'student'
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
-  const badge = {
+  // 숫자 배지는 아직 예시 데이터라 실제 로그인에서는 숨겨요
+  const badge = REAL ? {} : {
     members: DATA.leads.filter(l => l.urgent).length,
     learn: DATA.training.filter(t => t.status[ME.name] !== 'done').length
   };
@@ -571,7 +661,12 @@ function render() {
   renderChrome(r.area);
   const crumbs = r.crumbs.length ? `<nav class="crumbs">${r.crumbs.map(([l, h], i) =>
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
-  const note = PROFILE ? '<div class="demo-note">로그인됐어요. 지금 보이는 학원 데이터는 아직 예시예요 — 실제 학원 데이터는 다음 단계에서 연결돼요.</div>' : '';
+  // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
+  const realPages = ['members/students', 'members/invite'];
+  const isReal = realPages.includes(parts.slice(0, 2).join('/'));
+  const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
+    ? '원생 명단 · 초대 코드는 실제 데이터예요. 나머지 화면은 아직 예시예요.'
+    : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
   bind();
   $('#side').classList.remove('open');
@@ -581,6 +676,10 @@ function render() {
 function on(sel, fn) { document.querySelectorAll(sel).forEach(el => el.onclick = e => fn(el, e)); }
 
 function bind() {
+  // 원생 명단 · 초대 코드 (실제 데이터)
+  on('[data-act="addStudent"]', () => REAL ? studentDialog(null) : toast('데모에서는 추가할 수 없어요'));
+  on('[data-edit-student]', b => studentDialog(REAL.students.find(s => s.id === b.dataset.editStudent)));
+  on('[data-copy]', b => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('코드를 복사했어요'), () => toast(b.dataset.copy)));
   // 수납
   on('[data-remind]', b => { DATA.unpaid[b.dataset.remind].sent = true; render(); toast('납부 안내를 보냈어요'); });
   on('[data-act="remindAll"]', () => { DATA.unpaid.forEach(u => u.sent = true); render(); toast(`미납 ${DATA.unpaid.length}가정에 안내를 보냈어요`); });
@@ -696,6 +795,83 @@ function rolePicker(user) {
   };
 }
 
+/* ---------- 실제 학원 데이터 불러오기 ---------- */
+async function loadStudents() {
+  const { data } = await SB.from('students').select('*').eq('academy_id', REAL.academy.id).order('created_at');
+  REAL.students = data || [];
+  DATA.academy.students = REAL.students.length;
+}
+async function loadInvite() {
+  const [c, m] = await Promise.all([
+    SB.rpc('get_invite_codes', { p_academy: REAL.academy.id }),
+    SB.rpc('list_academy_members', { p_academy: REAL.academy.id })
+  ]);
+  REAL.codes = c.data || [];
+  REAL.members = m.data || [];
+}
+function useAcademy() {
+  const a = REAL.academy;
+  DATA.academy.name = esc(a.name); DATA.academy.short = DATA.academy.name[0];
+  DATA.academy.area = esc(a.region || '지역 미등록');
+}
+
+// 아직 학원에 속하지 않았을 때: 원장은 학원 만들기 / 모두 초대 코드로 합류
+const JOIN_ERRORS = {
+  invalid_code: '코드를 찾을 수 없어요. 다시 확인해 주세요.',
+  'role_mismatch:owner': '원장용 코드예요. 원장으로 가입한 분만 쓸 수 있어요.',
+  'role_mismatch:teacher': '강사용 코드예요. 강사로 가입한 분만 쓸 수 있어요.',
+  'role_mismatch:family': '학부모·학생용 코드예요. 학부모나 학생으로 가입한 분만 쓸 수 있어요.',
+  owner_only: '학원은 원장님만 만들 수 있어요.'
+};
+const joinError = e => JOIN_ERRORS[Object.keys(JOIN_ERRORS).find(k => (e.message || '').includes(k))] || '문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+
+function onboarding(user) {
+  MY = null;
+  const owner = PROFILE.role === 'owner';
+  const who = { owner: '원장님', teacher: '강사님', parent: '학부모님', student: '학생' }[PROFILE.role];
+  $('.layout').style.display = 'block';
+  $('.layout').innerHTML = `
+  <div class="picker"><div class="card">
+    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <h1>${esc(PROFILE.name || '')} ${who}, 학원을 연결해 주세요</h1>
+    ${owner ? `
+    <form class="f-stack" id="makeForm" novalidate>
+      <p class="muted">처음이시면 우리 학원을 만들어 주세요. 만들면 강사·학부모 초대 코드가 생겨요.</p>
+      <label class="f">학원 이름<input name="aname" value="${esc(PROFILE.academy_name || '')}" maxlength="100" placeholder="예: 하늘영어학원"></label>
+      <label class="f">지역<input name="region" maxlength="100" placeholder="예: 수원 영통구"></label>
+      <p class="msg" id="makeMsg" hidden></p>
+      <button class="btn primary">학원 만들기</button>
+    </form>
+    <div class="or">이미 다른 원장님이 학원을 만들었나요?</div>` : `
+    <p class="muted">학원에서 받은 <b>${PROFILE.role === 'teacher' ? '강사용' : '학부모·학생용'} 초대 코드</b>를 넣어 주세요.</p>`}
+    <form class="f-stack" id="joinForm" novalidate>
+      <label class="f">초대 코드<input name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" style="text-transform:uppercase"></label>
+      <p class="msg" id="joinMsg" hidden></p>
+      <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
+    </form>
+    <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
+  </div></div>`;
+  const fail = (id, t) => { const m = $(id); m.textContent = t; m.hidden = false; };
+  if (owner) $('#makeForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, name = el.aname.value.trim();
+    if (!name) return fail('#makeMsg', '학원 이름을 적어 주세요.');
+    const { error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null });
+    if (error) return fail('#makeMsg', joinError(error));
+    location.reload();
+  };
+  $('#joinForm').onsubmit = async e => {
+    e.preventDefault();
+    const code = e.target.elements.code.value.trim();
+    if (!code) return fail('#joinMsg', '초대 코드를 적어 주세요.');
+    const { error } = await SB.rpc('join_academy', { p_code: code });
+    if (error) return fail('#joinMsg', joinError(error));
+    location.reload();
+  };
+  $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
+  $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html'; };
+}
+
 async function boot() {
   if (!DEMO) {
     if (!SB) { location.replace('index.html'); return; }
@@ -706,7 +882,17 @@ async function boot() {
     const { data: p } = await SB.from('profiles').select('username, name, role, academy_name').eq('id', user.id).maybeSingle();
     PROFILE = p || {};
     if (!PROFILE.role) { rolePicker(user); return; }
+
+    // 소속 학원 (여러 곳이면 먼저 들어간 곳)
+    const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region)')
+      .eq('user_id', user.id).order('created_at').limit(1);
+    if (!mem || !mem.length) { onboarding(user); return; }
+    PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
+    REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [] };
+    useAcademy();
+    if (ROLE === 'owner' || ROLE === 'teacher') await loadStudents();
+    if (ROLE === 'owner') await loadInvite();
   }
   render();
 }
