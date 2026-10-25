@@ -29,8 +29,11 @@ const ICON = {
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
 
 const params = new URLSearchParams(location.search);
-const ROLE = DATA.users[params.get('role')] ? params.get('role') : 'owner';
-const ME = DATA.users[ROLE];
+// 데모: 첫 화면 데모 버튼(?demo=1&role=…)이나 예전 주소(?role=…)로 들어온 경우. 그 밖엔 실제 로그인이 필요해요.
+const DEMO = params.has('demo') || params.has('role');
+let ROLE = DATA.users[params.get('role')] ? params.get('role') : 'owner';
+let ME = DATA.users[ROLE];
+let PROFILE = null; // 실제로 로그인한 회원의 프로필 (데모면 null)
 const MK = DATA.marketingUrl;
 
 function toast(msg) {
@@ -441,7 +444,7 @@ const AREAS = {
   },
   student: {}
 };
-const MY = AREAS[ROLE];
+let MY = AREAS[ROLE];
 
 /* ---------- 홈 ---------- */
 function tiles() {
@@ -554,7 +557,11 @@ function renderChrome(area) {
   const items = [['home', '홈', 'home'], ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && ROLE !== 'parent' ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
-  $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html">로그아웃</a>`;
+  $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
+  $('#logout').onclick = async e => {
+    if (!PROFILE || !SB) return;
+    e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
+  };
   document.title = `${ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
 }
 
@@ -564,7 +571,8 @@ function render() {
   renderChrome(r.area);
   const crumbs = r.crumbs.length ? `<nav class="crumbs">${r.crumbs.map(([l, h], i) =>
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
-  $('#view').innerHTML = crumbs + r.html;
+  const note = PROFILE ? '<div class="demo-note">로그인됐어요. 지금 보이는 학원 데이터는 아직 예시예요 — 실제 학원 데이터는 다음 단계에서 연결돼요.</div>' : '';
+  $('#view').innerHTML = note + crumbs + r.html;
   bind();
   $('#side').classList.remove('open');
 }
@@ -643,5 +651,63 @@ function moveLead(id, stage) {
 
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
 $('#side').addEventListener('click', e => { if (e.target === $('#side')) $('#side').classList.remove('open'); });
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
-render();
+window.addEventListener('hashchange', () => { if (MY) { render(); window.scrollTo(0, 0); } });
+
+/* ---------- 시작: 데모면 바로, 아니면 Supabase 로그인 확인 ---------- */
+const ROLE_NAMES = { owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
+
+function useProfile() {
+  ROLE = PROFILE.role; MY = AREAS[ROLE];
+  const nm = esc(PROFILE.name || PROFILE.username || '회원');
+  ME = { ...DATA.users[ROLE], name: nm, av: nm[0], label: ROLE_NAMES[ROLE] };
+  if (PROFILE.academy_name && (ROLE === 'owner' || ROLE === 'teacher')) {
+    DATA.academy.name = esc(PROFILE.academy_name); DATA.academy.short = DATA.academy.name[0];
+  }
+}
+
+// 구글로 처음 가입하면 역할이 없어서, 한 번만 고르게 해요
+function rolePicker(user) {
+  MY = null;
+  const m = user.user_metadata || {};
+  $('.layout').style.display = 'block';
+  $('.layout').innerHTML = `
+  <div class="picker"><form class="card" id="pickForm" novalidate>
+    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <h1>반가워요! 한 가지만 알려 주세요</h1>
+    <p class="muted">역할에 맞는 화면으로 안내해 드려요. 나중에 바꿀 수 있어요.</p>
+    <label class="f">어떤 분이세요?
+      <span class="role-pick">${Object.entries(ROLE_NAMES).map(([v, l], i) => `<label><input type="radio" name="role" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</span>
+    </label>
+    <label class="f">이름<input name="fullname" value="${esc(m.full_name || m.name || '')}" maxlength="50"></label>
+    <label class="f">학원 이름<input name="academy" placeholder="예: 하늘영어학원" maxlength="100"></label>
+    <p class="msg" id="pickMsg" hidden></p>
+    <button class="btn primary">시작하기</button>
+  </form></div>`;
+  $('#pickForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, name = el.fullname.value.trim();
+    const msg = $('#pickMsg');
+    if (!name) { msg.textContent = '이름을 적어 주세요.'; msg.hidden = false; return; }
+    const { error } = await SB.from('profiles')
+      .update({ role: el.role.value, name: name.slice(0, 50), academy_name: el.academy.value.trim().slice(0, 100) || null })
+      .eq('id', user.id);
+    if (error) { msg.textContent = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; msg.hidden = false; return; }
+    location.reload();
+  };
+}
+
+async function boot() {
+  if (!DEMO) {
+    if (!SB) { location.replace('index.html'); return; }
+    const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
+    if (params.has('code')) history.replaceState(null, '', 'app.html' + location.hash);
+    if (!data.session) { location.replace('index.html'); return; }
+    const user = data.session.user;
+    const { data: p } = await SB.from('profiles').select('username, name, role, academy_name').eq('id', user.id).maybeSingle();
+    PROFILE = p || {};
+    if (!PROFILE.role) { rolePicker(user); return; }
+    useProfile();
+  }
+  render();
+}
+boot();
