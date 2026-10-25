@@ -289,3 +289,14 @@ dialog::backdrop { background: rgba(7,10,61,.45); }
   .stack .li { grid-template-columns: 40px 1fr; }
   .stack .li .r { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 }
+
+/* 센터 관리 */
+.player iframe, .player video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+a.player:hover .play { transform: scale(1.06); }
+.player .play { transition: transform .15s; }
+.needs { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.admin-add { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; }
+.admin-add .f { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.admin-add input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.admin-add input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
+@media (max-width: 700px) { .admin-add { grid-template-columns: 1fr; } }

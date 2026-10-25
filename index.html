@@ -227,7 +227,7 @@ function renderPanel() {
     if (!fd.getAll('need').length) return fail('필요한 지원을 하나 이상 골라 주세요.');
     if (!SB) return fail('지금은 신청을 받을 수 없어요. 잠시 후 다시 시도해 주세요.');
     const btn = form.querySelector('button'); btn.disabled = true; btn.textContent = '보내는 중…';
-    // Supabase support_requests 테이블에 저장 (읽기는 막혀 있고 센터만 대시보드에서 확인)
+    // Supabase support_requests 테이블에 저장 (읽기는 센터 관리자 화면에서만)
     const { error } = await SB.from('support_requests').insert({
       academy_name: v('academy').slice(0, 100), region: v('area').slice(0, 100) || null,
       owner_name: v('name').slice(0, 50), phone: v('phone').slice(0, 30),

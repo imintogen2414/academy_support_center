@@ -35,6 +35,8 @@ let ROLE = DATA.users[params.get('role')] ? params.get('role') : 'owner';
 let ME = DATA.users[ROLE];
 let PROFILE = null; // 실제로 로그인한 회원의 프로필 (데모면 null)
 let REAL = null;    // 실제 학원 데이터 { academy, role, students, codes, members } (데모면 null)
+let USER = null;    // Supabase 로그인 사용자
+let CENTER = null;  // 센터 관리자 자료 { videos, done, requests, admins, refl } (관리자가 아니면 null)
 const MK = DATA.marketingUrl;
 
 function toast(msg) {
@@ -64,6 +66,7 @@ const ddChip = s => {
   const n = dday(s);
   return `<span class="chip ${n < 0 ? 'crit' : n <= 7 ? 'warn' : 'mute'}">${n < 0 ? `${-n}일 지남` : n === 0 ? 'D-day' : `D-${n}`}</span>`;
 };
+const todayText = () => { const t = day0(TODAY); return `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일 (${'일월화수목금토'[t.getDay()]})`; };
 const monthLabel = m => `${m.slice(0, 4)}년 ${+m.slice(5)}월`;
 const shiftMonth = (m, n) => ymd(new Date(+m.slice(0, 4), +m.slice(5) - 1 + n, 1)).slice(0, 7);
 const monthBar = () => `
@@ -425,6 +428,8 @@ function realOwnerTodo() {
   if (left) items.push([`오늘 출결 ${left}명 입력 전`, '강사님이 수업 중에 입력해도 돼요', '#admin/attend', '<span class="chip warn">오늘</span>']);
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
+  const miss = sum(DATA.training, t => Object.values(t.status).filter(x => x !== 'done').length);
+  if (miss) items.push([`강사 교육 미이수 ${miss}건`, '센터 교육 영상 · 강사님께 알려 주세요', '#teachers/training', '<span class="chip mute">확인</span>']);
   if (!items.length) items.push(['오늘 급하게 챙길 일은 없어요', '서류 마감 · 미납 · 출결 · 급한 문의를 살펴봤어요', '#admin', '<span class="chip good">여유</span>']);
   return items;
 }
@@ -432,12 +437,19 @@ function realOwnerTodo() {
 /* ================= 원장 · 강사 관리 ================= */
 function staffPage() {
   const total = DATA.training.length;
-  return head('우리 학원 강사', '센터 교육 이수 현황과 담당 반을 확인해요.') + `
+  if (REAL && !DATA.staff.length) return head('우리 학원 강사', '센터 교육 이수 현황을 확인해요.') + `
+  <section class="card empty">
+    <span class="tile-ic">${ic('users')}</span>
+    <h2>아직 합류한 강사님이 없어요</h2>
+    <p class="muted">강사용 초대 코드로 가입하면 여기에 나오고, 센터 교육 이수 현황도 함께 보여요.</p>
+    <a class="btn primary" href="#members/invite">초대 코드 보기</a>
+  </section>`;
+  return head('우리 학원 강사', REAL ? '센터 교육 이수 현황을 확인해요.' : '센터 교육 이수 현황과 담당 반을 확인해요.') + `
   <section class="card"><div class="list">
     ${DATA.staff.map(s => `
       <div class="li">
         <span class="av" style="background:var(--navy-700)">${s.name[0]}</span>
-        <div><div class="t">${s.name} <span class="muted small">${s.cls}</span></div><div class="d">근무 시작 ${s.since}</div></div>
+        <div><div class="t">${s.name} <span class="muted small">${s.cls}</span></div><div class="d">${REAL ? s.since : `근무 시작 ${s.since}`}</div></div>
         <div class="r"><span class="time">센터 교육 이수</span><b class="num">${DATA.training.filter(t => t.status[s.name] === 'done').length}/${total}</b></div>
       </div>`).join('')}
   </div></section>
@@ -446,6 +458,12 @@ function staffPage() {
 
 function trainingList(base) {
   const me = teacherName();
+  if (!DATA.training.length) return `
+  <section class="card empty">
+    <span class="tile-ic">${ic('video')}</span>
+    <h2>아직 배부된 교육 영상이 없어요</h2>
+    <p class="muted">학원지원센터 본부가 영상을 올리면 여기에 바로 나와요.</p>
+  </section>`;
   return `
   <section class="card"><div class="list">
     ${DATA.training.map(t => {
@@ -453,11 +471,11 @@ function trainingList(base) {
       const done = sts.filter(s => s === 'done').length;
       const right = me
         ? (t.status[me] === 'done' ? '<span class="chip good">이수 완료</span>' : `<span class="chip warn">마감 ${t.due}</span>`)
-        : `<b class="num">${done}/${sts.length}명</b>${bar(done / sts.length * 100, 'sm')}`;
+        : sts.length ? `<b class="num">${done}/${sts.length}명</b>${bar(done / sts.length * 100, 'sm')}` : '<span class="time">강사 없음</span>';
       return `
       <a class="li link" href="#${base}/${t.id}">
         <span class="thumb-sm">${ic('play')}</span>
-        <div><div class="t">${t.title}</div><div class="d"><span class="chip ${t.cat === '필수' ? 'crit' : 'info'}">${t.cat}</span> ${t.len} · 마감 ${t.due}</div></div>
+        <div><div class="t">${t.title}</div><div class="d"><span class="chip ${t.cat === '필수' ? 'crit' : 'info'}">${t.cat}</span> ${t.len ? `${t.len} · ` : ''}마감 ${t.due}</div></div>
         <div class="r">${right}</div>
       </a>`;
     }).join('')}
@@ -473,8 +491,7 @@ function trainingDetail(id, base) {
   if (!t) return notFound();
   const me = teacherName();
   const notDone = Object.entries(t.status).filter(([, s]) => s !== 'done').map(([n]) => n);
-  const player = `
-    <div class="player"><span class="play">${ic('play')}</span><span class="len num">${t.len}</span><span class="by">학원지원센터 교육팀</span></div>`;
+  const player = videoPlayer(t.url, t.len);
   const reflections = `
     <section class="card">
       <div class="card-head"><h2>리플렉션 ${t.reflections.length}개</h2></div>
@@ -484,25 +501,27 @@ function trainingDetail(id, base) {
     </section>`;
 
   if (me) {
-    const done = t.status[me] === 'done';
+    const mine = t.reflections.find(r => r.mine);
+    const done = t.status[me] === 'done' && !editingReflect;
     return head(t.title, t.desc) + `
     <div class="grid2">
       <div>${player}</div>
       <section class="card">
         <div class="card-head"><h2>내 리플렉션</h2>${done ? '<span class="chip good">이수 완료</span>' : `<span class="chip warn">마감 ${t.due}</span>`}</div>
-        ${done ? '<p class="muted" style="margin:0">제출했어요. 원장님과 센터 교육팀이 확인해요.</p>' : `
+        ${done ? `<p class="muted" style="margin:0">제출했어요. 원장님과 센터 교육팀이 확인해요.</p>${REAL && mine ? '<button class="btn sm" data-act="editReflect" style="margin-top:10px">리플렉션 고치기</button>' : ''}` : `
         <p class="muted small" style="margin:0 0 10px">영상을 보고 배운 점, 내 수업에 적용할 점을 적어 주세요.</p>
-        <textarea id="reflectText" rows="6" placeholder="예: 활동 전환 신호를 정해 두는 방법을 다음 주 수업에 써 보려고 해요."></textarea>
-        <button class="btn primary" id="reflectSubmit" style="margin-top:10px">제출하고 이수 완료</button>`}
+        <textarea id="reflectText" rows="6" maxlength="2000" placeholder="예: 활동 전환 신호를 정해 두는 방법을 다음 주 수업에 써 보려고 해요.">${editingReflect && mine ? esc(mine.text) : ''}</textarea>
+        <button class="btn primary" id="reflectSubmit" style="margin-top:10px">${editingReflect ? '고쳐서 제출' : '제출하고 이수 완료'}</button>`}
       </section>
     </div>` + reflections;
   }
 
-  return head(t.title, t.desc, notDone.length ? `<button class="btn" data-nudge="${t.id}">미이수 강사에게 알림</button>` : '') + `
+  return head(t.title, t.desc, notDone.length && !REAL ? `<button class="btn" data-nudge="${t.id}">미이수 강사에게 알림</button>` : '') + `
   <div class="grid2">
     <div>${player}</div>
     <section class="card">
       <div class="card-head"><h2>이수 현황</h2><span class="sub">마감 ${t.due}</span></div>
+      ${Object.keys(t.status).length ? '' : '<p class="muted small" style="margin:0">아직 합류한 강사님이 없어요.</p>'}
       <div class="list">
         ${Object.entries(t.status).map(([n, s]) => `
           <div class="li"><span class="av" style="background:var(--navy-700)">${n[0]}</span><div class="t">${n}</div>
@@ -511,6 +530,22 @@ function trainingDetail(id, base) {
     </section>
   </div>` + reflections;
 }
+
+// 유튜브 · 비메오 주소는 화면 안에서 재생, mp4는 바로 재생, 그 밖의 주소는 새 창으로
+function embedUrl(u) {
+  let m = (u || '').match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  m = (u || '').match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  return m ? `https://player.vimeo.com/video/${m[1]}` : null;
+}
+function videoPlayer(url, len) {
+  const em = embedUrl(url);
+  if (em) return `<div class="player"><iframe src="${esc(em)}" title="교육 영상" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`;
+  if (/^https:\/\/\S+\.(mp4|webm)(\?\S*)?$/i.test(url || '')) return `<div class="player"><video src="${esc(url)}" controls preload="metadata"></video></div>`;
+  const inner = `<span class="play">${ic('play')}</span>${len ? `<span class="len num">${esc(len)}</span>` : ''}<span class="by">${url ? '눌러서 영상 열기' : REAL || CENTER ? '영상 주소 준비 중' : '학원지원센터 교육팀'}</span>`;
+  return url ? `<a class="player" href="${esc(url)}" target="_blank" rel="noopener">${inner}</a>` : `<div class="player">${inner}</div>`;
+}
+let editingReflect = false;
 
 function hirePage() {
   const mine = DATA.jobs.filter(j => j.mine);
@@ -689,9 +724,10 @@ function invitePage() {
 /* ---------- 입력 창 (원생 · 상담 등에서 함께 씀) ----------
    fields: [이름, 라벨, { type, placeholder, max, required, half, options }]
    half: 두 칸을 한 줄에. type: text(기본) · tel · date · month · number · select · check
-   options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸 */
+   options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
+   academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
-function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after }) {
+function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
   const cur = (k, o) => row ? row[k] : o.value;
@@ -714,7 +750,7 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
   <form method="dialog" class="dlg" id="dlgForm" novalidate>
     <h2>${title}</h2>${html}
     <p class="msg" id="dlgMsg" hidden></p>
-    <div class="acts">${row ? '<button type="button" class="btn danger" id="dlgDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${okText || '저장'}</button></div>
+    <div class="acts">${row && !noDelete ? '<button type="button" class="btn danger" id="dlgDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${okText || '저장'}</button></div>
   </form>`;
   d.showModal();
   const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
@@ -723,18 +759,19 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     e.preventDefault();
     const el = e.target.elements, data = {};
     for (const [k, lab, o = {}] of fields) {
-      if (o.type === 'check') { data[k] = el[k].checked; continue; }
-      const v = el[k].value.trim();
+      if (o.type === 'check') { data[k] = el.namedItem(k).checked; continue; }
+      const v = el.namedItem(k).value.trim();
       if (o.required && !v) return fail(`${lab}을(를) ${o.type === 'select' ? '골라' : '적어'} 주세요.`);
       if (o.type === 'number' && v !== '' && !(Number(v) >= 0)) return fail(`${lab}은(는) 0 이상의 숫자로 적어 주세요.`);
+      if (o.url && v && !/^https:\/\/\S+$/.test(v)) return fail(`${lab}은(는) https:// 로 시작하는 주소로 넣어 주세요.`);
       data[k] = v === '' ? null : o.type === 'number' ? Math.round(Number(v)) : v;
     }
-    const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, academy_id: REAL.academy.id });
+    const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) });
     const { error } = await q;
     if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
     d.close(); await after(); render(); toast(row ? '고쳤어요' : `${label(data)} 추가했어요`);
   };
-  if (row) $('#dlgDel').onclick = async () => {
+  if (row && !noDelete) $('#dlgDel').onclick = async () => {
     if (!confirm(`${label(row)} 삭제할까요?`)) return;
     const { error } = await SB.from(table).delete().eq('id', row.id);
     if (error) { toast('삭제하지 못했어요'); return; }
@@ -845,6 +882,175 @@ function homeworkList() {
     <label class="chk ${h.done ? 'done' : ''}"><input type="checkbox" data-hw="${i}" ${h.done ? 'checked' : ''}><span><b>${h.what}</b><small>${h.acad}</small></span></label>`).join('')}</div>`;
 }
 
+/* ================= 센터 관리 (센터 관리자만) ================= */
+const VIDEO_CATS = ['필수', '수업', '상담', '운영'];
+function centerVideosPage() {
+  const list = CENTER.videos;
+  const add = `<button class="btn primary" data-act="addVideo">${ic('plus')}영상 올리기</button>`;
+  return head('강사 교육 영상', '여기 올린 영상은 센터에 가입한 모든 학원의 원장·강사에게 배부돼요. 강사가 보고 리플렉션을 쓰면 이수 완료예요.', list.length ? add : '') + (list.length ? `
+  <section class="card"><div class="list">
+    ${list.map(v => `
+      <a class="li link" href="#center/videos/${v.id}">
+        <span class="thumb-sm">${ic('play')}</span>
+        <div><div class="t">${esc(v.title)}</div><div class="d"><span class="chip ${v.category === '필수' ? 'crit' : 'info'}">${esc(v.category)}</span> ${v.length ? `${esc(v.length)} · ` : ''}마감 ${v.due ? md(v.due) : '없음'}${v.video_url ? '' : ' · <b style="color:var(--warn)">영상 주소 없음</b>'}</div></div>
+        <div class="r"><b class="num">리플렉션 ${CENTER.done[v.id] || 0}개</b>${v.published ? '<span class="chip good">배부 중</span>' : '<span class="chip mute">숨김</span>'}</div>
+      </a>`).join('')}
+  </div></section>` : `
+  <section class="card empty">
+    <span class="tile-ic">${ic('video')}</span>
+    <h2>첫 교육 영상을 올려 주세요</h2>
+    <p class="muted">유튜브(일부 공개)나 비메오에 영상을 올린 뒤 주소를 넣으면 화면 안에서 바로 재생돼요.</p>
+    ${add}
+  </section>`) + `
+  <a class="hint" href="https://studio.youtube.com" target="_blank" rel="noopener">${ic('video')}<span>영상은 유튜브에 "일부 공개"로 올리면 주소를 아는 사람만 볼 수 있어요</span><b>유튜브 스튜디오 →</b></a>`;
+}
+
+function centerVideoDetail(id) {
+  const v = CENTER.videos.find(x => x.id === id);
+  if (!v) return notFound();
+  if (!(id in CENTER.refl)) loadVideoRefl(id);
+  const refl = CENTER.refl[id];
+  return head(esc(v.title), esc(v.description || ''), `<button class="btn" data-edit-video="${v.id}">고치기</button>`) + `
+  <div class="grid2">
+    <div>${videoPlayer(v.video_url, v.length)}</div>
+    <section class="card">
+      <div class="card-head"><h2>배부 정보</h2>${v.published ? '<span class="chip good">배부 중</span>' : '<span class="chip mute">숨김 · 원장·강사에게 안 보여요</span>'}</div>
+      <div class="list">
+        <div class="li"><span class="av time-av">분류</span><div class="t">${esc(v.category)}</div><span></span></div>
+        <div class="li"><span class="av time-av">마감</span><div class="t">${v.due ? `${md(v.due)} ${ddChip(v.due)}` : '없음'}</div><span></span></div>
+        <div class="li"><span class="av time-av">주소</span><div class="t small" style="word-break:break-all">${v.video_url ? `<a href="${esc(v.video_url)}" target="_blank" rel="noopener" style="color:var(--blue-600)">${esc(v.video_url)}</a>` : '없음'}</div><span></span></div>
+      </div>
+    </section>
+  </div>
+  <section class="card">
+    <div class="card-head"><h2>리플렉션 ${refl ? `${refl.length}개` : ''}</h2><span class="sub">강사가 쓴 소감 · 쓰면 이수 완료</span></div>
+    ${!refl ? '<p class="muted small" style="margin:0">불러오는 중…</p>' : refl.length ? `<div class="reflects">${refl.map(r => `
+      <div class="reflect"><div class="who"><b>${esc(r.name)}</b> <span class="muted small">${esc(r.academies || '')} · ${md(r.done_at.slice(0, 10))}</span></div><p>${esc(r.body)}</p></div>`).join('')}</div>`
+      : '<p class="muted small" style="margin:0">아직 작성된 리플렉션이 없어요.</p>'}
+  </section>`;
+}
+
+function videoDialog(v) {
+  formDialog({
+    title: v ? '교육 영상 고치기' : '교육 영상 올리기', table: 'training_videos', row: v, academy: false,
+    after: async () => { await loadCenter(); if (REAL && (ROLE === 'owner' || ROLE === 'teacher')) await loadTraining(); if (v && !CENTER.videos.some(x => x.id === v.id)) location.hash = '#center/videos'; },
+    label: r => `${r.title} 영상을`,
+    fields: [
+      ['title', '제목', { required: true, max: 100, placeholder: '예: 첫 상담에서 학부모 신뢰 얻는 법' }],
+      ['video_url', '영상 주소', { url: true, max: 500, placeholder: 'https://youtu.be/…' }],
+      ['category', '분류', { type: 'select', required: true, options: VIDEO_CATS, value: '수업', half: true }], ['length', '길이', { max: 10, placeholder: '예: 18:30', half: true }],
+      ['due', '이수 마감', { type: 'date', half: true }],
+      ['description', '설명', { max: 1000, placeholder: '강사에게 보이는 한두 줄 소개' }],
+      ['published', '원장·강사에게 배부해요 (끄면 숨겨져요)', { type: 'check', value: true }]
+    ]
+  });
+}
+
+async function loadVideoRefl(id) {
+  CENTER.refl[id] = null;
+  const { data } = await SB.rpc('admin_video_reflections', { p_video: id });
+  CENTER.refl[id] = data || [];
+  if (location.hash === `#center/videos/${id}`) render();
+}
+
+// 지원 신청 (첫 화면 "지원받기"에서 들어온 것)
+const REQ_STATE = { new: ['crit', '새 신청'], contacted: ['warn', '연락함'], done: ['good', '완료'] };
+const REQ_NEXT = { new: ['contacted', '연락함으로'], contacted: ['done', '완료로'], done: ['new', '다시 열기'] };
+let reqFilter = 'all';
+function centerRequestsPage() {
+  const all = CENTER.requests, list = all.filter(r => reqFilter === 'all' || r.status === reqFilter);
+  return head('지원 신청', '첫 화면 "지원받기"에서 학원이 보낸 신청이에요. 연락하면 상태를 바꿔 두세요. 학원 이름을 누르면 메모를 남길 수 있어요.') + `
+  <div class="filters">${[['all', '전체'], ...Object.entries(REQ_STATE).map(([k, [, l]]) => [k, l])].map(([k, l]) =>
+    `<button class="${k === reqFilter ? 'on' : ''}" data-req-filter="${k}">${l} ${k === 'all' ? all.length : all.filter(r => r.status === k).length}</button>`).join('')}</div>
+  ${list.length ? `<section class="card"><div class="list stack">
+    ${list.map(r => {
+      const [c, l] = REQ_STATE[r.status], [next, nl] = REQ_NEXT[r.status];
+      return `
+      <div class="li">
+        <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc(r.academy_name[0])}</span>
+        <div><div class="t"><span class="nm-link" data-edit-req="${r.id}" role="button" tabindex="0">${esc(r.academy_name)}</span> <span class="muted small">${esc(r.region || '')}</span></div>
+          <div class="d">${esc(r.owner_name)} 원장님 · <a href="tel:${esc(r.phone)}" style="color:var(--blue-600)">${esc(r.phone)}</a> · ${md(r.created_at.slice(0, 10))} 신청</div>
+          <div class="needs">${(r.needs || []).map(n => `<span class="chip info">${esc(n)}</span>`).join('')}</div>
+          ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}
+          ${r.admin_memo ? `<div class="d"><b>센터 메모</b> ${esc(r.admin_memo)}</div>` : ''}</div>
+        <div class="r"><span class="chip ${c}">${l}</span><button class="btn sm ${next === 'done' ? 'primary' : ''}" data-req-step="${r.id}:${next}">${nl}</button></div>
+      </div>`;
+    }).join('')}
+  </div></section>` : `<section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>${reqFilter === 'all' ? '아직 들어온 신청이 없어요' : '여기에 해당하는 신청이 없어요'}</h2><p class="muted">첫 화면 왼쪽 "지원받기"에서 학원이 신청하면 여기에 쌓여요.</p></section>`}`;
+}
+
+function requestDialog(r) {
+  formDialog({
+    title: `${r.academy_name} 지원 신청`, table: 'support_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    label: () => '신청을',
+    fields: [
+      ['status', '상태', { type: 'select', required: true, options: Object.entries(REQ_STATE).map(([k, [, l]]) => [k, l]) }],
+      ['admin_memo', '센터 메모', { max: 1000, placeholder: '예: 10/26 통화 · 행정 컨설팅 일정 잡기' }]
+    ]
+  });
+}
+
+async function stepRequest(id, status) {
+  const r = CENTER.requests.find(x => x.id === id), before = r.status;
+  r.status = status; render();
+  const { error } = await SB.from('support_requests').update({ status }).eq('id', id);
+  if (error) { r.status = before; render(); toast('저장하지 못했어요'); return; }
+  toast(`${r.academy_name} → ${REQ_STATE[status][1]}`);
+}
+
+// 관리자 추가 · 빼기
+const ADMIN_ERRORS = {
+  no_such_id: '그 아이디로 가입한 회원이 없어요. 가입한 뒤에 추가해 주세요.',
+  bad_id: '아이디는 영문 소문자·숫자·밑줄 4–20자예요.',
+  bad_email: '이메일 주소를 다시 확인해 주세요.',
+  cannot_remove_self: '나 자신은 뺄 수 없어요. 다른 관리자에게 부탁해 주세요.',
+  admin_only: '센터 관리자만 할 수 있어요.'
+};
+const adminError = e => ADMIN_ERRORS[Object.keys(ADMIN_ERRORS).find(k => (e.message || '').includes(k))] || '문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+function centerAdminsPage() {
+  const me = (USER.email || '').toLowerCase();
+  return head('관리자', '센터 관리 화면을 쓸 수 있는 사람이에요. 관리자는 누구나 다른 관리자를 추가하거나 뺄 수 있어요.') + `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>관리자 추가</h2></div>
+    <form class="admin-add" id="adminAdd" novalidate>
+      <label class="f">구글 이메일 또는 아이디<input name="who" maxlength="200" placeholder="예: someone@gmail.com 또는 daepyo01" autocapitalize="off"></label>
+      <label class="f">이름 (선택)<input name="name" maxlength="50" placeholder="예: 김대표"></label>
+      <button class="btn primary">추가하기</button>
+    </form>
+    <p class="msg" id="adminMsg" hidden></p>
+    <p class="muted small" style="margin:10px 0 0">구글 이메일로 추가한 분은 그 구글 계정으로 "구글로 계속하기" 로그인을 해야 관리자로 인정돼요. 아이디는 이미 가입한 아이디만 추가할 수 있어요.</p>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>지금 관리자</h2><span class="sub">${CENTER.admins.length}명</span></div>
+    <div class="list">${CENTER.admins.map(a => `
+      <div class="li">
+        <span class="av" style="background:var(--navy-700)">${esc((a.name || a.email)[0].toUpperCase())}</span>
+        <div><div class="t">${esc(a.name || a.email.split('@')[0])}${a.email === me ? ' <span class="chip info">나</span>' : ''}</div><div class="d">${esc(a.email.replace('@id.academysupportcenter.app', ' (아이디)'))}</div></div>
+        <div class="r">${a.joined ? '<span class="chip good">가입함</span>' : '<span class="chip mute">아직 로그인 전</span>'}${a.email === me ? '' : `<button class="btn sm danger" data-rm-admin="${esc(a.email)}">빼기</button>`}</div>
+      </div>`).join('')}
+    </div>
+  </section>`;
+}
+
+const centerTodo = () => {
+  const fresh = CENTER.requests.filter(r => r.status === 'new');
+  const items = fresh.slice(0, 3).map(r => [`${esc(r.academy_name)} 지원 신청 연락하기`, `${esc(r.owner_name)} 원장님 · ${(r.needs || []).map(esc).join(' · ')}`, '#center/requests', '<span class="chip crit">새 신청</span>']);
+  if (fresh.length > 3) items.push([`새 신청 ${fresh.length - 3}건 더 있어요`, '지원 신청에서 모두 보기', '#center/requests', '']);
+  const noUrl = CENTER.videos.filter(v => v.published && !v.video_url).length;
+  if (noUrl) items.push([`영상 주소가 없는 교육 ${noUrl}개`, '강사에게 재생 버튼이 안 보여요', '#center/videos', '<span class="chip warn">확인</span>']);
+  if (!items.length) items.push(['새로 처리할 일이 없어요', '지원 신청 · 교육 영상을 살펴봤어요', '#center', '<span class="chip good">여유</span>']);
+  return items;
+};
+
+const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 배부 · 지원 신청 · 관리자',
+  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건 · 영상 ${CENTER.videos.length}개`,
+  subs: {
+    videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 리플렉션 보기', stat: () => `영상 ${CENTER.videos.length}개 · 리플렉션 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}개`,
+      render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
+    requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
+    admins: { name: '관리자', icon: 'shield', desc: '센터 관리자 추가 · 빼기', stat: () => `${CENTER.admins.length}명`, render: centerAdminsPage }
+  } };
+
 function attendStat() {
   if (!REAL) { const s = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]); return `오늘 ${s[0]}/${s[1]}명`; }
   const { day, map } = REAL.attend;
@@ -930,6 +1136,11 @@ function todo(items) {
 }
 
 function home() {
+  if (ROLE === 'admin') {
+    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · 학원지원센터 본부 화면이에요.`) + todo(centerTodo()) +
+      `<h2 class="sec-title">센터 관리</h2>` + subTiles('center', CENTER_AREA) +
+      `<a class="hint" href="#" data-act="pickRole">${ic('users')}<span>원장·강사로 학원 프로그램도 쓰시려면 학원을 연결해 주세요</span><b>학원 연결하기 →</b></a>`;
+  }
   if (ROLE === 'owner') {
     const urgent = DATA.leads.filter(l => l.urgent).length;
     return head(`안녕하세요, ${ME.name} 원장님`, `${DATA.today} · 학원 운영에 필요한 지원을 다섯 가지로 묶었어요.`) +
@@ -969,7 +1180,10 @@ function home() {
 
 /* ---------- 영역 첫 화면 (세부 메뉴 고르기) ---------- */
 function areaIndex(id, a) {
-  return head(a.name, a.desc) + `<div class="tiles">${Object.entries(a.subs).map(([sid, s]) => `
+  return head(a.name, a.desc) + subTiles(id, a);
+}
+function subTiles(id, a) {
+  return `<div class="tiles">${Object.entries(a.subs).map(([sid, s]) => `
     <a class="tile" href="#${id}/${sid}">
       <span class="tile-ic">${ic(s.icon)}</span>
       <b>${s.name}</b>
@@ -979,6 +1193,7 @@ function areaIndex(id, a) {
     </a>`).join('')}</div>`;
 }
 
+const trainingTitle = id => { const t = DATA.training.find(x => x.id === id); return t ? t.rawTitle || t.title : ''; };
 const notFound = () => head('페이지를 찾을 수 없어요', '') + '<a class="btn" href="#home">홈으로</a>';
 
 /* ---------- 경로 해석 ---------- */
@@ -992,8 +1207,7 @@ function resolve(parts) {
   if (!a.subs) {
     // 하위 메뉴가 없는 영역: #영역 → #영역/항목
     if (sid && a.detail) {
-      const t = DATA.training.find(x => x.id === sid);
-      crumbs.push([t ? t.title : '', '']);
+      crumbs.push([trainingTitle(sid), '']);
       return { html: a.detail(sid), crumbs, area: aid };
     }
     return { html: a.render(), crumbs, area: aid };
@@ -1003,15 +1217,16 @@ function resolve(parts) {
   if (!s) return { html: notFound(), crumbs, area: aid };
   crumbs.push([s.name, `#${aid}/${sid}`]);
   if (item && s.detail) {
-    const t = DATA.training.find(x => x.id === item);
-    crumbs.push([t ? t.title : '', '']);
+    crumbs.push([(s.title || trainingTitle)(item) || '', '']);
     return { html: s.detail(item), crumbs, area: aid };
   }
   return { html: s.render(), crumbs, area: aid };
 }
 
 function renderChrome(area) {
-  $('#acad').innerHTML = ROLE === 'parent' || ROLE === 'student'
+  $('#acad').innerHTML = ROLE === 'admin'
+    ? '<span class="dot">센</span><div><b>학원지원센터 본부</b><span>센터 관리자</span></div>'
+    : ROLE === 'parent' || ROLE === 'student'
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
   // 숫자 배지는 아직 예시 데이터라 실제 로그인에서는 숨겨요
@@ -1027,7 +1242,7 @@ function renderChrome(area) {
     if (!PROFILE || !SB) return;
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
   };
-  document.title = `${ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
+  document.title = `${ROLE === 'admin' ? '센터 관리' : ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
 }
 
 function render() {
@@ -1037,11 +1252,12 @@ function render() {
   const crumbs = r.crumbs.length ? `<nav class="crumbs">${r.crumbs.map(([l, h], i) =>
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
-  const realPages = ['members/students', 'members/invite', 'members/leads', 'admin', 'admin/attend', 'admin/billing', 'admin/finance', 'admin/paper', 'attend'];
-  const isReal = realPages.includes(parts.slice(0, 2).join('/'));
+  const realPages = ['members/students', 'members/invite', 'members/leads', 'admin', 'attend', 'learn', 'teachers/staff', 'teachers/training', 'center'];
+  const path = parts.join('/');
+  const isReal = ROLE === 'admin' || realPages.some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
-    ? '행정 지원(출결·수납·재정·서류) · 상담·등록 · 원생 명단 · 초대 코드는 실제 데이터예요. 나머지 화면은 아직 예시예요.'
-    : ROLE === 'teacher' ? '출결 입력은 실제 데이터예요. 나머지 화면은 아직 예시예요.'
+    ? '이 화면은 아직 예시예요. 행정 지원 · 강사 교육 · 우리 학원 강사 · 상담·등록 · 원생 명단 · 초대 코드는 실제 데이터예요.'
+    : ROLE === 'teacher' ? '이 화면은 아직 예시예요. 출결 입력 · 강사 교육은 실제 데이터예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
   bind();
@@ -1087,14 +1303,48 @@ function bind() {
   // 강사 교육
   on('[data-nudge]', () => toast('미이수 강사에게 알림을 보냈어요'));
   const submit = $('#reflectSubmit');
-  if (submit) submit.onclick = () => {
+  if (submit) submit.onclick = async () => {
     const text = $('#reflectText').value.trim();
     if (!text) { toast('리플렉션을 적어 주세요'); return; }
     const t = DATA.training.find(x => x.id === location.hash.split('/').pop());
+    if (REAL) {
+      const again = t.reflections.some(r => r.mine);
+      submit.disabled = true;
+      const { error } = again
+        ? await SB.from('training_reflections').update({ body: text }).eq('video_id', t.id).eq('user_id', USER.id)
+        : await SB.from('training_reflections').insert({ video_id: t.id, body: text });
+      submit.disabled = false;
+      if (error) { toast('제출하지 못했어요. 다시 시도해 주세요.'); return; }
+      editingReflect = false; await loadTraining(); render(); toast(again ? '리플렉션을 고쳤어요' : '제출했어요 · 이수 완료');
+      return;
+    }
     t.reflections.push({ who: ME.name, at: '10/25', text });
     t.status[ME.name] = 'done';
     render(); toast('제출했어요 · 이수 완료');
   };
+  on('[data-act="editReflect"]', () => { editingReflect = true; render(); });
+  // 센터 관리
+  on('[data-act="addVideo"]', () => videoDialog(null));
+  on('[data-edit-video]', b => videoDialog(CENTER.videos.find(v => v.id === b.dataset.editVideo)));
+  on('[data-req-filter]', b => { reqFilter = b.dataset.reqFilter; render(); });
+  on('[data-req-step]', b => { const [id, st] = b.dataset.reqStep.split(':'); stepRequest(id, st); });
+  on('[data-edit-req]', b => requestDialog(CENTER.requests.find(r => r.id === b.dataset.editReq)));
+  on('[data-rm-admin]', async b => {
+    if (!confirm(`${b.dataset.rmAdmin} 님을 관리자에서 뺄까요?`)) return;
+    const { error } = await SB.rpc('remove_center_admin', { p_email: b.dataset.rmAdmin });
+    if (error) { toast(adminError(error)); return; }
+    await loadCenter(); render(); toast('관리자에서 뺐어요');
+  });
+  const adminAdd = $('#adminAdd');
+  if (adminAdd) adminAdd.onsubmit = async e => {
+    e.preventDefault();
+    const el = adminAdd.elements, who = el.who.value.trim(), msg = $('#adminMsg');
+    if (!who) { msg.textContent = '이메일이나 아이디를 적어 주세요.'; msg.hidden = false; return; }
+    const { error } = await SB.rpc('add_center_admin', { p_who: who, p_name: el.name.value.trim() || null });
+    if (error) { msg.textContent = adminError(error); msg.hidden = false; return; }
+    await loadCenter(); render(); toast(`${who} 님을 관리자로 추가했어요`);
+  };
+  on('[data-act="pickRole"]', (b, e) => { e.preventDefault(); PROFILE.role ? onboarding(USER) : rolePicker(USER); });
   // 채용
   on('[data-act="newJob"]', () => {
     const title = prompt('공고 제목을 입력하세요', '중등 영어 강사 (파트타임)');
@@ -1158,7 +1408,7 @@ async function moveLead(id, stage) {
 
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
 $('#side').addEventListener('click', e => { if (e.target === $('#side')) $('#side').classList.remove('open'); });
-window.addEventListener('hashchange', () => { if (MY) { render(); window.scrollTo(0, 0); } });
+window.addEventListener('hashchange', () => { if (MY) { editingReflect = false; render(); window.scrollTo(0, 0); } });
 
 /* ---------- 시작: 데모면 바로, 아니면 Supabase 로그인 확인 ---------- */
 const ROLE_NAMES = { owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
@@ -1229,6 +1479,43 @@ async function loadRows(table, order, ascending = true) {
 const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
+// 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
+async function loadTraining() {
+  const [v, mine, rep] = await Promise.all([
+    SB.from('training_videos').select('*').eq('published', true).order('due', { ascending: true, nullsFirst: false }),
+    SB.from('training_reflections').select('video_id, body, created_at').eq('user_id', USER.id),
+    ROLE === 'owner' ? SB.rpc('academy_training_report', { p_academy: REAL.academy.id }) : Promise.resolve({ data: [] })
+  ]);
+  const own = mine.data || [], report = rep.data || [];
+  const teachers = [...new Map(report.map(r => [r.teacher_id, { id: r.teacher_id, name: esc(r.teacher_name), raw: r.teacher_name, joined: r.joined_at }])).values()];
+  DATA.staff = teachers.map(t => ({ name: t.name, cls: '', since: `${md(t.joined.slice(0, 10))} 합류` }));
+  DATA.training = (v.data || []).map(x => {
+    const status = {}, reflections = [];
+    if (ROLE === 'teacher') {
+      const m = own.find(r => r.video_id === x.id);
+      status[ME.name] = m ? 'done' : 'todo';
+      if (m) reflections.push({ who: PROFILE.name || PROFILE.username || '나', at: md(m.created_at.slice(0, 10)), text: m.body, mine: true });
+    } else teachers.forEach(t => {
+      const r = report.find(y => y.teacher_id === t.id && y.video_id === x.id);
+      status[t.name] = r ? 'done' : 'todo';
+      if (r) reflections.push({ who: t.raw, at: md(r.done_at.slice(0, 10)), text: r.body });
+    });
+    return { id: x.id, title: esc(x.title), rawTitle: x.title, cat: esc(x.category), len: esc(x.length || ''), due: x.due ? md(x.due) : '없음',
+      desc: esc(x.description || ''), url: x.video_url, status, reflections };
+  });
+}
+// 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 관리자 명단
+async function loadCenter() {
+  const [v, r, q, a] = await Promise.all([
+    SB.from('training_videos').select('*').order('created_at', { ascending: false }),
+    SB.from('training_reflections').select('video_id'),
+    SB.from('support_requests').select('*').order('created_at', { ascending: false }),
+    SB.rpc('list_center_admins')
+  ]);
+  const done = {};
+  (r.data || []).forEach(x => { done[x.video_id] = (done[x.video_id] || 0) + 1; });
+  CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {} };
+}
 async function loadInvite() {
   const [c, m] = await Promise.all([
     SB.rpc('get_invite_codes', { p_academy: REAL.academy.id }),
@@ -1241,8 +1528,7 @@ function useAcademy() {
   const a = REAL.academy;
   DATA.academy.name = esc(a.name); DATA.academy.short = DATA.academy.name[0];
   DATA.academy.area = esc(a.region || '지역 미등록');
-  const t = day0(TODAY);
-  DATA.today = `${t.getFullYear()}년 ${t.getMonth() + 1}월 ${t.getDate()}일 (${'일월화수목금토'[t.getDay()]})`;
+  DATA.today = todayText();
 }
 
 // 아직 학원에 속하지 않았을 때: 원장은 학원 만들기 / 모두 초대 코드로 합류
@@ -1308,22 +1594,35 @@ async function boot() {
     const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
     if (params.has('code')) history.replaceState(null, '', 'app.html' + location.hash);
     if (!data.session) { location.replace('index.html'); return; }
-    const user = data.session.user;
-    const { data: p } = await SB.from('profiles').select('username, name, role, academy_name').eq('id', user.id).maybeSingle();
+    const user = USER = data.session.user;
+    const [{ data: p }, { data: admin }] = await Promise.all([
+      SB.from('profiles').select('username, name, role, academy_name').eq('id', user.id).maybeSingle(),
+      SB.rpc('am_center_admin')
+    ]);
     PROFILE = p || {};
-    if (!PROFILE.role) { rolePicker(user); return; }
+    if (admin) await loadCenter();
+    if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
 
     // 소속 학원 (여러 곳이면 먼저 들어간 곳)
     const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region)')
       .eq('user_id', user.id).order('created_at').limit(1);
-    if (!mem || !mem.length) { onboarding(user); return; }
+    if (!mem || !mem.length) {
+      if (!CENTER) { onboarding(user); return; }
+      // 학원 없이 센터 관리만 하는 관리자
+      ROLE = 'admin'; MY = { center: CENTER_AREA };
+      const nm = esc(PROFILE.name || user.user_metadata?.full_name || PROFILE.username || (user.email || '관리자').split('@')[0]);
+      ME = { name: nm, av: nm[0], label: '센터 관리자', color: 'var(--navy-700)' };
+      DATA.today = todayText();
+      render(); return;
+    }
     PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], paperwork: [] };
     useAcademy();
-    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance()]);
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork()]);
+    if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();
 }
