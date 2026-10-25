@@ -143,6 +143,7 @@ main { display: grid; place-items: center; padding: 40px 24px; }
 .roles input:checked + span { color: var(--blue-600); }
 .roles label:has(input:checked) { border-color: var(--blue-500); background: var(--blue-50); }
 .note { font-size: 12px; color: var(--muted); margin-top: 14px; text-align: center; }
+.hint-line { margin: -2px 0 14px; padding: 10px 12px; border-radius: 12px; background: var(--blue-50); font-size: 13px; color: var(--ink); }
 .field label small { font-weight: 500; color: var(--muted); margin-left: 4px; }
 .msg { margin: -4px 0 12px; font-size: 13px; color: var(--crit); }
 .msg.ok { color: var(--good); }

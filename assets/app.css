@@ -218,3 +218,35 @@ textarea:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0
 .role-pick input { position: absolute; opacity: 0; pointer-events: none; }
 .role-pick label:has(input:checked) { border-color: var(--blue-500); background: var(--blue-50); color: var(--blue-600); }
 .msg { margin: 0; font-size: 13px; color: var(--crit); }
+
+/* 학원 연결(학원 만들기 · 초대 코드로 합류) */
+.picker .f-stack { display: grid; gap: 12px; }
+.picker .or { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); margin: 6px 0 -2px; }
+.picker .or::before, .picker .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* 원생 명단 (실제 데이터) */
+.tr.sv { grid-template-columns: 1.1fr 1fr 1.6fr 1.4fr 70px; }
+.empty { text-align: center; display: grid; justify-items: center; gap: 6px; padding: 40px 24px; }
+.empty h2 { margin: 6px 0 0; font-size: 19px; }
+.empty p { margin: 0 0 10px; max-width: 420px; }
+
+/* 초대 코드 */
+.codes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 900px) { .codes { grid-template-columns: 1fr; } }
+.code-card { background: var(--surface); border-radius: var(--radius); padding: 20px; display: grid; gap: 6px; align-content: start; justify-items: start; }
+.code-card .who { font-size: 12.5px; font-weight: 700; color: var(--blue-600); }
+.code-card b { font-size: 26px; letter-spacing: 3px; }
+.code-card p { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+
+/* 원생 추가·수정 창 */
+dialog { border: 0; border-radius: 20px; padding: 0; width: min(520px, calc(100vw - 32px)); box-shadow: 0 30px 80px rgba(7,10,61,.35); }
+dialog::backdrop { background: rgba(7,10,61,.45); }
+.dlg { display: grid; gap: 12px; padding: 24px; }
+.dlg h2 { margin: 0 0 4px; font-size: 20px; }
+.dlg .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .dlg .two { grid-template-columns: 1fr; } }
+.dlg .f, .picker .f { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+.dlg input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.dlg input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
+.dlg .acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.btn.danger { color: var(--crit); border-color: var(--crit-soft); }
