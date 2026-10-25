@@ -33,15 +33,17 @@
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).
   - `leads`: 상담·등록(문의→상담→체험수업→등록). 원장·강사 읽기·쓰기, 원장만 삭제. "등록"으로 옮기면 트리거가 `students`에 자동 추가.
   - 행정 지원: `attendance`(학생·날짜마다 출석/지각/결석/조퇴, 원장·강사 읽기, 쓰기는 `mark_attendance(학생들, 날짜, 상태|null)` RPC만), `invoices`(수납·청구, 금액은 원 단위, 학생 이름·반은 트리거가 채움), `expenses`(지출), `paperwork`(서류 마감). 돈·서류는 원장만.
-- 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/attend` `#admin/billing` `#admin/finance` `#admin/paper`, 강사는 `#attend`), 원장 홈 "오늘 챙길 일", 상담·등록(`#members/leads`), 원생 명단(`#members/students`), 초대 코드(`#members/invite`). 나머지는 예시 + "예시예요" 안내.
+  - 센터 관리: `center_admins`(이메일 목록, RPC로만: `am_center_admin` `list_center_admins` `add_center_admin(이메일|아이디)` `remove_center_admin`, 나 자신은 못 뺌). 판정은 `private.is_center_admin()` — 구글로 확인된 이메일이거나 센터 아이디일 때만. 첫 관리자: `yunji040615@gmail.com`, `imintogen2414@gmail.com`.
+  - 강사 교육: `training_videos`(관리자만 쓰기, 원장·강사는 배부된 것만 보기, 영상은 유튜브·비메오 주소), `training_reflections`(영상당 한 사람 하나, 쓰면 이수 완료, 본인·관리자만 보기). 원장은 `academy_training_report(학원)`, 관리자는 `admin_video_reflections(영상)`로 이름과 함께 봐요.
+  - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
+- 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/attend` `#admin/billing` `#admin/finance` `#admin/paper`, 강사는 `#attend`), 강사 교육(원장 `#teachers/training` `#teachers/staff`, 강사 `#learn`), 센터 관리(`#center/videos` `#center/requests` `#center/admins`), 원장 홈 "오늘 챙길 일", 상담·등록(`#members/leads`), 원생 명단(`#members/students`), 초대 코드(`#members/invite`). 나머지는 예시 + "예시예요" 안내.
+- 센터 관리자: 학원에 속해 있으면 메뉴에 "센터 관리"가 더 생기고, 학원 없이 관리자만이면 `ROLE = 'admin'`으로 센터 화면만 봐요(역할 고르기도 건너뜀).
 - 재정의 수입 = 그 달에 "납부 확인"한 청구 합계. 지출은 `expenses`. 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
 - 입력 창은 `app.js`의 `formDialog`(필드 목록만 넘기면 추가·수정·삭제까지)를 쓴다.
 
 # 다음 할 일 (순서대로, PR 하나씩)
 1. ~~행정 지원을 실제 데이터로~~ (완료: 출결·수납·재정·서류)
-2. **센터 관리 + 강사 교육**: 센터 관리자 = 대표님. 관리자가 다른 관리자를 추가할 수 있게(`center_admins` 같은 표). 관리자 화면에서 강사 교육 영상 올리기·관리, 지원 신청(`support_requests`) 보기. 강사는 시청·리플렉션, 원장은 우리 강사 이수 현황.
-   - 첫 관리자 2명(사용자 지정): `yunji040615@gmail.com`, `imintogen2414@gmail.com`. 나중에 관리자 화면에서 더 추가.
-   - 이메일로 관리자를 인정할 땐 구글 로그인으로 확인된 이메일만(비밀번호 가입은 이메일 확인이 꺼져 있어 남의 이메일로 가입할 수 있음).
+2. ~~센터 관리 + 강사 교육~~ (완료: 관리자 추가·빼기, 교육 영상 배부, 리플렉션, 지원 신청 처리)
 3. 강사 채용 → 제휴 신청 · 학부모 유학 상담 신청(원장이 홍보 → 학부모 신청 → 원장 확인).
 
 # 작업 메모
