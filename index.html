@@ -3,141 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>학원지원센터 — 학원이 성장하는 플랫폼</title>
+<title>학원지원센터 — 학원 운영의 모든 것을 함께합니다</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="assets/base.css">
-<style>
-/* ---------- 헤더 ---------- */
-.site-head { position: absolute; inset: 0 0 auto; z-index: 10; }
-.site-head .in { max-width: 1180px; margin: 0 auto; padding: 22px 24px; display: flex; align-items: center; gap: 24px; color: #fff; }
-.site-nav { display: flex; gap: 26px; margin: 0 auto; font-size: 14px; color: rgba(255,255,255,.72); }
-.site-nav a:hover, .site-nav a.on { color: #fff; }
-.site-nav a.on { font-weight: 700; }
-.head-actions { display: flex; gap: 10px; align-items: center; }
-.head-actions .ghost { color: #fff; }
-@media (max-width: 860px) { .site-nav { display: none; } .head-actions { margin-left: auto; } }
-
-/* ---------- 히어로 ---------- */
-.hero { position: relative; overflow: hidden; color: #fff; padding: 150px 24px 0;
-  background:
-    radial-gradient(60% 50% at 50% 100%, rgba(85, 96, 255, .55), transparent 70%),
-    linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 55%, #1a22b8 100%); }
-/* 세로 빛줄기 */
-.hero::before { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0 38px, rgba(120,135,255,.10) 38px 40px, rgba(255,255,255,0) 40px 78px);
-  mask-image: linear-gradient(180deg, transparent 10%, #000 70%); -webkit-mask-image: linear-gradient(180deg, transparent 10%, #000 70%); }
-.hero-copy { position: relative; text-align: center; max-width: 760px; margin: 0 auto; }
-.hero .pill { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); color: rgba(255,255,255,.85); font-weight: 500; }
-.hero .pill b { color: var(--blue-400); font-weight: 700; }
-.hero h1 { font-size: clamp(36px, 6vw, 62px); line-height: 1.18; letter-spacing: -2px; margin: 22px 0 18px; font-weight: 800; }
-.hero h1 em { font-style: normal; background: linear-gradient(90deg, #a9b0ff, #fff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero p.lede { color: rgba(255,255,255,.7); font-size: 16px; margin: 0 auto 30px; max-width: 560px; }
-.hero-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.hero-cta .btn.outline { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); color: #fff; }
-
-/* 히어로 카드 */
-.stage { position: relative; max-width: 1080px; margin: 64px auto 0; display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 28px; align-items: end; }
-.glass { border-radius: 24px; padding: 22px; }
-.card-white { background: rgba(255,255,255,.96); color: var(--ink); box-shadow: 0 20px 60px rgba(4, 8, 60, .45); }
-.card-blue { background: linear-gradient(160deg, rgba(110,120,255,.55), rgba(40,50,200,.35)); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(14px); box-shadow: 0 20px 60px rgba(4, 8, 60, .45), inset 0 1px 0 rgba(255,255,255,.25); }
-.c-label { font-size: 13px; font-weight: 700; }
-.c-sub { font-size: 11px; color: var(--muted); }
-.big { font-size: 40px; font-weight: 800; letter-spacing: -1.5px; color: var(--blue-600); line-height: 1.1; }
-.left-col { display: grid; gap: 14px; transform: translateY(-40px); }
-.mini-row { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.94); border-radius: 14px; padding: 10px 14px; color: var(--ink); box-shadow: 0 10px 30px rgba(4,8,60,.35); font-size: 13px; }
-.mini-row .av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 12px; flex: none; }
-.mini-row .t { font-weight: 700; }
-.mini-row .d { font-size: 11px; color: var(--muted); }
-.mini-row.offset { margin-left: 50px; }
-.center-card { border-radius: 28px 28px 0 0; padding: 26px 24px 0; text-align: left; }
-.center-card .pill { background: var(--sunk); color: var(--ink); border: 0; font-weight: 600; margin: 0 auto 18px; display: table; }
-.center-card h3 { font-size: 22px; font-weight: 500; line-height: 1.35; margin: 0 0 18px; letter-spacing: -.5px; }
-.center-card h3 b { color: var(--blue-600); font-weight: 700; }
-.ring-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
-.ring { width: 66px; height: 66px; flex: none; }
-.ring-row p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
-.funnel { display: grid; gap: 8px; padding: 16px; background: var(--sunk); border-radius: 18px 18px 0 0; }
-.funnel .fr { display: grid; grid-template-columns: 72px 1fr 34px; gap: 10px; align-items: center; font-size: 12.5px; }
-.funnel .bar { height: 10px; border-radius: 99px; background: var(--blue-100); overflow: hidden; }
-.funnel .bar span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--blue-400), var(--blue-600)); }
-.funnel .n { font-weight: 700; text-align: right; }
-.right-card { transform: translateY(-60px); }
-.right-card .pill { background: rgba(255,255,255,.14); color: #fff; border: 0; font-size: 12px; }
-.right-card h4 { font-size: 24px; line-height: 1.25; margin: 14px 0 6px; letter-spacing: -.5px; }
-.right-card .s { font-size: 12px; color: rgba(255,255,255,.75); }
-.right-card .go { margin-top: 26px; width: 38px; height: 38px; border-radius: 50%; background: #fff; color: var(--blue-600); display: grid; place-items: center; }
-.float-badge { position: absolute; right: -10px; bottom: 30px; display: flex; align-items: center; gap: 8px; background: #fff; color: var(--ink); border-radius: 999px; padding: 6px 14px 6px 6px; font-size: 11.5px; box-shadow: 0 10px 30px rgba(4,8,60,.35); z-index: 2; }
-.avs { display: flex; }
-.avs i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; margin-left: -8px; }
-.avs i:first-child { margin-left: 0; }
-@media (max-width: 900px) {
-  .stage { grid-template-columns: 1fr; max-width: 420px; }
-  .left-col, .right-card { transform: none; }
-  .left-col { order: 2; } .right-card { order: 3; margin-bottom: 40px; }
-  .center-card { order: 1; border-radius: 28px; padding-bottom: 20px; }
-  .funnel { border-radius: 18px; }
-  .float-badge { display: none; }
-}
-
-/* ---------- 섹션 공통 ---------- */
-section.block { max-width: 1180px; margin: 0 auto; padding: 96px 24px; }
-.sec-head { text-align: center; max-width: 720px; margin: 0 auto 48px; }
-.sec-head .pill { background: var(--blue-100); color: var(--blue-600); }
-.sec-head h2 { font-size: clamp(28px, 4vw, 42px); line-height: 1.25; letter-spacing: -1.2px; margin: 16px 0 12px; font-weight: 700; }
-.sec-head p { color: var(--muted); margin: 0; }
-
-/* 기능 카드 */
-.features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
-@media (max-width: 1000px) { .features { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
-.feat { background: var(--surface); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; gap: 10px; min-height: 220px; border: 1px solid transparent; transition: border-color .2s, transform .2s; }
-.feat:hover { border-color: var(--blue-100); transform: translateY(-3px); }
-.feat .ic { width: 44px; height: 44px; border-radius: 50%; background: var(--blue-50); color: var(--blue-600); display: grid; place-items: center; margin-bottom: 8px; }
-.feat h3 { font-size: 16px; margin: 0; letter-spacing: -.3px; }
-.feat p { font-size: 13.5px; color: var(--muted); margin: 0; flex: 1; }
-.feat .more { font-size: 13px; font-weight: 600; color: var(--blue-600); display: inline-flex; gap: 6px; align-items: center; }
-.feat .tag { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .3px; }
-.feat.hot { background: linear-gradient(160deg, var(--blue-600), var(--navy-700)); color: #fff; box-shadow: 0 18px 40px rgba(59,70,241,.35); }
-.feat.hot .ic { background: rgba(255,255,255,.15); color: #fff; }
-.feat.hot p, .feat.hot .tag { color: rgba(255,255,255,.75); }
-.feat.hot .more { color: #fff; }
-
-/* 운영 기반 */
-.base { background: var(--surface); border-radius: 28px; padding: 40px; display: grid; grid-template-columns: 1fr 1.4fr; gap: 40px; align-items: center; }
-@media (max-width: 860px) { .base { grid-template-columns: 1fr; padding: 28px; } }
-.base h3 { font-size: 28px; letter-spacing: -.8px; margin: 12px 0 10px; line-height: 1.3; }
-.base p { color: var(--muted); margin: 0; }
-.base-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-@media (max-width: 560px) { .base-grid { grid-template-columns: repeat(2, 1fr); } }
-.base-grid div { background: var(--sunk); border-radius: 14px; padding: 14px 16px; font-weight: 600; font-size: 14px; display: flex; gap: 10px; align-items: center; }
-.base-grid svg { color: var(--blue-600); }
-
-/* 진행 방식 */
-.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; counter-reset: s; }
-@media (max-width: 900px) { .steps { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
-.step { background: var(--surface); border-radius: var(--radius); padding: 24px; position: relative; }
-.step::before { counter-increment: s; content: "0" counter(s); font-size: 13px; font-weight: 800; color: var(--blue-600); }
-.step h4 { margin: 8px 0 6px; font-size: 17px; }
-.step p { margin: 0; font-size: 13.5px; color: var(--muted); }
-
-/* 역할별 */
-.roles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-@media (max-width: 900px) { .roles { grid-template-columns: repeat(2, 1fr); } }
-.role { border-radius: var(--radius); padding: 22px; background: var(--surface); }
-.role .who { font-size: 13px; font-weight: 700; color: var(--blue-600); }
-.role h4 { margin: 6px 0 10px; font-size: 18px; letter-spacing: -.3px; }
-.role ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); display: grid; gap: 4px; }
-
-/* CTA */
-.cta { margin: 0 24px 80px; border-radius: 32px; color: #fff; text-align: center; padding: 72px 24px; position: relative; overflow: hidden;
-  background: radial-gradient(70% 90% at 50% 120%, rgba(124,133,255,.7), transparent 60%), linear-gradient(180deg, var(--navy-800), var(--navy-900)); }
-.cta h2 { font-size: clamp(26px, 4vw, 40px); letter-spacing: -1px; margin: 0 0 12px; line-height: 1.3; }
-.cta p { color: rgba(255,255,255,.7); margin: 0 0 28px; }
-@media (min-width: 1228px) { .cta { max-width: 1180px; margin-left: auto; margin-right: auto; } }
-
-footer { text-align: center; font-size: 13px; color: var(--muted); padding: 0 24px 40px; }
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
 
@@ -148,199 +17,70 @@ footer { text-align: center; font-size: 13px; color: var(--muted); padding: 0 24
       학원지원센터
     </a>
     <nav class="site-nav">
-      <a href="#" class="on">홈</a>
-      <a href="#features">주요 기능</a>
-      <a href="#base">운영 기능</a>
+      <a href="#areas">지원 분야</a>
       <a href="#how">이용 방법</a>
-      <a href="#roles">누가 쓰나요</a>
     </nav>
     <div class="head-actions">
       <a href="login.html" class="btn ghost sm">로그인</a>
-      <a href="login.html?signup=1" class="btn primary sm">무료로 시작하기</a>
+      <a href="login.html?signup=1" class="btn primary sm">시작하기</a>
     </div>
   </div>
 </header>
 
 <section class="hero">
   <div class="hero-copy">
-    <span class="pill">행정 프로그램이 아니라 <b>학원이 성장하는 플랫폼</b></span>
-    <h1>원생은 늘고,<br><em>수업은 더 좋아지게</em></h1>
-    <p class="lede">홍보·상담부터 강사 수업 피드백, 교재사·기관 제휴 혜택까지. 혼자서는 어려웠던 학원 성장을 한곳에서 시작하세요.</p>
+    <span class="pill">행정 · 강사 · 제휴 · 홍보 · 학생 관리 <b>한곳에서</b></span>
+    <h1>원장님은 가르치는 일에만,<br><em>나머지는 저희가 지원합니다</em></h1>
+    <p class="lede">학원 하나를 운영하는 데 필요한 모든 일. 학원지원센터가 행정부터 강사 교육·채용, 제휴 혜택, 홍보, 학생·학부모 관리까지 함께합니다.</p>
     <div class="hero-cta">
       <a href="login.html?signup=1" class="btn primary">우리 학원 등록하기 <span class="arrow"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
       <a href="login.html" class="btn outline">데모 둘러보기</a>
     </div>
   </div>
-
-  <div class="stage">
-    <div class="left-col">
-      <div class="glass card-white">
-        <div class="c-label">이번 달 신규 상담</div>
-        <div class="c-sub">10월 1일 – 25일</div>
-        <div style="display:flex;align-items:center;gap:8px;margin:10px 0 12px">
-          <span class="big num">38</span><span class="chip good">▲ 41%</span>
-        </div>
-        <div class="mini-row" style="box-shadow:none;background:var(--sunk);padding:8px 10px">
-          <span class="av" style="background:var(--blue-500)">N</span>
-          <div><div class="t">네이버 플레이스 문의</div><div class="d">가장 많이 들어온 경로 · 17건</div></div>
-        </div>
-      </div>
-      <div class="mini-row">
-        <span class="av" style="background:#17a06b">체</span>
-        <div><div class="t">체험수업 예약</div><div class="d">초등 B반 · 오늘 17:00</div></div>
-      </div>
-      <div class="mini-row offset">
-        <span class="av" style="background:var(--navy-700)">등</span>
-        <div><div class="t">등록 완료</div><div class="d">중등 기초반 · 박하은</div></div>
-      </div>
-    </div>
-
-    <div class="glass card-white center-card">
-      <span class="pill">상담 → 등록 한눈에 보기</span>
-      <h3>문의가 <b>등록으로</b><br>이어지는 길을 관리해요</h3>
-      <div class="ring-row">
-        <svg class="ring" viewBox="0 0 66 66"><circle cx="33" cy="33" r="27" fill="none" stroke="#e3e6ff" stroke-width="7"/><circle cx="33" cy="33" r="27" fill="none" stroke="#3b46f1" stroke-width="7" stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="98" transform="rotate(-90 33 33)"/><text x="33" y="38" text-anchor="middle" font-size="15" font-weight="800" fill="#12163a">42%</text></svg>
-        <p><b style="color:var(--ink)">등록 전환율</b><br>이번 달 문의 38건 중 16명이 등록했어요</p>
-      </div>
-      <div class="funnel">
-        <div class="fr"><span>문의</span><div class="bar"><span style="width:100%"></span></div><span class="n num">38</span></div>
-        <div class="fr"><span>상담</span><div class="bar"><span style="width:68%"></span></div><span class="n num">26</span></div>
-        <div class="fr"><span>체험수업</span><div class="bar"><span style="width:58%"></span></div><span class="n num">22</span></div>
-        <div class="fr"><span>등록</span><div class="bar"><span style="width:42%"></span></div><span class="n num">16</span></div>
-      </div>
-    </div>
-
-    <div class="glass card-blue right-card">
-      <span class="pill">✦ 새 제휴 혜택</span>
-      <div class="c-sub" style="color:rgba(255,255,255,.65);margin-top:14px">교재사 MOU · 가입 학원 전용</div>
-      <h4>교재 구입비<br>최대 18% 할인</h4>
-      <div class="s">지난달 가입 학원 평균 <b>월 21만 원</b> 절감</div>
-      <a href="login.html" class="go" aria-label="제휴 혜택 보기"><svg class="icon" style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      <div class="float-badge">
-        <div class="avs"><i style="background:#7c85ff"></i><i style="background:#17a06b"></i><i style="background:#e0493a"></i></div>
-        <div><b>강사 피드백 3건</b><div class="c-sub">이번 주 새로 올라온 수업 영상</div></div>
-      </div>
-    </div>
-  </div>
+  <div class="quick" id="quick"></div>
 </section>
 
-<section class="block" id="features">
+<section class="block" id="areas">
   <div class="sec-head">
-    <span class="pill">세 가지 성장 기둥</span>
-    <h2>원장님이 매일 보는 화면은<br>학원의 성장으로 채워요</h2>
-    <p>홍보·마케팅, 강사 수업 관리, MOU·제휴. 행정은 뒤에서 조용히 돌아가요.</p>
+    <span class="pill">다섯 가지 지원</span>
+    <h2>학원 운영 전체를<br>다섯 가지로 나눠 지원해요</h2>
+    <p>궁금한 분야를 눌러 자세히 보세요.</p>
   </div>
-  <div class="features">
-    <div class="feat hot">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-7-7 18-2-8-9-3z"/></svg></div>
-      <span class="tag">홍보·마케팅</span>
-      <h3>상담·체험수업 관리</h3>
-      <p>문의 → 상담 → 체험수업 → 등록을 한 화면에서. 등록하면 바로 원생으로 전환돼요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h5"/></svg></div>
-      <span class="tag">홍보·마케팅</span>
-      <h3>학원 홍보 페이지</h3>
-      <p>반 구성·강사·시간표·교습비로 공개 페이지를 자동으로 만들어요. 네이버·인스타 링크로 바로 쓰세요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 6.5 7 .8-5.2 4.7 1.5 7L12 17.5 5.7 21l1.5-7L2 9.3l7-.8z"/></svg></div>
-      <span class="tag">홍보·마케팅</span>
-      <h3>인증 후기 · 성과 카드</h3>
-      <p>재원생 학부모만 쓰는 인증 후기와, 개인정보 없이 만든 성과 홍보 이미지.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
-      <span class="tag">홍보·마케팅</span>
-      <h3>마케팅 의뢰 · 성과 리포트</h3>
-      <p>버튼 하나로 전문 마케팅을 맡기고, 광고비 대비 실제 등록 수까지 확인해요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg></div>
-      <span class="tag">강사 영상 관리</span>
-      <h3>수업 영상 · 타임라인 피드백</h3>
-      <p>"03:42 설명이 빨라요"처럼 장면마다 코멘트. 감시가 아닌 성장 도구예요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
-      <span class="tag">강사 영상 관리</span>
-      <h3>평가 체크리스트 · 성장 추이</h3>
-      <p>학원별 기준으로 평가하고, 출석률·재등록률과 함께 강사의 성장을 봐요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12l3 3 5-5"/><path d="M2 12l5-5 5 3 5-3 5 5-10 9z"/></svg></div>
-      <span class="tag">MOU·제휴</span>
-      <h3>플랫폼 제휴 혜택</h3>
-      <p>교재사·PG사·보험사와 맺은 단체 혜택에 클릭 한 번으로 참여해요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-    <div class="feat">
-      <div class="ic"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20c0-3 2.5-5 5-5s5 2 5 5M12 20c0-3 2.5-5 5-5s5 2 5 5"/></svg></div>
-      <span class="tag">MOU·제휴</span>
-      <h3>학원 간 · 기관 제휴</h3>
-      <p>태권도+영어 패키지, 셔틀 공동 운영, 방과후·기업 위탁까지 제안하고 전자 서명해요.</p>
-      <span class="more">자세히 보기 →</span>
-    </div>
-  </div>
-</section>
-
-<section class="block" id="base" style="padding-top:0">
-  <div class="base">
-    <div>
-      <span class="pill" style="background:var(--blue-100);color:var(--blue-600)">운영 기반 · 모든 플랜 기본 제공</span>
-      <h3>매일 하는 운영 업무는<br>그대로, 더 가볍게</h3>
-      <p>출결·수납·메신저·기록부·재정·교육청 행정까지. 학부모와 학생 앱도 함께 제공돼요.</p>
-    </div>
-    <div class="base-grid">
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3 8-8"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg>출결 관리</div>
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>수납·청구</div>
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-12 7l-6 2 2-6a8 8 0 1 1 16-3z"/></svg>메신저·공지</div>
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/></svg>학생 기록부</div>
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7"/></svg>재정 관리</div>
-      <div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>교육청 행정</div>
-    </div>
-  </div>
+  <div class="areas" id="areaCards"></div>
 </section>
 
 <section class="block" id="how" style="padding-top:0">
   <div class="sec-head">
     <span class="pill">이용 방법</span>
-    <h2>가입부터 첫 등록까지</h2>
+    <h2>가입하면 바로 시작돼요</h2>
   </div>
   <div class="steps">
-    <div class="step"><h4>학원 등록</h4><p>학원 정보와 반·강사를 입력하면 운영 기능이 바로 열려요.</p></div>
-    <div class="step"><h4>홍보 페이지 공개</h4><p>입력한 정보로 홍보 페이지가 자동으로 만들어져요.</p></div>
-    <div class="step"><h4>문의를 등록으로</h4><p>들어온 문의를 상담·체험수업·등록까지 한 흐름으로 관리해요.</p></div>
-    <div class="step"><h4>제휴 혜택 받기</h4><p>교재·결제·보험 제휴 혜택에 참여해 운영비를 줄여요.</p></div>
-  </div>
-</section>
-
-<section class="block" id="roles" style="padding-top:0">
-  <div class="sec-head">
-    <span class="pill">누가 쓰나요</span>
-    <h2>역할마다 필요한 화면만</h2>
-  </div>
-  <div class="roles">
-    <div class="role"><div class="who">원장</div><h4>학원의 성장 지표</h4><ul><li>신규 상담·등록 전환</li><li>강사 평가·피드백</li><li>제휴 혜택·재정</li></ul></div>
-    <div class="role"><div class="who">강사</div><h4>내 수업과 성장</h4><ul><li>수업 영상 올리기</li><li>받은 피드백 확인</li><li>출결·과제 입력</li></ul></div>
-    <div class="role"><div class="who">학부모</div><h4>여러 학원을 한 번에</h4><ul><li>통합 시간표·일정</li><li>수납·알림</li><li>인증 후기 작성</li></ul></div>
-    <div class="role"><div class="who">학생</div><h4>오늘의 목표</h4><ul><li>학원별 과제 체크</li><li>출결·성적 기록</li><li>메신저</li></ul></div>
+    <div class="step"><h4>학원 등록</h4><p>학원 정보와 반·강사를 입력하면 행정·학생 관리가 바로 열려요.</p></div>
+    <div class="step"><h4>필요한 지원 고르기</h4><p>강사 교육, 제휴 신청, 홍보 의뢰 중 필요한 것만 골라 쓰세요.</p></div>
+    <div class="step"><h4>담당 매니저와 함께</h4><p>센터 담당 매니저가 신청한 제휴·홍보를 연결하고 진행 상황을 알려 드려요.</p></div>
   </div>
 </section>
 
 <div class="cta">
-  <h2>우리 학원의 다음 학기를<br>지금 준비하세요</h2>
-  <p>운영 기능은 무료, 성장 기능은 필요한 만큼만.</p>
-  <a href="login.html?signup=1" class="btn primary">무료로 시작하기</a>
+  <h2>학원 운영, 이제 혼자 하지 마세요</h2>
+  <p>학원지원센터가 원장님 곁에서 함께합니다.</p>
+  <div class="acts"><a href="login.html?signup=1" class="btn primary">시작하기</a><a href="login.html" class="btn outline">데모 둘러보기</a></div>
 </div>
 
-<footer>© 2026 학원지원센터 · 시안 화면이며 표시된 수치는 예시예요.</footer>
+<footer>© 2026 학원지원센터 · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</footer>
 
+<script src="assets/areas.js"></script>
+<script>
+document.getElementById('quick').innerHTML = SITE_AREAS.map(a =>
+  `<a href="service.html?area=${a.id}"><span class="ic">${sic(a.icon)}</span>${a.name}</a>`).join('');
+document.getElementById('areaCards').innerHTML = SITE_AREAS.map(a => `
+  <a class="feat" href="service.html?area=${a.id}">
+    <div class="ic">${sic(a.icon)}</div>
+    ${a.partner ? '<span class="tag">공식 파트너 · 인투마케팅</span>' : ''}
+    <h3>${a.name}</h3>
+    <p>${a.short}</p>
+    <span class="more">자세히 보기 →</span>
+  </a>`).join('');
+</script>
 </body>
 </html>
