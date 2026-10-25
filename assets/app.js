@@ -79,7 +79,7 @@ function billingPage() {
         </div>`).join('')}
     </div>
   </section>
-  <a class="hint" href="#mou/partners">${ic('handshake')}<span>카드 결제 제휴(PG)를 신청하면 수수료가 2.3% → 1.6%로 내려가요</span><b>제휴 보기 →</b></a>`;
+  <a class="hint" href="#mou/partners">${ic('handshake')}<span>카드 결제(PG) 제휴를 신청하면 카드 수수료가 내려가요</span><b>제휴 보기 →</b></a>`;
 }
 
 function financePage() {
@@ -97,7 +97,7 @@ function financePage() {
       ${f.items.map(([n, v]) => `<div class="row-bar"><span>${n}</span>${bar(v / max * 100)}<b class="num">${v}만 원</b></div>`).join('')}
     </div>
   </section>
-  <a class="hint" href="#mou/mine">${ic('handshake')}<span>학원 전문 세무사 제휴 이용 중 · 이 자료가 그대로 세무 신고에 쓰여요</span><b>내 제휴 →</b></a>`;
+  <a class="hint" href="#mou/mine">${ic('handshake')}<span>교재 공동구매 제휴로 이번 달 교재비 20만 원을 아꼈어요</span><b>내 제휴 →</b></a>`;
 }
 
 function paperPage() {
@@ -219,7 +219,11 @@ const P_STATE = { using: ['good', '이용 중'], applied: ['info', '신청 완�
 function partnersPage() {
   const cats = ['전체', ...new Set(DATA.partners.map(p => p.cat))];
   const shown = DATA.partners.filter(p => partnerCat === '전체' || p.cat === partnerCat);
-  return head('제휴처 둘러보기', '학원지원센터가 미리 MOU를 맺어 둔 곳이에요. 따로 협상하거나 계약서를 쓸 필요 없이 신청만 하면 바로 적용돼요.') + `
+  return head('제휴처 둘러보기', '학원지원센터가 미리 MOU를 맺어 둔 곳이에요. 따로 협상하거나 계약서를 쓸 필요 없이 신청만 하면 바로 연결돼요.') + `
+  <div class="banner">
+    <div><span class="pill">유학 제휴 파트너</span><h2>유학은 인투어브로드와 함께해요</h2><p>방학 영어캠프 · 조기유학 · 어학연수 · 해외 대학 진학까지. 우리 학원 학생과 학부모에게 유학 프로그램을 연결해 드려요.</p></div>
+    <a class="btn primary" href="${DATA.abroadUrl}" target="_blank" rel="noopener">인투어브로드 바로가기 ${ic('ext')}</a>
+  </div>
   <div class="filters">${cats.map(c => `<button class="${c === partnerCat ? 'on' : ''}" data-cat="${c}">${c}</button>`).join('')}</div>
   <div class="grid3">
     ${shown.map(p => `
@@ -235,9 +239,10 @@ function partnersPage() {
 function myPartnersPage() {
   const mine = DATA.partners.filter(p => p.status !== 'none');
   const saved = mine.reduce((a, p) => a + (p.saved || 0), 0);
-  return head('내 제휴', '신청하고 이용 중인 제휴예요. 할인은 수납·재정 화면에 자동으로 반영돼요.') + `
+  return head('내 제휴', '신청하고 이용 중인 제휴예요. 유학 프로그램 참가 현황과 할인 내역을 함께 봐요.') + `
   <div class="stats">
     <div class="stat"><span>이용 · 신청</span><b class="num">${mine.length}곳</b></div>
+    <div class="stat"><span>유학 제휴</span><b class="num">${mine.filter(p => p.cat === '유학').length}곳</b></div>
     <div class="stat good"><span>이번 달 아낀 비용</span><b class="num">${saved}만 원</b></div>
   </div>
   <section class="card"><div class="list">
@@ -245,7 +250,7 @@ function myPartnersPage() {
       <div class="li">
         <span class="av" style="background:var(--blue-600)">${ic('handshake')}</span>
         <div><div class="t">${p.name} <span class="muted small">${p.cat}</span></div><div class="d">${p.benefit}</div></div>
-        <div class="r"><span class="chip ${P_STATE[p.status][0]}">${P_STATE[p.status][1]}</span>${p.saved ? `<span class="time">${p.saved}만 원 절감</span>` : ''}</div>
+        <div class="r"><span class="chip ${P_STATE[p.status][0]}">${P_STATE[p.status][1]}</span>${p.saved ? `<span class="time">${p.saved}만 원 절감</span>` : p.note ? `<span class="time">${p.note}</span>` : ''}</div>
       </div>`).join('')}
   </div></section>
   <a class="hint" href="#mou/partners">${ic('plus')}<span>다른 제휴처도 둘러보세요</span><b>제휴처 둘러보기 →</b></a>`;
@@ -409,9 +414,9 @@ const AREAS = {
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => `이번 달 ${DATA.notices.length}건`, render: noticesPage }
       } },
-    mou: { name: '제휴(MOU)', icon: 'handshake', desc: '센터가 맺어 둔 제휴를 바로 신청', stat: () => `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
+    mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청', stat: () => `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
       subs: {
-        partners: { name: '제휴처 둘러보기', icon: 'handshake', desc: '교재·결제·보험·차량·세무·시설', stat: () => `${DATA.partners.length}곳`, render: partnersPage },
+        partners: { name: '제휴처 둘러보기', icon: 'handshake', desc: '유학 · 캠프 · 어학연수와 그 밖의 제휴', stat: () => `${DATA.partners.length}곳`, render: partnersPage },
         mine: { name: '내 제휴', icon: 'check', desc: '이용 중인 제휴와 아낀 비용', stat: () => `${DATA.partners.filter(p => p.status !== 'none').length}곳`, render: myPartnersPage }
       } },
     promo: { name: '홍보 지원', icon: 'megaphone', desc: '블로그·디자인·영상을 인투마케팅이 지원', stat: () => `진행 중 의뢰 ${DATA.promoRequests.length}건`,

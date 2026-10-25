@@ -69,14 +69,17 @@ const DATA = {
     { id: 'j4', academy: '하늘영어학원 동탄점', title: '고등 영어 강사 (주말)', area: '화성 동탄', type: '파트타임', pay: '시급 3만 원', hours: '토·일 10–18시', due: '11/20' }
   ],
 
-  /* ---------- 제휴(MOU) — 센터가 미리 맺어 둔 제휴처 ---------- */
+  /* ---------- 제휴(MOU) — 센터가 미리 맺어 둔 제휴처. 중심은 유학(인투어브로드) ---------- */
+  abroadUrl: 'https://intoabroad.com',
   partners: [
-    { id: 'p1', cat: '교재', name: '교재 공동구매', benefit: '교재 구입비 최대 18% 할인', desc: '주요 출판사 교재를 센터 단가로 주문해요.', status: 'using', saved: 20 },
-    { id: 'p2', cat: '결제', name: '카드 결제(PG)', benefit: '수수료 2.3% → 1.6%', desc: '수납 화면과 바로 연결돼요. 월 1,480만 원 기준 약 10만 원 절감.', status: 'none' },
-    { id: 'p3', cat: '보험', name: '학원 배상책임보험', benefit: '단체 가입 보험료 25% 할인', desc: '원생 상해·시설 배상을 한 번에 보장해요.', status: 'none' },
-    { id: 'p4', cat: '차량', name: '셔틀 차량 리스', benefit: '월 리스료 12% 할인', desc: '어린이 통학버스 신고 서류까지 함께 지원해요.', status: 'none' },
-    { id: 'p5', cat: '세무', name: '학원 전문 세무사', benefit: '기장료 첫 3개월 무료', desc: '재정 화면 자료를 그대로 넘겨 신고해요.', status: 'using', saved: 0 },
-    { id: 'p6', cat: '시설', name: '인테리어·간판', benefit: '시공비 10% 할인 · 무료 실측', desc: '학원 시설 기준에 맞춘 시공 업체를 연결해요.', status: 'none' }
+    { id: 'a1', cat: '유학', name: '방학 해외 영어캠프', benefit: '재원생 단체 참가 · 인솔 교사 동행', desc: '여름·겨울방학 2~4주 해외 캠프. 학원 이름으로 단체 모집해요.', status: 'using', note: '겨울캠프 참가 6명' },
+    { id: 'a2', cat: '유학', name: '초·중·고 조기유학', benefit: '학부모 1:1 유학 상담 연결', desc: '국가·학교 선택부터 홈스테이, 현지 관리까지 전문 상담사가 함께해요.', status: 'none' },
+    { id: 'a3', cat: '유학', name: '단기 어학연수', benefit: '재원생 · 학부모 특별 조건', desc: '학원에서 배운 영어를 현지에서 써 보는 1~12주 연수예요.', status: 'none' },
+    { id: 'a4', cat: '유학', name: '해외 대학 진학', benefit: '고등부 진학 상담 연계', desc: '해외 대학 · 파운데이션 과정 진학 설계와 서류 준비를 도와요.', status: 'none' },
+    { id: 'a5', cat: '유학', name: '유학 설명회 공동 개최', benefit: '학원에서 설명회 · 전문가 파견', desc: '학부모 대상 설명회를 학원에서 함께 열어 신규 상담으로 이어지게 해요.', status: 'none' },
+    { id: 'p1', cat: '그 밖의 제휴', name: '교재 공동구매', benefit: '교재 구입비 할인', desc: '주요 출판사 교재를 센터 단가로 주문해요.', status: 'using', saved: 20 },
+    { id: 'p2', cat: '그 밖의 제휴', name: '카드 결제(PG)', benefit: '카드 수수료 인하', desc: '수납 화면과 바로 연결돼요.', status: 'none' },
+    { id: 'p3', cat: '그 밖의 제휴', name: '학원 배상책임보험', benefit: '단체 가입 할인', desc: '원생 상해 · 시설 배상을 한 번에 보장해요.', status: 'none' }
   ],
 
   /* ---------- 홍보 지원 (인투마케팅 연결) ---------- */

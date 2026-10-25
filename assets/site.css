@@ -105,6 +105,15 @@ body.wide #panel { max-width: 860px; }
 .foot { font-size: 12px; color: rgba(255,255,255,.5); }
 .foot a { color: rgba(255,255,255,.8); text-decoration: underline; }
 
+/* ---------- 휴대폰 위쪽 탭 (지원받기 ↔ 프로그램 이용하기) ---------- */
+.mtabs { display: none; }
+@media (max-width: 900px) {
+  .mtabs { display: flex; position: sticky; top: 0; z-index: 20; gap: 4px; padding: 8px 12px; background: rgba(7,10,61,.92); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,.1); }
+  .mtabs button { flex: 1; border: 0; border-radius: 999px; padding: 10px 8px; font-size: 14px; font-weight: 700; background: transparent; color: rgba(255,255,255,.65); }
+  .mtabs button.on { background: #fff; color: var(--blue-600); }
+  .support, main { scroll-margin-top: 60px; }
+}
+
 /* ---------- 오른쪽: 프로그램 로그인 ---------- */
 main { display: grid; place-items: center; padding: 40px 24px; }
 .box { width: min(420px, 100%); }

@@ -26,6 +26,12 @@
 </head>
 <body>
 
+<!-- 휴대폰에서만 보이는 위쪽 탭: 지원받기 ↔ 프로그램 이용하기 바로 이동 -->
+<nav class="mtabs" aria-label="화면 바로가기">
+  <button type="button" data-jump="support" class="on">지원받기</button>
+  <button type="button" data-jump="program">프로그램 이용하기</button>
+</nav>
+
 <!-- 왼쪽: 지원받기 — 분야 고르기 → 분야 상세 → 지원 신청 → 접수 완료 -->
 <aside class="support">
   <div class="top-row">
@@ -33,11 +39,11 @@
     <span class="tag">지원받기</span>
   </div>
   <div id="panel"></div>
-  <div class="foot">홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</div>
+  <div class="foot">유학 제휴 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투어브로드</a> · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</div>
 </aside>
 
 <!-- 오른쪽: 프로그램 쓰기 -->
-<main>
+<main id="program">
   <div class="box">
     <span class="kicker">프로그램 쓰기</span>
     <h2 id="title">다시 오셨네요</h2>
@@ -101,8 +107,8 @@ function homeView() {
 // 분야 상세페이지: 소개 → 이런 고민 → 지원 내용 → 진행 과정 → 자주 묻는 질문 → 다른 분야
 function areaView(a) {
   const idx = SITE_AREAS.indexOf(a) + 1;
-  const second = a.partner
-    ? `<a class="btn outline" href="${MARKETING_URL}" target="_blank" rel="noopener">인투마케팅 바로가기 ${sic('ext')}</a>`
+  const second = a.link
+    ? `<a class="btn outline" href="${a.link[1]}" target="_blank" rel="noopener">${a.link[0]} ${sic('ext')}</a>`
     : `<a class="btn outline" href="${a.demo}">실제 화면 미리 보기</a>`;
   return `
     <a class="back" href="#">‹ 전체 지원 분야</a>
@@ -220,6 +226,17 @@ function setTab(t) {
 tabs.forEach(b => b.onclick = () => setTab(b.dataset.tab));
 if (new URLSearchParams(location.search).has('signup')) setTab('signup');
 function go(role) { location.href = 'app.html?role=' + role; }
+
+/* ---------- 휴대폰 위쪽 탭 ---------- */
+const jumps = document.querySelectorAll('[data-jump]');
+jumps.forEach(b => b.onclick = () => {
+  if (b.dataset.jump === 'program') document.getElementById('program').scrollIntoView({ behavior: 'smooth' });
+  else window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+// 지금 보고 있는 쪽 탭에 불이 들어오게
+new IntersectionObserver(([e]) => {
+  jumps.forEach(b => b.classList.toggle('on', (b.dataset.jump === 'program') === e.isIntersecting));
+}, { rootMargin: '-50% 0px -50% 0px' }).observe(document.getElementById('program'));
 </script>
 </body>
 </html>
