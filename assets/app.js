@@ -549,7 +549,7 @@ function renderChrome(area) {
   const items = [['home', '홈', 'home'], ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && ROLE !== 'parent' ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
-  $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="login.html">로그아웃</a>`;
+  $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html">로그아웃</a>`;
   document.title = `${ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
 }
 

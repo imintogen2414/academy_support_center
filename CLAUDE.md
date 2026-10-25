@@ -19,7 +19,11 @@
 - 화면 수치는 모두 예시 데이터(`assets/data.js`)다.
 
 # 파일 구조
-- `index.html`: 첫 화면(소개), `service.html?area=admin|teachers|members|mou|promo`: 지원 분야 상세. 내용은 `assets/areas.js`, 스타일은 `assets/site.css`
-- `login.html`: 로그인·회원가입, 데모 계정 입장
+- `index.html`: 첫 화면. 홈페이지가 아니라 프로그램 입구처럼 반반으로 나눈다.
+  - 왼쪽(남색) "지원받기": 분야 고르기 → `#area/admin` 분야 상세 → `#apply/admin` 지원 신청 → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
+  - 오른쪽(흰색) "프로그램 쓰기": 로그인·회원가입(`?signup=1`), 데모 계정 입장
+  - 스타일은 `assets/site.css`
+- `login.html`, `service.html`: 예전 주소. 첫 화면으로 넘겨 주기만 한다.
+- 공유 미리보기: 각 페이지의 og 메타 태그 + `assets/og.png`(1200×630), 탭 아이콘 `assets/favicon.svg`
 - `app.html` + `assets/app.js`: 로그인 후 화면. `?role=owner|teacher|parent|student`, 페이지는 `#home` → `#admin` → `#admin/attend` 같은 해시로 바뀐다. 메뉴 구조는 `app.js`의 `AREAS`.
 - `assets/base.css`: 공통 색·버튼, `assets/app.css`: 로그인 후 화면 스타일

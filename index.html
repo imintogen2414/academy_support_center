@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>학원지원센터 — 학원 운영의 모든 것을 함께합니다</title>
+<title>학원지원센터 — 원장님은 가르치는 일에만, 나머지는 저희가 지원합니다</title>
 <meta name="description" content="행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="학원지원센터">
@@ -26,77 +26,162 @@
 </head>
 <body>
 
-<header class="site-head">
-  <div class="in">
-    <a href="index.html" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>
-      학원지원센터
-    </a>
-    <nav class="site-nav">
-      <a href="#areas">지원 분야</a>
-      <a href="#how">이용 방법</a>
-    </nav>
-    <div class="head-actions">
-      <a href="login.html" class="btn ghost sm">로그인</a>
-      <a href="login.html?signup=1" class="btn primary sm">시작하기</a>
+<!-- 왼쪽: 지원받기 — 분야 고르기 → 분야 상세 → 지원 신청 → 접수 완료 -->
+<aside class="support">
+  <div class="top-row">
+    <a href="index.html" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
+    <span class="tag">지원받기</span>
+  </div>
+  <div id="panel"></div>
+  <div class="foot">홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</div>
+</aside>
+
+<!-- 오른쪽: 프로그램 쓰기 -->
+<main>
+  <div class="box">
+    <span class="kicker">프로그램 쓰기</span>
+    <h2 id="title">다시 오셨네요</h2>
+    <p class="sub" id="lede">계정으로 로그인하거나, 데모 계정으로 둘러보세요.</p>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="login">로그인</button>
+      <button role="tab" aria-selected="false" data-tab="signup">회원가입</button>
     </div>
-  </div>
-</header>
 
-<section class="hero">
-  <div class="hero-copy">
-    <span class="pill">행정 · 강사 · 제휴 · 홍보 · 학생 관리 <b>한곳에서</b></span>
-    <h1>원장님은 가르치는 일에만,<br><em>나머지는 저희가 지원합니다</em></h1>
-    <p class="lede">학원 하나를 운영하는 데 필요한 모든 일. 학원지원센터가 행정부터 강사 교육·채용, 제휴 혜택, 홍보, 학생·학부모 관리까지 함께합니다.</p>
-    <div class="hero-cta">
-      <a href="login.html?signup=1" class="btn primary">우리 학원 등록하기 <span class="arrow"><svg class="icon" style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
-      <a href="login.html" class="btn outline">데모 둘러보기</a>
+    <form id="loginForm" onsubmit="event.preventDefault(); go('owner')">
+      <div class="field"><label for="em">이메일</label><input id="em" type="email" placeholder="you@academy.kr" autocomplete="username"></div>
+      <div class="field"><label for="pw">비밀번호</label><input id="pw" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button class="btn primary wide">로그인</button>
+    </form>
+
+    <form id="signupForm" hidden onsubmit="event.preventDefault(); go(new FormData(this).get('role'))">
+      <div class="field"><label>어떤 분이세요?</label>
+        <div class="roles">
+          <label><input type="radio" name="role" value="owner" checked><span>원장</span></label>
+          <label><input type="radio" name="role" value="teacher"><span>강사</span></label>
+          <label><input type="radio" name="role" value="parent"><span>학부모</span></label>
+          <label><input type="radio" name="role" value="student"><span>학생</span></label>
+        </div>
+      </div>
+      <div class="field"><label for="nm">이름</label><input id="nm" placeholder="홍길동"></div>
+      <div class="field"><label for="em2">이메일</label><input id="em2" type="email" placeholder="you@academy.kr"></div>
+      <div class="field"><label for="ac">학원 이름 또는 초대 코드</label><input id="ac" placeholder="예: 하늘영어학원"></div>
+      <button class="btn primary wide">가입하고 시작하기</button>
+    </form>
+
+    <div class="divider">데모 계정으로 둘러보기</div>
+    <div class="demo">
+      <button onclick="go('owner')"><span class="av" style="background:var(--blue-600)">정</span><div><div class="t">원장 · 정수민</div><div class="d">하늘영어학원 원장</div></div><span class="go">입장 →</span></button>
+      <button onclick="go('teacher')"><span class="av" style="background:#17a06b">김</span><div><div class="t">강사 · 김민지</div><div class="d">초등 A·B반 담당</div></div><span class="go">입장 →</span></button>
+      <button onclick="go('parent')"><span class="av" style="background:#c98a12">김</span><div><div class="t">학부모 · 김은정</div><div class="d">이서연 어머니 · 학원 3곳</div></div><span class="go">입장 →</span></button>
+      <button onclick="go('student')"><span class="av" style="background:#7c85ff">서</span><div><div class="t">학생 · 이서연</div><div class="d">초등 5학년</div></div><span class="go">입장 →</span></button>
     </div>
+    <p class="note">시안 단계라 실제 계정 없이 어떤 버튼을 눌러도 입장돼요.</p>
   </div>
-  <div class="quick" id="quick"></div>
-</section>
-
-<section class="block" id="areas">
-  <div class="sec-head">
-    <span class="pill">다섯 가지 지원</span>
-    <h2>학원 운영 전체를<br>다섯 가지로 나눠 지원해요</h2>
-    <p>궁금한 분야를 눌러 자세히 보세요.</p>
-  </div>
-  <div class="areas" id="areaCards"></div>
-</section>
-
-<section class="block" id="how" style="padding-top:0">
-  <div class="sec-head">
-    <span class="pill">이용 방법</span>
-    <h2>가입하면 바로 시작돼요</h2>
-  </div>
-  <div class="steps">
-    <div class="step"><h4>학원 등록</h4><p>학원 정보와 반·강사를 입력하면 행정·학생 관리가 바로 열려요.</p></div>
-    <div class="step"><h4>필요한 지원 고르기</h4><p>강사 교육, 제휴 신청, 홍보 의뢰 중 필요한 것만 골라 쓰세요.</p></div>
-    <div class="step"><h4>담당 매니저와 함께</h4><p>센터 담당 매니저가 신청한 제휴·홍보를 연결하고 진행 상황을 알려 드려요.</p></div>
-  </div>
-</section>
-
-<div class="cta">
-  <h2>학원 운영, 이제 혼자 하지 마세요</h2>
-  <p>학원지원센터가 원장님 곁에서 함께합니다.</p>
-  <div class="acts"><a href="login.html?signup=1" class="btn primary">시작하기</a><a href="login.html" class="btn outline">데모 둘러보기</a></div>
-</div>
-
-<footer>© 2026 학원지원센터 · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</footer>
+</main>
 
 <script src="assets/areas.js"></script>
 <script>
-document.getElementById('quick').innerHTML = SITE_AREAS.map(a =>
-  `<a href="service.html?area=${a.id}"><span class="ic">${sic(a.icon)}</span>${a.name}</a>`).join('');
-document.getElementById('areaCards').innerHTML = SITE_AREAS.map(a => `
-  <a class="feat" href="service.html?area=${a.id}">
-    <div class="ic">${sic(a.icon)}</div>
-    ${a.partner ? '<span class="tag">공식 파트너 · 인투마케팅</span>' : ''}
-    <h3>${a.name}</h3>
-    <p>${a.short}</p>
-    <span class="more">자세히 보기 →</span>
-  </a>`).join('');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const panel = document.getElementById('panel');
+let applied = null; // 방금 접수한 신청 (시안이라 화면에만 보여줌)
+
+/* ---------- 왼쪽 패널 화면들 (#area/admin, #apply, #done 같은 해시로 이동) ---------- */
+function homeView() {
+  return `
+    <h1>원장님은 가르치는 일에만,<br><em>나머지는 저희가 지원합니다</em></h1>
+    <p class="lede">필요한 지원 분야를 골라 보세요. 자세히 보고 바로 신청할 수 있어요.</p>
+    <div class="label">무엇을 지원받고 싶으세요?</div>
+    <div class="glist">${SITE_AREAS.map(a => `
+      <a class="grow" href="#area/${a.id}"><span class="ic">${sic(a.icon)}</span><span><b>${a.name}</b><small>${a.short}</small></span><span class="go">›</span></a>`).join('')}
+    </div>
+    <div class="acts"><a class="btn light" href="#apply">지원 신청하기</a></div>`;
+}
+
+function areaView(a) {
+  return `
+    <a class="back" href="#">‹ 전체 지원 분야</a>
+    <div class="big-ic">${sic(a.icon)}</div>
+    <h1>${a.title}</h1>
+    <p class="lede">${a.lede}</p>
+    <div class="label">이런 걸 지원해요</div>
+    <div class="glist">${a.items.map(([t, d]) => `<div class="grow static"><span><b>${t}</b><small>${d}</small></span></div>`).join('')}</div>
+    <div class="acts">
+      <a class="btn light" href="#apply/${a.id}">이 지원 신청하기</a>
+      ${a.partner ? `<a class="btn outline" href="${MARKETING_URL}" target="_blank" rel="noopener">인투마케팅 바로가기 ${sic('ext')}</a>` : `<a class="btn outline" href="${a.demo}">데모 화면 보기</a>`}
+    </div>`;
+}
+
+function applyView(pick) {
+  return `
+    <a class="back" href="${pick ? `#area/${pick}` : '#'}">‹ 이전으로</a>
+    <h1>지원 신청</h1>
+    <p class="lede">남겨 주시면 학원지원센터 담당 매니저가 1일 안에 연락드려요.</p>
+    <form class="form" id="applyForm" novalidate>
+      <div class="two">
+        <label class="f">학원 이름<input name="academy" placeholder="예: 하늘영어학원"></label>
+        <label class="f">지역<input name="area" placeholder="예: 수원 영통구"></label>
+      </div>
+      <div class="two">
+        <label class="f">원장님 성함<input name="name" placeholder="홍길동"></label>
+        <label class="f">연락처<input name="phone" type="tel" placeholder="010-0000-0000"></label>
+      </div>
+      <div class="f">필요한 지원 (여러 개 고를 수 있어요)
+        <div class="picks">${SITE_AREAS.map(a => `<label><input type="checkbox" name="need" value="${a.name}" ${a.id === pick ? 'checked' : ''}><span>${a.name}</span></label>`).join('')}</div>
+      </div>
+      <label class="f">더 하실 말씀<textarea name="memo" rows="3" placeholder="예: 겨울방학 전에 홍보를 시작하고 싶어요."></textarea></label>
+      <p class="err" id="applyErr" hidden></p>
+      <div class="acts"><button class="btn light">신청하기</button></div>
+    </form>`;
+}
+
+function doneView() {
+  const a = applied || { academy: '', needs: [] };
+  return `
+    <div class="done-ic">✓</div>
+    <h1>신청이 접수됐어요</h1>
+    <p class="lede">${a.academy ? `${esc(a.academy)} 원장님, ` : ''}담당 매니저가 1일 안에 연락드릴게요.${a.needs.length ? `<br>신청한 지원: ${a.needs.map(esc).join(' · ')}` : ''}</p>
+    <div class="acts"><a class="btn light" href="#">처음으로</a><button class="btn outline" onclick="setTab('signup')">바로 회원가입하기</button></div>`;
+}
+
+function renderPanel() {
+  const [view, id] = location.hash.slice(1).split('/');
+  const area = SITE_AREAS.find(a => a.id === id);
+  if (view === 'area' && area) panel.innerHTML = areaView(area);
+  else if (view === 'apply') panel.innerHTML = applyView(area ? area.id : null);
+  else if (view === 'done') panel.innerHTML = doneView();
+  else panel.innerHTML = homeView();
+  document.querySelector('.support').scrollTop = 0;
+
+  const form = document.getElementById('applyForm');
+  if (form) form.onsubmit = e => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const err = document.getElementById('applyErr');
+    if (!fd.get('academy').trim() || !fd.get('name').trim() || !fd.get('phone').trim()) {
+      err.textContent = '학원 이름, 원장님 성함, 연락처를 적어 주세요.'; err.hidden = false; return;
+    }
+    if (!fd.getAll('need').length) { err.textContent = '필요한 지원을 하나 이상 골라 주세요.'; err.hidden = false; return; }
+    applied = { academy: fd.get('academy').trim(), needs: fd.getAll('need') };
+    location.hash = 'done';
+  };
+}
+window.addEventListener('hashchange', renderPanel);
+renderPanel();
+
+/* ---------- 오른쪽: 로그인 · 회원가입 ---------- */
+const tabs = document.querySelectorAll('[data-tab]');
+function setTab(t) {
+  tabs.forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  document.getElementById('loginForm').hidden = t !== 'login';
+  document.getElementById('signupForm').hidden = t !== 'signup';
+  document.getElementById('title').textContent = t === 'login' ? '다시 오셨네요' : '학원지원센터 시작하기';
+  document.getElementById('lede').textContent = t === 'login' ? '계정으로 로그인하거나, 데모 계정으로 둘러보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
+  if (t === 'signup' && window.innerWidth <= 900) document.querySelector('main').scrollIntoView({ behavior: 'smooth' });
+}
+tabs.forEach(b => b.onclick = () => setTab(b.dataset.tab));
+if (new URLSearchParams(location.search).has('signup')) setTab('signup');
+function go(role) { location.href = 'app.html?role=' + role; }
 </script>
 </body>
 </html>
