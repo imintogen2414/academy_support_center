@@ -82,6 +82,18 @@ const DATA = {
     { id: 'p3', cat: '그 밖의 제휴', name: '학원 배상책임보험', benefit: '단체 가입 할인', desc: '원생 상해 · 시설 배상을 한 번에 보장해요.', status: 'none' }
   ],
 
+  // 학부모 유학 상담: 원장이 안내 → 학부모가 신청 → 원장 확인 → 센터(인투어브로드)에 연결 요청
+  abroad: {
+    promos: [
+      { id: 'ap1', program: '방학 해외 영어캠프', title: '겨울방학 필리핀 영어캠프 (4주)', body: '인솔 교사가 함께 가는 재원생 단체 캠프예요. 오전 1:1 수업, 오후 액티비티로 진행해요.', event_date: '2027-01-04', active: true },
+      { id: 'ap2', program: '유학 설명회', title: '11월 조기유학 · 어학연수 설명회', body: '인투어브로드 유학 상담사가 학원에 직접 와서 국가별 비용과 준비 과정을 설명해 드려요.', event_date: '2026-11-15', active: true }
+    ],
+    requests: [
+      { id: 'ar1', promo_id: 'ap1', program: '방학 해외 영어캠프', parent_name: '김은정', phone: '010-****-2481', student_name: '이서연', student_grade: '초5', memo: '처음 보내는 거라 안전이 걱정돼요.', status: 'new', created_at: '2026-10-24' },
+      { id: 'ar2', promo_id: 'ap2', program: '유학 설명회', parent_name: '박상훈', phone: '010-****-7710', student_name: '박하은', student_grade: '중1', memo: null, status: 'forwarded', owner_memo: '설명회 전에 개별 상담 원하심', created_at: '2026-10-21' }
+    ]
+  },
+
   /* ---------- 홍보 지원 (인투마케팅 연결) ---------- */
   marketingUrl: 'https://intomarketing.co.kr',
   promoServices: [

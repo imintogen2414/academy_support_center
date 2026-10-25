@@ -24,6 +24,7 @@ const ICON = {
   grad: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
 };
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
@@ -36,7 +37,9 @@ let ME = DATA.users[ROLE];
 let PROFILE = null; // 실제로 로그인한 회원의 프로필 (데모면 null)
 let REAL = null;    // 실제 학원 데이터 { academy, role, students, codes, members } (데모면 null)
 let USER = null;    // Supabase 로그인 사용자
-let CENTER = null;  // 센터 관리자 자료 { videos, done, requests, admins, refl } (관리자가 아니면 null)
+let CENTER = null;  // 센터 관리자 자료 { videos, done, requests, admins, refl, partnerApps, abroad } (관리자가 아니면 null)
+let JOBS = null;    // 강사: 센터 채용 게시판 { posts, mine } (데모면 null)
+let SEEKER = false; // 아직 학원에 합류하지 않은 강사가 채용 공고만 보는 중
 const MK = DATA.marketingUrl;
 
 function toast(msg) {
@@ -428,6 +431,10 @@ function realOwnerTodo() {
   if (left) items.push([`오늘 출결 ${left}명 입력 전`, '강사님이 수업 중에 입력해도 돼요', '#admin/attend', '<span class="chip warn">오늘</span>']);
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
+  const fresh = REAL.applicants.filter(a => a.status === 'applied');
+  if (fresh.length) items.push([`새 강사 지원자 ${fresh.length}명`, fresh.slice(0, 3).map(a => esc(a.name)).join(' · '), '#teachers/hire', '<span class="chip info">지원</span>']);
+  const ab = REAL.abroad.requests.filter(r => r.status === 'new');
+  if (ab.length) items.push([`유학 상담 신청 ${ab.length}건 확인하기`, ab.slice(0, 3).map(r => `${esc(r.parent_name)} · ${esc(r.program)}`).join(' / '), '#mou/abroad', '<span class="chip crit">새 신청</span>']);
   const miss = sum(DATA.training, t => Object.values(t.status).filter(x => x !== 'done').length);
   if (miss) items.push([`강사 교육 미이수 ${miss}건`, '센터 교육 영상 · 강사님께 알려 주세요', '#teachers/training', '<span class="chip mute">확인</span>']);
   if (!items.length) items.push(['오늘 급하게 챙길 일은 없어요', '서류 마감 · 미납 · 출결 · 급한 문의를 살펴봤어요', '#admin', '<span class="chip good">여유</span>']);
@@ -548,6 +555,7 @@ function videoPlayer(url, len) {
 let editingReflect = false;
 
 function hirePage() {
+  if (REAL) return realHirePage();
   const mine = DATA.jobs.filter(j => j.mine);
   return head('강사 채용', '공고는 학원지원센터 강사 채용 게시판에 올라가고, 센터에 가입한 강사들이 바로 지원해요.', `<button class="btn primary" data-act="newJob">${ic('plus')}새 공고 올리기</button>`) +
   mine.map(j => `
@@ -564,7 +572,14 @@ function hirePage() {
 
 /* ================= 원장 · 제휴(MOU) ================= */
 let partnerCat = '전체';
-const P_STATE = { using: ['good', '이용 중'], applied: ['info', '신청 완료 · 센터 확인 중'] };
+const P_STATE = { using: ['good', '이용 중'], applied: ['info', '신청 완료 · 센터 확인 중'],
+  new: ['info', '신청 완료 · 센터 확인 중'], contacted: ['warn', '센터가 연락했어요'], connected: ['good', '연결 완료'], closed: ['mute', '종료'] };
+// 실제 로그인이면 제휴 신청 기록에서, 데모면 예시 데이터에서 상태를 가져와요
+const partnerState = p => {
+  if (!REAL) return p.status;
+  const a = REAL.partnerApps.find(x => x.partner_id === p.id && x.status !== 'closed');
+  return a ? a.status : 'none';
+};
 function partnersPage() {
   const cats = ['전체', ...new Set(DATA.partners.map(p => p.cat))];
   const shown = DATA.partners.filter(p => partnerCat === '전체' || p.cat === partnerCat);
@@ -576,16 +591,17 @@ function partnersPage() {
   <div class="filters">${cats.map(c => `<button class="${c === partnerCat ? 'on' : ''}" data-cat="${c}">${c}</button>`).join('')}</div>
   <div class="grid3">
     ${shown.map(p => `
-      <div class="perk ${p.status !== 'none' ? 'joined' : ''}">
+      <div class="perk ${partnerState(p) !== 'none' ? 'joined' : ''}">
         <span class="who">${p.cat} · ${p.name}</span>
         <span class="t">${p.benefit}</span>
         <span class="d">${p.desc}</span>
-        <div class="row">${p.status === 'none' ? `<button class="btn sm primary" data-apply="${p.id}">바로 신청</button>` : `<span class="chip ${P_STATE[p.status][0]}">${P_STATE[p.status][1]}</span>`}</div>
+        <div class="row">${partnerState(p) === 'none' ? `<button class="btn sm primary" data-apply="${p.id}">바로 신청</button>` : `<span class="chip ${P_STATE[partnerState(p)][0]}">${P_STATE[partnerState(p)][1]}</span>`}</div>
       </div>`).join('')}
   </div>`;
 }
 
 function myPartnersPage() {
+  if (REAL) return realMyPartnersPage();
   const mine = DATA.partners.filter(p => p.status !== 'none');
   const saved = mine.reduce((a, p) => a + (p.saved || 0), 0);
   return head('내 제휴', '신청하고 이용 중인 제휴예요. 유학 프로그램 참가 현황과 할인 내역을 함께 봐요.') + `
@@ -727,7 +743,7 @@ function invitePage() {
    options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
    academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
-function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false }) {
+function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
   const cur = (k, o) => row ? row[k] : o.value;
@@ -769,7 +785,7 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) });
     const { error } = await q;
     if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
-    d.close(); await after(); render(); toast(row ? '고쳤어요' : `${label(data)} 추가했어요`);
+    d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`);
   };
   if (row && !noDelete) $('#dlgDel').onclick = async () => {
     if (!confirm(`${label(row)} 삭제할까요?`)) return;
@@ -824,6 +840,7 @@ function noticesPage() {
 
 /* ================= 강사 화면 ================= */
 function jobsPage() {
+  if (JOBS) return realJobsPage();
   return head('채용 공고', '학원지원센터에 가입한 학원들의 강사 채용 공고예요. 프로필과 교육 이수 기록이 함께 전달돼요.') + `
   <section class="card"><div class="list">
     ${DATA.jobs.map(j => `
@@ -833,6 +850,251 @@ function jobsPage() {
         <div class="r">${j.applied ? '<span class="chip good">지원 완료</span>' : `<button class="btn sm primary" data-applyjob="${j.id}">지원하기</button>`}<span class="time">마감 ${j.due}</span></div>
       </div>`).join('')}
   </div></section>`;
+}
+
+/* ================= 채용 · 제휴 · 유학 (실제 데이터) ================= */
+const JOB_TYPES = ['파트타임', '전임', '주말', '방학 특강'];
+// 원장이 보는 지원 상태 · 강사가 보는 지원 상태
+const APP_STATE = { applied: ['info', '새 지원'], interview: ['warn', '면접 제안'], hired: ['good', '채용 확정'], declined: ['mute', '진행 안 함'] };
+const MY_APP_STATE = { applied: ['info', '지원 완료'], interview: ['warn', '면접 제안을 받았어요'], hired: ['good', '채용 확정'], declined: ['mute', '다른 분과 진행해요'] };
+const jobLine = j => [j.job_type, j.subject, j.pay, j.hours].filter(Boolean).map(esc).join(' · ');
+
+function realHirePage() {
+  const add = `<button class="btn primary" data-act="newJob">${ic('plus')}새 공고 올리기</button>`;
+  if (!REAL.jobs.length) return head('강사 채용', '공고는 센터 강사 채용 게시판에 올라가고, 센터에 가입한 강사들이 바로 지원해요.') + `
+  <section class="card empty">
+    <span class="tile-ic">${ic('brief')}</span>
+    <h2>첫 채용 공고를 올려 보세요</h2>
+    <p class="muted">지원자의 이름 · 경력 · 센터 교육 이수 기록이 함께 들어와요.</p>
+    ${add}
+  </section>`;
+  const appRow = a => {
+    const [c, l] = APP_STATE[a.status];
+    const key = `${a.job_id}:${a.user_id}`;
+    const acts = a.status === 'applied' ? `<button class="btn sm" data-app-step="${key}:declined">진행 안 함</button><button class="btn sm primary" data-app-step="${key}:interview">면접 제안</button>`
+      : a.status === 'interview' ? `<button class="btn sm" data-app-step="${key}:declined">진행 안 함</button><button class="btn sm primary" data-app-step="${key}:hired">채용 확정</button>` : '';
+    return `
+      <div class="li">
+        <span class="av" style="background:var(--blue-500)">${esc(a.name[0])}</span>
+        <div><div class="t">${esc(a.name)} <span class="chip ${a.trainings_done ? 'good' : 'mute'}">센터 교육 ${a.trainings_done}개 이수</span></div>
+          <div class="d">${esc(a.career || '경력 미입력')} · ${md(a.applied_at.slice(0, 10))} 지원${a.phone ? ` · <a href="tel:${esc(a.phone)}" style="color:var(--blue-600)">${esc(a.phone)}</a>` : ''}</div>
+          ${a.message ? `<div class="d">"${esc(a.message)}"</div>` : ''}</div>
+        <div class="r"><span class="chip ${c}">${l}</span>${acts ? `<span class="btns">${acts}</span>` : ''}</div>
+      </div>`;
+  };
+  return head('강사 채용', '공고는 센터 강사 채용 게시판에 올라가요. 공고 제목을 누르면 고치거나 마감할 수 있어요.', add) + REAL.jobs.map(j => {
+    const as = REAL.applicants.filter(a => a.job_id === j.id);
+    return `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><div><h2><span class="nm-link" data-edit-job="${j.id}" role="button" tabindex="0">${esc(j.title)}</span></h2><div class="sub">${jobLine(j)}${j.due ? ` · 마감 ${md(j.due)}` : ''}</div></div>
+      <span class="btns">${j.status === 'open' ? '<span class="chip good">모집 중</span>' : '<span class="chip mute">마감</span>'}<span class="chip info">지원자 ${as.length}명</span></span></div>
+    ${as.length ? `<div class="list stack">${as.map(appRow).join('')}</div>` : '<p class="muted small" style="margin:0">아직 지원자가 없어요. 센터에 가입한 강사들에게 바로 보여요.</p>'}
+  </section>`;
+  }).join('');
+}
+
+function jobDialog(j) {
+  formDialog({
+    title: j ? '채용 공고 고치기' : '새 채용 공고', table: 'job_posts', row: j, after: loadJobs, okText: j ? '저장' : '올리기',
+    label: r => `${r.title} 공고를`, doneText: '센터 채용 게시판에 공고를 올렸어요',
+    fields: [
+      ['title', '공고 제목', { required: true, max: 100, placeholder: '예: 초등부 영어 강사 (파트타임)' }],
+      ['job_type', '근무 형태', { type: 'select', required: true, options: JOB_TYPES, value: '파트타임', half: true }], ['subject', '과목', { max: 50, placeholder: '예: 초등 영어', half: true }],
+      ['pay', '급여', { max: 50, placeholder: '예: 시급 2.2만 원', half: true }], ['hours', '근무 시간', { max: 50, placeholder: '예: 평일 15–20시', half: true }],
+      ['area', '지역', { max: 100, value: REAL.academy.region || '', half: true }], ['due', '모집 마감', { type: 'date', half: true }],
+      ['description', '하는 일 · 우대 사항', { max: 2000 }],
+      ['status', '상태', { type: 'select', required: true, value: 'open', options: [['open', '모집 중'], ['closed', '마감']] }]
+    ]
+  });
+}
+
+async function stepApplicant(jobId, userId, status) {
+  const a = REAL.applicants.find(x => x.job_id === jobId && x.user_id === userId), before = a.status;
+  a.status = status; render();
+  const { error } = await SB.from('job_applications').update({ status }).eq('job_id', jobId).eq('user_id', userId);
+  if (error) { a.status = before; render(); toast('저장하지 못했어요'); return; }
+  toast(status === 'interview' ? `${a.name} 님께 연락해 면접 일정을 잡아 주세요` : status === 'hired' ? `${a.name} 님 채용을 확정했어요 · 강사용 초대 코드를 보내 주세요` : '진행 안 함으로 바꿨어요');
+}
+
+// 강사: 센터 채용 게시판
+function realJobsPage() {
+  const mine = id => JOBS.mine.find(a => a.job_id === id);
+  return head('채용 공고', '센터에 가입한 학원들의 강사 채용 공고예요. 지원하면 이름 · 경력과 센터 교육 이수 기록이 원장님께 전달돼요.') +
+    (SEEKER ? `<a class="hint" href="#" data-act="joinAcademy" style="margin:0 0 16px">${ic('users')}<span>학원에서 강사용 초대 코드를 받았나요?</span><b>학원 연결하기 →</b></a>` : '') +
+    (JOBS.posts.length ? `
+  <section class="card"><div class="list stack">
+    ${JOBS.posts.map(j => {
+      const a = mine(j.id);
+      return `
+      <div class="li">
+        <span class="av" style="background:var(--navy-700)">${esc((j.academy_name || '학')[0])}</span>
+        <div><div class="t">${esc(j.title)}</div><div class="d">${esc(j.academy_name || '')}${j.area ? ` · ${esc(j.area)}` : ''} · ${jobLine(j)}</div>${j.description ? `<div class="d">${esc(j.description)}</div>` : ''}</div>
+        <div class="r">${a ? `<span class="chip ${MY_APP_STATE[a.status][0]}">${MY_APP_STATE[a.status][1]}</span>${a.status === 'applied' ? `<button class="btn sm" data-cancel-app="${j.id}">지원 취소</button>` : ''}`
+          : `<button class="btn sm primary" data-applyjob="${j.id}">지원하기</button>`}${j.due ? `<span class="time">마감 ${md(j.due)}</span>` : ''}</div>
+      </div>`;
+    }).join('')}
+  </div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('brief')}</span><h2>지금 모집 중인 공고가 없어요</h2><p class="muted">학원이 공고를 올리면 여기에 바로 나와요.</p></section>`);
+}
+
+function applyJobDialog(j) {
+  formDialog({
+    title: `${j.academy_name || ''} · ${j.title} 지원`, table: 'job_applications', academy: false, extra: { job_id: j.id }, after: loadJobBoard, okText: '지원하기',
+    label: () => '지원서를', doneText: `${j.academy_name || '학원'}에 지원서를 보냈어요`,
+    fields: [
+      ['career', '경력', { max: 200, placeholder: '예: 경력 3년 · 초등 영어 · 파닉스' }],
+      ['phone', '연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000' }],
+      ['message', '원장님께 한마디', { max: 1000, placeholder: '예: 평일 오후 모두 가능해요.' }]
+    ]
+  });
+}
+
+// 원장: 내 제휴 신청
+function realMyPartnersPage() {
+  const list = REAL.partnerApps, open = list.filter(a => a.status !== 'closed');
+  return head('내 제휴', '신청한 제휴의 진행 상황이에요. 센터가 제휴처와 연결해 드리고, 안내를 여기에 남겨요.') + `
+  <div class="stats">
+    <div class="stat"><span>진행 중 신청</span><b class="num">${open.filter(a => a.status !== 'connected').length}건</b></div>
+    <div class="stat good"><span>연결 완료</span><b class="num">${list.filter(a => a.status === 'connected').length}곳</b></div>
+    <div class="stat"><span>유학 제휴</span><b class="num">${open.filter(a => a.partner_id.startsWith('a')).length}곳</b></div>
+  </div>` + (list.length ? `
+  <section class="card"><div class="list stack">
+    ${list.map(a => `
+      <div class="li">
+        <span class="av" style="background:var(--blue-600)">${ic(a.partner_id.startsWith('a') ? 'globe' : 'handshake')}</span>
+        <div><div class="t">${esc(a.partner_name)} <span class="muted small">${md(a.created_at.slice(0, 10))} 신청</span></div>
+          ${a.memo ? `<div class="d">"${esc(a.memo)}"</div>` : ''}${a.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(a.admin_memo)}</div>` : ''}</div>
+        <div class="r"><span class="chip ${P_STATE[a.status][0]}">${P_STATE[a.status][1]}</span>${a.status === 'new' ? `<button class="btn sm" data-cancel-partner="${a.id}">신청 취소</button>` : ''}</div>
+      </div>`).join('')}
+  </div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('handshake')}</span><h2>아직 신청한 제휴가 없어요</h2><p class="muted">센터가 미리 맺어 둔 제휴처에 신청만 하면 연결해 드려요.</p><a class="btn primary" href="#mou/partners">제휴처 둘러보기</a></section>`) +
+  `<a class="hint" href="#mou/partners">${ic('plus')}<span>다른 제휴처도 둘러보세요</span><b>제휴처 둘러보기 →</b></a>`;
+}
+
+function partnerApplyDialog(p) {
+  formDialog({
+    title: `${p.name} 제휴 신청`, table: 'partner_applications', extra: { partner_id: p.id, partner_name: p.name }, after: loadPartnerApps, okText: '신청하기',
+    label: () => '제휴 신청을', doneText: `${p.name} 제휴를 신청했어요 · 센터가 연락드려요`,
+    fields: [['memo', '센터에 남길 말', { max: 1000, placeholder: p.cat === '유학' ? '예: 겨울캠프에 재원생 10명 정도 생각 중이에요.' : '예: 다음 달부터 쓰고 싶어요.' }]]
+  });
+}
+
+// 유학 상담: 원장 화면 (데모에서는 예시 데이터로 보여 줘요)
+const ABROAD_PROGRAMS = ['방학 해외 영어캠프', '초·중·고 조기유학', '단기 어학연수', '해외 대학 진학', '유학 설명회', '기타'];
+const AB_STATE = { new: ['crit', '새 신청'], confirmed: ['warn', '원장 확인'], forwarded: ['info', '센터 연결 중'], done: ['good', '상담 연결 완료'] };
+const AB_PARENT_STATE = { new: ['info', '신청 완료'], confirmed: ['warn', '학원이 확인했어요'], forwarded: ['info', '유학 상담사 연결 중'], done: ['good', '상담 연결 완료'] };
+const abroadData = () => REAL ? REAL.abroad : DATA.abroad;
+function abroadOwnerPage() {
+  const { promos, requests } = abroadData();
+  const cnt = st => requests.filter(r => r.status === st).length;
+  const reqRow = r => {
+    const [c, l] = AB_STATE[r.status];
+    const act = r.status === 'new' ? `<button class="btn sm" data-ab-step="${r.id}:confirmed">확인했어요</button>`
+      : r.status === 'confirmed' ? `<button class="btn sm primary" data-ab-step="${r.id}:forwarded">인투어브로드 연결 요청</button>` : '';
+    return `
+      <div class="li">
+        <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc(r.parent_name[0])}</span>
+        <div><div class="t"><span class="nm-link" data-edit-ab="${r.id}" role="button" tabindex="0">${esc(r.parent_name)}</span> <span class="muted small">${esc([r.student_name, r.student_grade].filter(Boolean).join(' '))}</span></div>
+          <div class="d">${esc(r.program)} · <a href="tel:${esc(r.phone)}" style="color:var(--blue-600)">${esc(r.phone)}</a> · ${md(r.created_at.slice(0, 10))} 신청</div>
+          ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}${r.owner_memo ? `<div class="d"><b>내 메모</b> ${esc(r.owner_memo)}</div>` : ''}${r.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(r.admin_memo)}</div>` : ''}</div>
+        <div class="r"><span class="chip ${c}">${l}</span>${act}</div>
+      </div>`;
+  };
+  return head('유학 상담', '유학 프로그램을 학부모 앱에 안내하면 학부모님이 상담을 신청해요. 확인한 뒤 "인투어브로드 연결 요청"을 누르면 센터가 유학 상담사를 연결해 드려요.', `<button class="btn primary" data-act="addPromo">${ic('plus')}학부모에게 안내하기</button>`) + `
+  <div class="stats">
+    <div class="stat crit"><span>새 신청</span><b class="num">${cnt('new')}건</b></div>
+    <div class="stat"><span>확인함</span><b class="num">${cnt('confirmed')}건</b></div>
+    <div class="stat good"><span>센터 연결</span><b class="num">${cnt('forwarded') + cnt('done')}건</b></div>
+  </div>
+  <div class="grid2">
+    <section class="card">
+      <div class="card-head"><h2>상담 신청</h2><span class="sub">이름을 누르면 메모를 남길 수 있어요</span></div>
+      ${requests.length ? `<div class="list stack">${requests.map(reqRow).join('')}</div>` : '<p class="muted small" style="margin:0">아직 신청이 없어요. 학부모에게 프로그램을 안내해 보세요.</p>'}
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>학부모에게 안내 중</h2><span class="sub">누르면 고칠 수 있어요</span></div>
+      ${promos.length ? `<div class="list">${promos.map(p => `
+        <a class="li link" href="#mou/abroad" data-edit-promo="${p.id}">
+          <span class="av" style="background:var(--blue-600)">${ic('globe')}</span>
+          <div><div class="t">${esc(p.title)}</div><div class="d">${esc(p.program)}${p.event_date ? ` · ${md(p.event_date)}` : ''} · 신청 ${requests.filter(r => r.promo_id === p.id).length}건</div></div>
+          <div class="r">${p.active ? '<span class="chip good">안내 중</span>' : '<span class="chip mute">숨김</span>'}</div>
+        </a>`).join('')}</div>` : '<p class="muted small" style="margin:0">아직 안내한 프로그램이 없어요.</p>'}
+    </section>
+  </div>
+  <a class="hint" href="${DATA.abroadUrl}" target="_blank" rel="noopener">${ic('globe')}<span>유학 프로그램 내용은 인투어브로드에서 자세히 볼 수 있어요</span><b>인투어브로드 →</b></a>`;
+}
+
+function promoDialog(pr) {
+  if (!REAL) return toast('데모에서는 저장되지 않아요');
+  formDialog({
+    title: pr ? '유학 안내 고치기' : '학부모에게 유학 프로그램 안내', table: 'abroad_promos', row: pr, after: loadAbroad, okText: pr ? '저장' : '안내하기',
+    label: r => `${r.title} 안내를`, doneText: '학부모 앱에 안내를 올렸어요',
+    fields: [
+      ['program', '프로그램', { type: 'select', required: true, options: ABROAD_PROGRAMS, value: '방학 해외 영어캠프', half: true }], ['event_date', '설명회 · 출발 날짜', { type: 'date', half: true }],
+      ['title', '제목', { required: true, max: 100, placeholder: '예: 겨울방학 필리핀 영어캠프 (4주)' }],
+      ['body', '안내 글', { max: 2000, placeholder: '예: 인솔 교사가 함께 가는 재원생 단체 캠프예요.' }],
+      ['active', '학부모 앱에 보여 줘요 (끄면 숨겨져요)', { type: 'check', value: true }]
+    ]
+  });
+}
+
+function abroadMemoDialog(r) {
+  if (!REAL) return toast('데모에서는 저장되지 않아요');
+  formDialog({
+    title: `${r.parent_name} 님 유학 상담`, table: 'abroad_requests', row: r, academy: false, noDelete: true, after: loadAbroad,
+    label: () => '신청을',
+    fields: [['owner_memo', '내 메모', { max: 1000, placeholder: '예: 10/26 통화 · 겨울캠프 비용 문의' }]]
+  });
+}
+
+async function stepAbroad(id, status, list, reload) {
+  if (!REAL && !CENTER) return toast('데모에서는 저장되지 않아요');
+  const r = list.find(x => x.id === id), before = r.status;
+  r.status = status; render();
+  const { error } = await SB.from('abroad_requests').update({ status }).eq('id', id);
+  if (error) { r.status = before; render(); toast('저장하지 못했어요'); return; }
+  await reload(); render();
+  toast(status === 'forwarded' ? '센터에 연결을 요청했어요 · 인투어브로드 상담사가 연락드려요' : status === 'done' ? '상담 연결 완료로 바꿨어요' : '확인했어요 · 학부모님께 연락해 주세요');
+}
+
+// 학부모: 유학 프로그램 보고 상담 신청
+function parentAbroadPage() {
+  const { promos, requests } = abroadData();
+  const active = promos.filter(p => p.active);
+  const mine = REAL ? requests : requests.filter(r => r.parent_name === ME.name);
+  const asked = id => mine.some(r => r.promo_id === id && r.status !== 'done');
+  return head('유학 프로그램', `${DATA.academy.name}에서 안내하는 유학 · 캠프 프로그램이에요. 상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투어브로드)와 연결해 드려요.`) +
+    (active.length ? `<div class="grid3">${active.map(p => `
+      <div class="perk">
+        <span class="who">${esc(p.program)}${p.event_date ? ` · ${md(p.event_date)}` : ''}</span>
+        <span class="t">${esc(p.title)}</span>
+        ${p.body ? `<span class="d">${esc(p.body)}</span>` : ''}
+        <div class="row">${asked(p.id) ? '<span class="chip info">상담 신청함</span>' : `<button class="btn sm primary" data-ab-apply="${p.id}">상담 신청</button>`}</div>
+      </div>`).join('')}</div>` : `
+    <section class="card empty"><span class="tile-ic">${ic('globe')}</span><h2>아직 안내된 프로그램이 없어요</h2><p class="muted">궁금한 점이 있으면 바로 상담을 신청해도 돼요.</p></section>`) + `
+    <section class="card" style="margin-top:16px">
+      <div class="card-head"><h2>내 상담 신청</h2><button class="btn sm" data-ab-apply="">다른 유학 상담 신청</button></div>
+      ${mine.length ? `<div class="list stack">${mine.map(r => `
+        <div class="li">
+          <span class="av" style="background:var(--blue-600)">${ic('globe')}</span>
+          <div><div class="t">${esc(r.program)}</div><div class="d">${esc([r.student_name, r.student_grade].filter(Boolean).join(' '))} · ${md(r.created_at.slice(0, 10))} 신청</div></div>
+          <div class="r"><span class="chip ${AB_PARENT_STATE[r.status][0]}">${AB_PARENT_STATE[r.status][1]}</span></div>
+        </div>`).join('')}</div>` : '<p class="muted small" style="margin:0">아직 신청한 상담이 없어요.</p>'}
+    </section>`;
+}
+
+function abroadApplyDialog(promo) {
+  if (!REAL) return toast('데모에서는 저장되지 않아요');
+  formDialog({
+    title: promo ? `${promo.title} 상담 신청` : '유학 상담 신청', table: 'abroad_requests', extra: { promo_id: promo ? promo.id : null }, after: loadAbroad, okText: '신청하기',
+    label: () => '상담 신청을', doneText: '상담을 신청했어요 · 원장님이 확인하고 연락드려요',
+    fields: [
+      ['program', '관심 프로그램', { type: 'select', required: true, options: ABROAD_PROGRAMS, value: promo ? promo.program : '', createOnly: true }],
+      ['parent_name', '학부모 이름', { required: true, max: 50, value: PROFILE.name || '', half: true }], ['phone', '연락처', { type: 'tel', required: true, max: 30, placeholder: '010-0000-0000', half: true }],
+      ['student_name', '학생 이름', { max: 50, half: true }], ['student_grade', '학년', { max: 20, placeholder: '예: 초5', half: true }],
+      ['memo', '궁금한 점', { max: 1000, placeholder: '예: 처음 보내는 거라 안전이 걱정돼요.' }]
+    ]
+  });
 }
 
 /* ================= 학부모 화면 ================= */
@@ -1032,25 +1294,100 @@ function centerAdminsPage() {
   </section>`;
 }
 
+// 센터: 제휴 신청 처리
+const PA_NEXT = { new: ['contacted', '연락함으로'], contacted: ['connected', '연결 완료로'], connected: ['closed', '종료'], closed: ['new', '다시 열기'] };
+const PA_LABEL = { new: '새 신청', contacted: '연락함', connected: '연결 완료', closed: '종료' };
+let paFilter = 'all';
+const filterBar = (all, labels, cur, attr) => `<div class="filters">${[['all', '전체'], ...Object.entries(labels)].map(([k, l]) =>
+  `<button class="${k === cur ? 'on' : ''}" data-${attr}="${k}">${l} ${k === 'all' ? all.length : all.filter(r => r.status === k).length}</button>`).join('')}</div>`;
+function centerPartnersPage() {
+  const all = CENTER.partnerApps, list = all.filter(a => paFilter === 'all' || a.status === paFilter);
+  return head('제휴 신청', '원장님이 "바로 신청"한 제휴예요. 제휴처와 연결하면서 상태를 바꿔 두면 원장님 "내 제휴"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
+    filterBar(all, PA_LABEL, paFilter, 'pa-filter') + (list.length ? `
+  <section class="card"><div class="list stack">${list.map(a => {
+    const [next, nl] = PA_NEXT[a.status];
+    return `
+    <div class="li">
+      <span class="av" style="background:var(--navy-700)">${esc((a.academy_name || '학')[0])}</span>
+      <div><div class="t"><span class="nm-link" data-edit-pa="${a.id}" role="button" tabindex="0">${esc(a.academy_name || '학원')}</span> <span class="muted small">${md(a.created_at.slice(0, 10))} 신청</span></div>
+        <div class="d"><b>${esc(a.partner_name)}</b>${a.memo ? ` · "${esc(a.memo)}"` : ''}</div>
+        ${a.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(a.admin_memo)}</div>` : ''}</div>
+      <div class="r"><span class="chip ${P_STATE[a.status][0]}">${PA_LABEL[a.status]}</span><button class="btn sm ${next === 'connected' ? 'primary' : ''}" data-pa-step="${a.id}:${next}">${nl}</button></div>
+    </div>`;
+  }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('handshake')}</span><h2>여기에 해당하는 신청이 없어요</h2><p class="muted">원장님이 제휴처 둘러보기에서 신청하면 여기에 쌓여요.</p></section>`);
+}
+function partnerAppDialog(a) {
+  formDialog({
+    title: `${a.academy_name || '학원'} · ${a.partner_name}`, table: 'partner_applications', row: a, academy: false, noDelete: true, after: loadCenter,
+    label: () => '신청을',
+    fields: [
+      ['status', '상태', { type: 'select', required: true, options: Object.entries(PA_LABEL) }],
+      ['admin_memo', '원장님께 남길 안내', { max: 1000, placeholder: '예: 인투어브로드 김OO 상담사가 10/28에 연락드려요' }]
+    ]
+  });
+}
+async function stepPartnerApp(id, status) {
+  const a = CENTER.partnerApps.find(x => x.id === id), before = a.status;
+  a.status = status; render();
+  const { error } = await SB.from('partner_applications').update({ status }).eq('id', id);
+  if (error) { a.status = before; render(); toast(error.code === '23505' ? '같은 제휴가 이미 진행 중이에요' : '저장하지 못했어요'); return; }
+  toast(`${a.academy_name} · ${a.partner_name} → ${PA_LABEL[status]}`);
+}
+
+// 센터: 원장이 연결 요청한 유학 상담
+function centerAbroadPage() {
+  const list = CENTER.abroad.filter(r => r.status === 'forwarded' || r.status === 'done');
+  return head('유학 상담', '학부모가 신청하고 원장님이 확인해서 넘긴 유학 상담이에요. 인투어브로드 상담사에게 연결한 뒤 "연결 완료"로 바꿔 주세요.') + (list.length ? `
+  <section class="card"><div class="list stack">${list.map(r => `
+    <div class="li">
+      <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc(r.parent_name[0])}</span>
+      <div><div class="t"><span class="nm-link" data-edit-cab="${r.id}" role="button" tabindex="0">${esc(r.parent_name)}</span> <span class="muted small">${esc(r.academy_name || '')} · ${esc([r.student_name, r.student_grade].filter(Boolean).join(' '))}</span></div>
+        <div class="d">${esc(r.program)} · <a href="tel:${esc(r.phone)}" style="color:var(--blue-600)">${esc(r.phone)}</a> · ${md(r.created_at.slice(0, 10))} 신청</div>
+        ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}${r.owner_memo ? `<div class="d"><b>원장 메모</b> ${esc(r.owner_memo)}</div>` : ''}${r.admin_memo ? `<div class="d"><b>센터 메모</b> ${esc(r.admin_memo)}</div>` : ''}</div>
+      <div class="r"><span class="chip ${AB_STATE[r.status][0]}">${AB_STATE[r.status][1]}</span>${r.status === 'forwarded' ? `<button class="btn sm primary" data-cab-step="${r.id}:done">연결 완료</button>` : ''}</div>
+    </div>`).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('globe')}</span><h2>연결 요청된 상담이 아직 없어요</h2><p class="muted">원장님이 학부모 신청을 확인하고 "인투어브로드 연결 요청"을 누르면 여기에 와요.</p></section>`) +
+  `<a class="hint" href="${DATA.abroadUrl}" target="_blank" rel="noopener">${ic('globe')}<span>유학 상담은 인투어브로드 상담사에게 연결해요</span><b>인투어브로드 →</b></a>`;
+}
+function centerAbroadDialog(r) {
+  formDialog({
+    title: `${r.parent_name} 님 유학 상담`, table: 'abroad_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    label: () => '신청을',
+    fields: [
+      ['status', '상태', { type: 'select', required: true, options: [['forwarded', '센터 연결 중'], ['done', '상담 연결 완료']] }],
+      ['admin_memo', '센터 메모 (원장님께 보여요)', { max: 1000, placeholder: '예: 10/27 김OO 상담사 배정' }]
+    ]
+  });
+}
+
 const centerTodo = () => {
   const fresh = CENTER.requests.filter(r => r.status === 'new');
   const items = fresh.slice(0, 3).map(r => [`${esc(r.academy_name)} 지원 신청 연락하기`, `${esc(r.owner_name)} 원장님 · ${(r.needs || []).map(esc).join(' · ')}`, '#center/requests', '<span class="chip crit">새 신청</span>']);
   if (fresh.length > 3) items.push([`새 신청 ${fresh.length - 3}건 더 있어요`, '지원 신청에서 모두 보기', '#center/requests', '']);
+  const pa = CENTER.partnerApps.filter(a => a.status === 'new').length;
+  if (pa) items.push([`새 제휴 신청 ${pa}건`, '제휴처와 연결해 주세요', '#center/partners', '<span class="chip crit">새 신청</span>']);
+  const ab = CENTER.abroad.filter(r => r.status === 'forwarded').length;
+  if (ab) items.push([`유학 상담 연결 요청 ${ab}건`, '인투어브로드 상담사 연결', '#center/abroad', '<span class="chip warn">연결 필요</span>']);
   const noUrl = CENTER.videos.filter(v => v.published && !v.video_url).length;
   if (noUrl) items.push([`영상 주소가 없는 교육 ${noUrl}개`, '강사에게 재생 버튼이 안 보여요', '#center/videos', '<span class="chip warn">확인</span>']);
   if (!items.length) items.push(['새로 처리할 일이 없어요', '지원 신청 · 교육 영상을 살펴봤어요', '#center', '<span class="chip good">여유</span>']);
   return items;
 };
 
-const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 배부 · 지원 신청 · 관리자',
-  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건 · 영상 ${CENTER.videos.length}개`,
+const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 관리자',
+  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
   subs: {
     videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 리플렉션 보기', stat: () => `영상 ${CENTER.videos.length}개 · 리플렉션 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}개`,
       render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
     requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
+    partners: { name: '제휴 신청', icon: 'handshake', desc: '원장님이 신청한 제휴 연결', stat: () => `새 신청 ${CENTER.partnerApps.filter(a => a.status === 'new').length}건`, render: centerPartnersPage },
+    abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
     admins: { name: '관리자', icon: 'shield', desc: '센터 관리자 추가 · 빼기', stat: () => `${CENTER.admins.length}명`, render: centerAdminsPage }
   } };
 
+function applicantStat() {
+  if (!REAL) return `지원자 ${DATA.jobs.filter(j => j.mine).reduce((a, j) => a + (j.applicants || []).length, 0)}명`;
+  return `새 지원자 ${REAL.applicants.filter(a => a.status === 'applied').length}명`;
+}
 function attendStat() {
   if (!REAL) { const s = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]); return `오늘 ${s[0]}/${s[1]}명`; }
   const { day, map } = REAL.attend;
@@ -1073,11 +1410,11 @@ const AREAS = {
         }, render: financePage },
         paper: { name: '서류·행정', icon: 'doc', desc: '교육청·세무서·공단 신고 서류', stat: () => `작성 필요 ${(REAL ? REAL.paperwork : DATA.paperwork).filter(p => p.status === 'todo').length}건`, render: paperPage }
       } },
-    teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · 지원자 ${DATA.jobs.filter(j => j.mine).reduce((a, j) => a + (j.applicants || []).length, 0)}명`,
+    teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · ${applicantStat()}`,
       subs: {
         staff: { name: '우리 학원 강사', icon: 'users', desc: '담당 반과 교육 이수 현황', stat: () => `${DATA.staff.length}명`, render: staffPage },
         training: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상과 강사 리플렉션', stat: () => `영상 ${DATA.training.length}개`, render: trainingPage, detail: id => trainingDetail(id, 'teachers/training') },
-        hire: { name: '강사 채용', icon: 'brief', desc: '공고 올리기와 지원자 관리', stat: () => `지원자 ${DATA.jobs.filter(j => j.mine).reduce((a, j) => a + (j.applicants || []).length, 0)}명`, render: hirePage }
+        hire: { name: '강사 채용', icon: 'brief', desc: '공고 올리기와 지원자 관리', stat: applicantStat, render: hirePage }
       } },
     members: { name: '학생·학부모 관리', icon: 'users', desc: '상담·등록부터 원생 명단, 학부모 공지까지', stat: () => `새 문의 ${DATA.leads.filter(l => l.stage === 'inquiry').length}건`,
       subs: {
@@ -1086,10 +1423,13 @@ const AREAS = {
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => `이번 달 ${DATA.notices.length}건`, render: noticesPage }
       } },
-    mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청', stat: () => `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
+    mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
+        ? `진행 중 제휴 ${REAL.partnerApps.filter(a => a.status !== 'closed').length}건 · 유학 상담 새 신청 ${REAL.abroad.requests.filter(r => r.status === 'new').length}건`
+        : `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
       subs: {
         partners: { name: '제휴처 둘러보기', icon: 'handshake', desc: '유학 · 캠프 · 어학연수와 그 밖의 제휴', stat: () => `${DATA.partners.length}곳`, render: partnersPage },
-        mine: { name: '내 제휴', icon: 'check', desc: '이용 중인 제휴와 아낀 비용', stat: () => `${DATA.partners.filter(p => p.status !== 'none').length}곳`, render: myPartnersPage }
+        abroad: { name: '유학 상담', icon: 'globe', desc: '학부모에게 유학 프로그램 안내 · 상담 신청 확인', stat: () => `새 신청 ${abroadData().requests.filter(r => r.status === 'new').length}건`, render: abroadOwnerPage },
+        mine: { name: '내 제휴', icon: 'check', desc: REAL ? '신청한 제휴의 진행 상황' : '이용 중인 제휴와 아낀 비용', stat: () => REAL ? `${REAL.partnerApps.filter(a => a.status !== 'closed').length}건` : `${DATA.partners.filter(p => p.status !== 'none').length}곳`, render: myPartnersPage }
       } },
     promo: { name: '홍보 지원', icon: 'megaphone', desc: '블로그·디자인·영상을 인투마케팅이 지원', stat: () => `진행 중 의뢰 ${DATA.promoRequests.length}건`,
       subs: {
@@ -1101,7 +1441,7 @@ const AREAS = {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
-    jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${DATA.jobs.length}건`, render: jobsPage }
+    jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage }
   },
   parent: {
     kid: { name: '우리 아이', icon: 'grad', desc: '일정·숙제, 기록, 수납을 한 번에', stat: () => `${DATA.child.name} · 학원 ${DATA.child.academies}곳`,
@@ -1110,7 +1450,8 @@ const AREAS = {
         record: { name: '기록·성적', icon: 'doc', desc: '출석률·시험·선생님 코멘트', stat: () => `출석 ${DATA.child.record.attend}%`, render: kidRecordPage },
         bills: { name: '수납', icon: 'card', desc: '학원별 수강료 결제', stat: () => { const n = DATA.child.bills.filter(b => !b.paid).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: kidBillsPage }
       } },
-    news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage }
+    news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
+    abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
   student: {}
 };
@@ -1160,8 +1501,10 @@ function home() {
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
+    const promos = abroadData().promos.filter(p => p.active).slice(0, 1)
+      .map(p => [esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']);
     return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${c.name}(${c.grade})의 학원 ${c.academies}곳을 한 화면에서 봐요.`) +
-      todo([
+      todo([...promos,
         ['10월 하늘영어학원 수강료', '30만 원 · 오늘까지', '#kid/bills', '<span class="chip crit">D-0</span>'],
         [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>']
@@ -1200,6 +1543,7 @@ const notFound = () => head('페이지를 찾을 수 없어요', '') + '<a class
 function resolve(parts) {
   const [aid, sid, item] = parts;
   const crumbs = [['홈', '#home']];
+  if (SEEKER && (aid === 'home' || !aid)) return resolve(['jobs']);
   if (aid === 'home' || !aid) return { html: home(), crumbs: [], area: 'home' };
   const a = MY[aid];
   if (!a) return { html: notFound(), crumbs, area: '' };
@@ -1226,6 +1570,7 @@ function resolve(parts) {
 function renderChrome(area) {
   $('#acad').innerHTML = ROLE === 'admin'
     ? '<span class="dot">센</span><div><b>학원지원센터 본부</b><span>센터 관리자</span></div>'
+    : SEEKER ? '<span class="dot">강</span><div><b>학원 연결 전</b><span>채용 공고를 볼 수 있어요</span></div>'
     : ROLE === 'parent' || ROLE === 'student'
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
@@ -1234,7 +1579,7 @@ function renderChrome(area) {
     members: DATA.leads.filter(l => l.urgent).length,
     learn: DATA.training.filter(t => t.status[ME.name] !== 'done').length
   };
-  const items = [['home', '홈', 'home'], ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
+  const items = [...(SEEKER ? [] : [['home', '홈', 'home']]), ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && ROLE !== 'parent' ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
   $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
@@ -1252,12 +1597,15 @@ function render() {
   const crumbs = r.crumbs.length ? `<nav class="crumbs">${r.crumbs.map(([l, h], i) =>
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
-  const realPages = ['members/students', 'members/invite', 'members/leads', 'admin', 'attend', 'learn', 'teachers/staff', 'teachers/training', 'center'];
-  const path = parts.join('/');
-  const isReal = ROLE === 'admin' || realPages.some(p => path === p || path.startsWith(`${p}/`));
+  const REAL_PAGES = {
+    owner: ['home', 'admin', 'teachers', 'members/students', 'members/invite', 'members/leads', 'mou', 'center'],
+    teacher: ['home', 'attend', 'learn', 'jobs', 'center'], parent: ['abroad', 'center'], student: ['center'], admin: ['home', 'center']
+  };
+  const path = parts.join('/') || 'home';
+  const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
-    ? '이 화면은 아직 예시예요. 행정 지원 · 강사 교육 · 우리 학원 강사 · 상담·등록 · 원생 명단 · 초대 코드는 실제 데이터예요.'
-    : ROLE === 'teacher' ? '이 화면은 아직 예시예요. 출결 입력 · 강사 교육은 실제 데이터예요.'
+    ? '이 화면은 아직 예시예요. 학부모 공지 · 홍보 지원 말고는 모두 실제 데이터예요.'
+    : ROLE === 'parent' ? '지금 보이는 내용은 아직 예시예요. "유학 프로그램"은 실제로 상담을 신청할 수 있어요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
   bind();
@@ -1322,6 +1670,34 @@ function bind() {
     t.status[ME.name] = 'done';
     render(); toast('제출했어요 · 이수 완료');
   };
+  // 채용 (실제 데이터)
+  on('[data-edit-job]', b => jobDialog(REAL.jobs.find(j => j.id === b.dataset.editJob)));
+  on('[data-app-step]', b => { const [j, u, st] = b.dataset.appStep.split(':'); stepApplicant(j, u, st); });
+  on('[data-cancel-app]', async b => {
+    if (!confirm('지원을 취소할까요?')) return;
+    const { error } = await SB.from('job_applications').delete().eq('job_id', b.dataset.cancelApp).eq('user_id', USER.id);
+    if (error) { toast('취소하지 못했어요'); return; }
+    await loadJobBoard(); render(); toast('지원을 취소했어요');
+  });
+  on('[data-act="joinAcademy"]', (b, e) => { e.preventDefault(); onboarding(USER); });
+  // 제휴 · 유학 (실제 데이터)
+  on('[data-cancel-partner]', async b => {
+    if (!confirm('제휴 신청을 취소할까요?')) return;
+    const { error } = await SB.from('partner_applications').delete().eq('id', b.dataset.cancelPartner);
+    if (error) { toast('취소하지 못했어요'); return; }
+    await loadPartnerApps(); render(); toast('신청을 취소했어요');
+  });
+  on('[data-act="addPromo"]', () => promoDialog(null));
+  on('[data-edit-promo]', (b, e) => { e.preventDefault(); promoDialog(abroadData().promos.find(p => p.id === b.dataset.editPromo)); });
+  on('[data-edit-ab]', b => abroadMemoDialog(abroadData().requests.find(r => r.id === b.dataset.editAb)));
+  on('[data-ab-step]', b => { const [id, st] = b.dataset.abStep.split(':'); stepAbroad(id, st, abroadData().requests, loadAbroad); });
+  on('[data-ab-apply]', b => abroadApplyDialog(abroadData().promos.find(p => p.id === b.dataset.abApply) || null));
+  // 센터: 제휴 신청 · 유학 상담
+  on('[data-pa-filter]', b => { paFilter = b.dataset.paFilter; render(); });
+  on('[data-pa-step]', b => { const [id, st] = b.dataset.paStep.split(':'); stepPartnerApp(id, st); });
+  on('[data-edit-pa]', b => partnerAppDialog(CENTER.partnerApps.find(a => a.id === b.dataset.editPa)));
+  on('[data-cab-step]', b => { const [id, st] = b.dataset.cabStep.split(':'); stepAbroad(id, st, CENTER.abroad, loadCenter); });
+  on('[data-edit-cab]', b => centerAbroadDialog(CENTER.abroad.find(r => r.id === b.dataset.editCab)));
   on('[data-act="editReflect"]', () => { editingReflect = true; render(); });
   // 센터 관리
   on('[data-act="addVideo"]', () => videoDialog(null));
@@ -1347,16 +1723,19 @@ function bind() {
   on('[data-act="pickRole"]', (b, e) => { e.preventDefault(); PROFILE.role ? onboarding(USER) : rolePicker(USER); });
   // 채용
   on('[data-act="newJob"]', () => {
+    if (REAL) return jobDialog(null);
     const title = prompt('공고 제목을 입력하세요', '중등 영어 강사 (파트타임)');
     if (!title) return;
     DATA.jobs.unshift({ id: 'j' + Date.now(), academy: DATA.academy.name, mine: true, title, area: DATA.academy.area, type: '파트타임', pay: '협의', hours: '협의', due: '11/25', applicants: [] });
     render(); toast('센터 채용 게시판에 공고를 올렸어요');
   });
   on('[data-interview]', b => { const [jid, i] = b.dataset.interview.split(':'); const a = DATA.jobs.find(j => j.id === jid).applicants[i]; a.step = '면접 제안 보냄'; render(); toast(`${a.name} 님께 면접을 제안했어요`); });
-  on('[data-applyjob]', b => { const j = DATA.jobs.find(x => x.id === b.dataset.applyjob); j.applied = true; render(); toast(`${j.academy}에 지원서를 보냈어요`); });
+  on('[data-applyjob]', b => {
+    if (JOBS) return applyJobDialog(JOBS.posts.find(x => x.id === b.dataset.applyjob));
+    const j = DATA.jobs.find(x => x.id === b.dataset.applyjob); j.applied = true; render(); toast(`${j.academy}에 지원서를 보냈어요`); });
   // 제휴
   on('[data-cat]', b => { partnerCat = b.dataset.cat; render(); });
-  on('[data-apply]', b => { const p = DATA.partners.find(x => x.id === b.dataset.apply); p.status = 'applied'; render(); toast(`${p.name} 제휴를 신청했어요 · 센터가 1일 안에 연결해 드려요`); });
+  on('[data-apply]', b => { const p = DATA.partners.find(x => x.id === b.dataset.apply); if (REAL) return partnerApplyDialog(p); p.status = 'applied'; render(); toast(`${p.name} 제휴를 신청했어요 · 센터가 1일 안에 연결해 드려요`); });
   // 학생·학부모
   on('[data-act="newNotice"]', () => {
     const title = prompt('공지 제목을 입력하세요');
@@ -1504,17 +1883,47 @@ async function loadTraining() {
       desc: esc(x.description || ''), url: x.video_url, status, reflections };
   });
 }
-// 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 관리자 명단
+// 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
 async function loadCenter() {
-  const [v, r, q, a] = await Promise.all([
-    SB.from('training_videos').select('*').order('created_at', { ascending: false }),
-    SB.from('training_reflections').select('video_id'),
-    SB.from('support_requests').select('*').order('created_at', { ascending: false }),
-    SB.rpc('list_center_admins')
+  const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
+  const [v, r, q, a, pa, ab] = await Promise.all([
+    newest('training_videos'), SB.from('training_reflections').select('video_id'), newest('support_requests'),
+    SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done'])
   ]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = (done[x.video_id] || 0) + 1; });
-  CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {} };
+  CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
+    partnerApps: pa.data || [], abroad: ab.data || [] };
+}
+// 원장: 우리 공고 + 지원자
+async function loadJobs() {
+  const [j, a] = await Promise.all([
+    SB.from('job_posts').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }),
+    SB.rpc('list_job_applicants', { p_academy: REAL.academy.id })
+  ]);
+  REAL.jobs = j.data || []; REAL.applicants = a.data || [];
+}
+// 강사: 모집 중인 공고 전체 + 내 지원
+async function loadJobBoard() {
+  const [j, a] = await Promise.all([
+    SB.from('job_posts').select('*').eq('status', 'open').order('created_at', { ascending: false }),
+    SB.from('job_applications').select('job_id, status, created_at').eq('user_id', USER.id)
+  ]);
+  JOBS = { posts: j.data || [], mine: a.data || [] };
+}
+const loadPartnerApps = async () => {
+  const { data } = await SB.from('partner_applications').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false });
+  REAL.partnerApps = data || [];
+};
+// 유학: 원장은 우리 학원 홍보 · 신청 전부, 학부모는 안내 중인 홍보 · 내 신청
+async function loadAbroad() {
+  const [p, r] = await Promise.all([
+    SB.from('abroad_promos').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }),
+    ROLE === 'owner'
+      ? SB.from('abroad_requests').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false })
+      : SB.from('abroad_requests').select('*').eq('user_id', USER.id).order('created_at', { ascending: false })
+  ]);
+  REAL.abroad = { promos: p.data || [], requests: r.data || [] };
 }
 async function loadInvite() {
   const [c, m] = await Promise.all([
@@ -1565,6 +1974,7 @@ function onboarding(user) {
       <p class="msg" id="joinMsg" hidden></p>
       <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
     </form>
+    ${PROFILE.role === 'teacher' ? `<a class="btn" href="app.html#jobs" id="seeJobs">아직 코드가 없어요 · 채용 공고 먼저 보기</a>` : ''}
     <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
   </div></div>`;
   const fail = (id, t) => { const m = $(id); m.textContent = t; m.hidden = false; };
@@ -1586,6 +1996,8 @@ function onboarding(user) {
   };
   $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
   $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html'; };
+  // 같은 페이지 주소라 해시만 바뀌니, 새로 열어서 채용 공고 화면으로 시작해요
+  if ($('#seeJobs')) $('#seeJobs').onclick = e => { e.preventDefault(); location.hash = '#jobs'; location.reload(); };
 }
 
 async function boot() {
@@ -1607,6 +2019,11 @@ async function boot() {
     const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region)')
       .eq('user_id', user.id).order('created_at').limit(1);
     if (!mem || !mem.length) {
+      // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요
+      if (!CENTER && PROFILE.role === 'teacher' && location.hash.startsWith('#jobs')) {
+        useProfile(); SEEKER = true; MY = { jobs: AREAS.teacher.jobs };
+        await loadJobBoard(); render(); return;
+      }
       if (!CENTER) { onboarding(user); return; }
       // 학원 없이 센터 관리만 하는 관리자
       ROLE = 'admin'; MY = { center: CENTER_AREA };
@@ -1618,10 +2035,13 @@ async function boot() {
     PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
-      attend: { day: TODAY, map: {} }, invoices: [], expenses: [], paperwork: [] };
+      attend: { day: TODAY, map: {} }, invoices: [], expenses: [], paperwork: [],
+      jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] } };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining()]);
-    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork()]);
+    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork(), loadJobs(), loadPartnerApps()]);
+    if (ROLE === 'teacher') await loadJobBoard();
+    await loadAbroad();
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();
