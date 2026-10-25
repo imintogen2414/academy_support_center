@@ -1,0 +1,11 @@
+{
+  "name": "academy-support-center",
+  "private": true,
+  "description": "학원지원센터 — 정적 화면 + Supabase",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.0"
+  }
+}

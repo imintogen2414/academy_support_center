@@ -15,13 +15,25 @@
   - 홍보 지원: 인투마케팅(https://intomarketing.co.kr)에 연결. 블로그·디자인·영상·SNS 광고
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
 - 디자인: 남색·파란 계열(진한 남색 배경, 세로 빛줄기, 반투명 카드, 밝은 파란 버튼). 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
-- 지금은 빌드 없이 열리는 정적 HTML 시안이다. 실제 로그인·DB를 붙일 때 Next.js + Supabase로 옮긴다.
-- 화면 수치는 모두 예시 데이터(`assets/data.js`)다.
+- 정적 HTML + 작은 빌드 단계 + Supabase. 화면을 React로 다시 짤 때가 오면 Next.js로 옮긴다.
+- 로그인 후 화면의 학원 수치는 아직 예시 데이터(`assets/data.js`)다. 실제 데이터는 단계별로 Supabase 테이블로 옮긴다.
+
+# 빌드 · Supabase
+- `npm run build` → `dist/`를 만든다(Vercel도 같은 명령, `vercel.json`). 화면 파일 복사 + supabase-js 브라우저 파일(`assets/vendor/supabase.js`) + 환경변수로 `assets/env.js` 생성.
+- 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Vercel에 등록됨). 없으면 로그인·신청 저장 없이 데모로만 동작.
+- 로컬 확인: 환경변수 넣고 `npm run build` 후 `dist/`를 웹서버로 연다. `dist/`, `node_modules/`는 커밋하지 않는다.
+- `assets/supa.js`: Supabase 연결(`SB`), 아이디 → 내부 이메일(`아이디@id.academysupportcenter.app`) 변환, 오류 문구.
+- 로그인: 아이디+비밀번호(내부 이메일 방식, Supabase "Confirm email" 꺼 둠), 구글(OAuth, pkce). 구글로 처음 오면 `app.html`에서 역할을 한 번 고른다.
+- `app.html`: `?demo=1&role=…`(또는 예전 `?role=…`)이면 데모, 아니면 로그인 필수.
+- 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
+  - `support_requests`: 학원 → 센터 지원 신청. 누구나 넣기만 가능, 읽기는 대시보드에서만.
+  - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
+- 다음 단계: 학원·원생 테이블 → 학부모 → 학원 유학·캠프 상담 신청(원장이 보고 센터·인투어브로드로 연결).
 
 # 파일 구조
 - `index.html`: 첫 화면. 홈페이지가 아니라 프로그램 입구처럼 반반으로 나눈다.
   - 왼쪽(남색) "지원받기": 분야 고르기 → `#area/admin` 분야 상세 → `#apply/admin` 지원 신청 → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
-  - 오른쪽(흰색) "프로그램 쓰기": 로그인·회원가입(`?signup=1`), 데모 계정 입장
+  - 오른쪽(흰색) "프로그램 쓰기": 아이디 로그인·회원가입(`?signup=1`), 구글로 계속하기, 데모 계정 입장
   - 휴대폰에서는 위쪽 탭(지원받기 / 프로그램 이용하기)으로 바로 오간다.
   - 스타일은 `assets/site.css`
 - `login.html`, `service.html`: 예전 주소. 첫 화면으로 넘겨 주기만 한다.

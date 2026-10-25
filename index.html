@@ -47,20 +47,27 @@
   <div class="box">
     <span class="kicker">프로그램 쓰기</span>
     <h2 id="title">다시 오셨네요</h2>
-    <p class="sub" id="lede">계정으로 로그인하거나, 데모 계정으로 둘러보세요.</p>
+    <p class="sub" id="lede">아이디로 로그인하거나, 데모 계정으로 둘러보세요.</p>
+
+    <!-- 이미 로그인돼 있으면 보여 줌 -->
+    <div class="signed" id="signedIn" hidden>
+      <span id="signedName"></span>
+      <div class="row"><a class="btn primary sm" href="app.html">프로그램 열기</a><button class="btn sm" type="button" id="signOut">로그아웃</button></div>
+    </div>
 
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="login">로그인</button>
       <button role="tab" aria-selected="false" data-tab="signup">회원가입</button>
     </div>
 
-    <form id="loginForm" onsubmit="event.preventDefault(); go('owner')">
-      <div class="field"><label for="em">이메일</label><input id="em" type="email" placeholder="you@academy.kr" autocomplete="username"></div>
-      <div class="field"><label for="pw">비밀번호</label><input id="pw" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <form id="loginForm" novalidate>
+      <div class="field"><label for="lid">아이디</label><input id="lid" name="uid" placeholder="아이디" autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="lpw">비밀번호</label><input id="lpw" name="pw" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <p class="msg" id="loginMsg" hidden></p>
       <button class="btn primary wide">로그인</button>
     </form>
 
-    <form id="signupForm" hidden onsubmit="event.preventDefault(); go(new FormData(this).get('role'))">
+    <form id="signupForm" hidden novalidate>
       <div class="field"><label>어떤 분이세요?</label>
         <div class="roles">
           <label><input type="radio" name="role" value="owner" checked><span>원장</span></label>
@@ -69,11 +76,19 @@
           <label><input type="radio" name="role" value="student"><span>학생</span></label>
         </div>
       </div>
-      <div class="field"><label for="nm">이름</label><input id="nm" placeholder="홍길동"></div>
-      <div class="field"><label for="em2">이메일</label><input id="em2" type="email" placeholder="you@academy.kr"></div>
-      <div class="field"><label for="ac">학원 이름 또는 초대 코드</label><input id="ac" placeholder="예: 하늘영어학원"></div>
+      <div class="field"><label for="nm">이름</label><input id="nm" name="fullname" placeholder="홍길동" autocomplete="name"></div>
+      <div class="field"><label for="sid">아이디 <small>영어 소문자·숫자·_ 4~20자</small></label><input id="sid" name="uid" placeholder="예: haneul_owner" autocomplete="username" autocapitalize="none"></div>
+      <div class="field"><label for="spw">비밀번호 <small>8자 이상</small></label><input id="spw" name="pw" type="password" placeholder="••••••••" autocomplete="new-password"></div>
+      <div class="field"><label for="ac">학원 이름</label><input id="ac" name="academy" placeholder="예: 하늘영어학원"></div>
+      <p class="msg" id="signupMsg" hidden></p>
       <button class="btn primary wide">가입하고 시작하기</button>
     </form>
+
+    <div class="divider">또는</div>
+    <button class="btn wide google" type="button" id="googleBtn">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.6-.2-2.3H12v4.3h6a5.1 5.1 0 0 1-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.2z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.7H2v2.9A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 13.9a6.6 6.6 0 0 1 0-4.2V6.8H2a11 11 0 0 0 0 9.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.3 1.7l3.2-3.2A11 11 0 0 0 2 6.8l3.7 2.9C6.6 7.4 9.1 5.4 12 5.4z"/></svg>
+      구글로 계속하기
+    </button>
 
     <div class="divider">데모 계정으로 둘러보기</div>
     <div class="demo">
@@ -82,15 +97,18 @@
       <button onclick="go('parent')"><span class="av" style="background:#c98a12">김</span><div><div class="t">학부모 · 김은정</div><div class="d">이서연 어머니 · 학원 3곳</div></div><span class="go">입장 →</span></button>
       <button onclick="go('student')"><span class="av" style="background:#7c85ff">서</span><div><div class="t">학생 · 이서연</div><div class="d">초등 5학년</div></div><span class="go">입장 →</span></button>
     </div>
-    <p class="note">시안 단계라 실제 계정 없이 어떤 버튼을 눌러도 입장돼요.</p>
+    <p class="note">데모 계정은 예시 학원 데이터로 둘러보는 화면이에요.</p>
   </div>
 </main>
 
+<script src="assets/vendor/supabase.js"></script>
+<script src="assets/env.js"></script>
+<script src="assets/supa.js"></script>
 <script src="assets/areas.js"></script>
 <script>
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const panel = document.getElementById('panel');
-let applied = null; // 방금 접수한 신청 (시안이라 화면에만 보여줌)
+let applied = null; // 방금 접수한 신청 (접수 완료 화면에 보여줌)
 
 /* ---------- 왼쪽 패널 화면들 (#area/admin, #apply, #done 같은 해시로 이동) ---------- */
 function homeView() {
@@ -198,15 +216,25 @@ function renderPanel() {
   if (window.innerWidth <= 900 && location.hash) document.querySelector('.support').scrollIntoView();
 
   const form = document.getElementById('applyForm');
-  if (form) form.onsubmit = e => {
+  if (form) form.onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(form);
     const err = document.getElementById('applyErr');
-    if (!fd.get('academy').trim() || !fd.get('name').trim() || !fd.get('phone').trim()) {
-      err.textContent = '학원 이름, 원장님 성함, 연락처를 적어 주세요.'; err.hidden = false; return;
-    }
-    if (!fd.getAll('need').length) { err.textContent = '필요한 지원을 하나 이상 골라 주세요.'; err.hidden = false; return; }
-    applied = { academy: fd.get('academy').trim(), needs: fd.getAll('need') };
+    const v = k => (fd.get(k) || '').trim();
+    const fail = t => { err.textContent = t; err.hidden = false; };
+    if (!v('academy') || !v('name') || !v('phone')) return fail('학원 이름, 원장님 성함, 연락처를 적어 주세요.');
+    if (!fd.getAll('need').length) return fail('필요한 지원을 하나 이상 골라 주세요.');
+    if (!SB) return fail('지금은 신청을 받을 수 없어요. 잠시 후 다시 시도해 주세요.');
+    const btn = form.querySelector('button'); btn.disabled = true; btn.textContent = '보내는 중…';
+    // Supabase support_requests 테이블에 저장 (읽기는 막혀 있고 센터만 대시보드에서 확인)
+    const { error } = await SB.from('support_requests').insert({
+      academy_name: v('academy').slice(0, 100), region: v('area').slice(0, 100) || null,
+      owner_name: v('name').slice(0, 50), phone: v('phone').slice(0, 30),
+      needs: fd.getAll('need'), memo: v('memo').slice(0, 2000) || null
+    });
+    btn.disabled = false; btn.textContent = '신청하기';
+    if (error) return fail('신청을 보내지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
+    applied = { academy: v('academy'), needs: fd.getAll('need') };
     location.hash = 'done';
   };
 }
@@ -220,12 +248,65 @@ function setTab(t) {
   document.getElementById('loginForm').hidden = t !== 'login';
   document.getElementById('signupForm').hidden = t !== 'signup';
   document.getElementById('title').textContent = t === 'login' ? '다시 오셨네요' : '학원지원센터 시작하기';
-  document.getElementById('lede').textContent = t === 'login' ? '계정으로 로그인하거나, 데모 계정으로 둘러보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
+  document.getElementById('lede').textContent = t === 'login' ? '아이디로 로그인하거나, 데모 계정으로 둘러보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
   if (t === 'signup' && window.innerWidth <= 900) document.querySelector('main').scrollIntoView({ behavior: 'smooth' });
 }
 tabs.forEach(b => b.onclick = () => setTab(b.dataset.tab));
 if (new URLSearchParams(location.search).has('signup')) setTab('signup');
-function go(role) { location.href = 'app.html?role=' + role; }
+function go(role) { location.href = 'app.html?demo=1&role=' + role; }
+
+function showMsg(el, text, ok) { el.textContent = text; el.classList.toggle('ok', !!ok); el.hidden = false; }
+async function busy(btn, label, fn) { const old = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = old; } }
+
+const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const loginMsg = document.getElementById('loginMsg');
+const signupMsg = document.getElementById('signupMsg');
+
+loginForm.onsubmit = e => {
+  e.preventDefault();
+  const el = loginForm.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value;
+  if (!id || !pw) return showMsg(loginMsg, '아이디와 비밀번호를 적어 주세요.');
+  if (!SB) return showMsg(loginMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  busy(loginForm.querySelector('button'), '로그인 중…', async () => {
+    const { error } = await SB.auth.signInWithPassword({ email: idToEmail(id), password: pw });
+    if (error) return showMsg(loginMsg, authErrorText(error));
+    location.href = 'app.html';
+  });
+};
+
+signupForm.onsubmit = e => {
+  e.preventDefault();
+  const f = signupForm, el = f.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value, name = el.fullname.value.trim();
+  if (!name) return showMsg(signupMsg, '이름을 적어 주세요.');
+  if (!ID_RULE.test(id)) return showMsg(signupMsg, '아이디는 영어 소문자·숫자·_ 로 4~20자예요.');
+  if (pw.length < 8) return showMsg(signupMsg, '비밀번호는 8자 이상으로 정해 주세요.');
+  if (!SB) return showMsg(signupMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  busy(f.querySelector('button'), '가입하는 중…', async () => {
+    const { data, error } = await SB.auth.signUp({
+      email: idToEmail(id), password: pw,
+      options: { data: { username: id, name: name.slice(0, 50), role: el.role.value, academy_name: el.academy.value.trim().slice(0, 100) } }
+    });
+    if (error) return showMsg(signupMsg, authErrorText(error));
+    if (!data.session) return showMsg(signupMsg, '가입은 됐는데 바로 로그인할 수 없어요. 센터에 문의해 주세요.');
+    location.href = 'app.html';
+  });
+};
+
+document.getElementById('googleBtn').onclick = async () => {
+  if (!SB) return showMsg(loginMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  const { error } = await SB.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/app.html' } });
+  if (error) { setTab('login'); showMsg(loginMsg, authErrorText(error)); }
+};
+
+// 이미 로그인돼 있으면 위에 안내
+if (SB) SB.auth.getSession().then(({ data }) => {
+  if (!data.session) return;
+  const u = data.session.user, m = u.user_metadata || {};
+  document.getElementById('signedName').textContent = `${m.name || m.full_name || m.username || '회원'}님으로 로그인돼 있어요.`;
+  document.getElementById('signedIn').hidden = false;
+});
+document.getElementById('signOut').onclick = async () => { await SB.auth.signOut(); location.reload(); };
 
 /* ---------- 휴대폰 위쪽 탭 ---------- */
 const jumps = document.querySelectorAll('[data-jump]');
