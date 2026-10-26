@@ -1024,8 +1024,7 @@ body.kiosk-on #view { max-width: none; padding: 0 !important; }
 .k-qr { display: grid; justify-items: center; align-content: center; gap: 14px; text-align: center; padding: 24px; border-radius: 28px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
 .k-code-img { width: min(420px, 70vw, 58vh); aspect-ratio: 1; background: #fff; border-radius: 22px; padding: 14px; display: grid; place-items: center; }
 .k-code-img svg { width: 100%; height: 100%; display: block; }
-.k-bar { width: min(420px, 70vw, 58vh); height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .15); overflow: hidden; }
-.k-bar i { display: block; height: 100%; width: 100%; background: #8c95ff; }
+.k-day { padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .12); font-weight: 700; font-size: 15px; }
 .k-qr h2 { margin: 6px 0 0; font-size: clamp(22px, 2.6vw, 32px); letter-spacing: -.02em; }
 .k-qr p { margin: 0; max-width: 520px; color: rgba(255, 255, 255, .7); font-size: 15px; }
 .k-pad { display: grid; align-content: center; gap: 12px; padding: 24px; border-radius: 28px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
@@ -1048,6 +1047,19 @@ body.kiosk-on #view { max-width: none; padding: 0 !important; }
 .k-recent #kRecent { display: flex; flex-wrap: wrap; gap: 6px; }
 .k-recent .chip { font-size: 13px; padding: 4px 10px; }
 @media (max-width: 860px) { .k-main { grid-template-columns: 1fr; } }
+/* "QR 인쇄": 학원 이름 · 날짜 · QR · 안내만 흰 종이에 크게 */
+@media print {
+  body.kiosk-on .kiosk { min-height: 0; display: block; background: #fff; color: #000; padding: 0; }
+  body.kiosk-on .k-top { justify-content: center; font-size: 30px; margin: 10mm 0 6mm; }
+  body.kiosk-on .k-top b { flex: none; }
+  body.kiosk-on .k-top .btn, body.kiosk-on .k-clock, body.kiosk-on .k-tip, body.kiosk-on .k-pad, body.kiosk-on .k-recent { display: none !important; }
+  body.kiosk-on .k-main { display: block; }
+  body.kiosk-on .k-qr { background: none; border: 0; padding: 0; }
+  body.kiosk-on .k-code-img { width: 120mm; padding: 0; }
+  body.kiosk-on .k-day { background: none; color: #000; font-size: 22px; }
+  body.kiosk-on .k-qr h2 { color: #000; }
+  body.kiosk-on .k-qr p { color: #333; }
+}
 /* QR을 찍고 들어온 출석 결과 (#checkin) */
 .checkin { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 36px 20px; max-width: 520px; margin: 20px auto; }
 .checkin h2 { margin: 0; font-size: 22px; }
