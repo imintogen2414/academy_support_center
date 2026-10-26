@@ -2974,12 +2974,121 @@ const FAMILY_AREAS = {
 };
 let MY = AREAS[ROLE];
 
+/* ---------- 새 소식 빨간 점: 메뉴마다 마지막으로 본 뒤에 남이 올린 게 있으면 점, 열어 보면 사라져요 ---------- */
+let SEEN = {};          // 메뉴 경로 → 마지막으로 본 시각 (user_seen, 예시 계정은 sessionStorage)
+const SEEN_WROTE = {};  // 방금 저장한 시각 (같은 화면을 다시 그릴 때 매번 저장하지 않게)
+const SEEN_BASE = new Date(Date.now() - 3 * 864e5).toISOString(); // 처음엔 최근 3일 것만 새 소식
+const notMine = (rows, who, at = 'created_at') => (rows || []).filter(r => !USER || !who || r[who] !== USER.id).map(r => r[at]).filter(Boolean);
+const NEWS = {
+  owner: {
+    'admin/approvals': () => notMine(apvData().filter(a => a.status === 'pending'), 'requested_by'),
+    'members/leads': () => DATA.leads.map(l => l.raw && l.raw.created_at),
+    'teachers/hire': () => (REAL.applicants || []).map(a => a.applied_at),
+    'teachers/training': () => DATA.training.map(t => t.created_at),
+    'mou/abroad': () => REAL.abroad.requests.map(r => r.created_at),
+    'mou/mine': () => REAL.partnerApps.map(r => r.updated_at),
+    'promo/requests': () => REAL.promoReqs.map(r => r.requested_by === USER.id ? r.updated_at : r.created_at),
+    schedule: () => notMine(REAL.events, 'created_by'),
+    library: () => notMine(REAL.library, 'uploaded_by')
+  },
+  teacher: {
+    approvals: () => apvData().map(a => a.decided_at),
+    learn: () => DATA.training.map(t => t.created_at),
+    jobs: () => (JOBS ? JOBS.posts : []).map(p => p.created_at),
+    schedule: () => notMine(REAL.events, 'created_by'),
+    library: () => notMine(REAL.library, 'uploaded_by'),
+    reports: () => notMine(REAL.reports, 'written_by', 'updated_at')
+  },
+  parent: {
+    'kid/todos': () => notMine(REAL.todos, 'created_by'),
+    'kid/reports': () => REAL.reports.map(r => r.issued_at),
+    'kid/bills': () => REAL.kidBills.filter(b => !b.paid_at).map(b => b.created_at),
+    news: () => REAL.notices.map(n => n.created_at),
+    library: () => notMine(REAL.library, 'uploaded_by'),
+    abroad: () => REAL.abroad.promos.filter(p => p.active).map(p => p.created_at).concat(REAL.abroad.requests.map(r => r.updated_at))
+  },
+  student: {
+    todos: () => notMine(REAL.todos, 'created_by'),
+    reports: () => REAL.reports.map(r => r.issued_at),
+    news: () => REAL.notices.map(n => n.created_at),
+    library: () => notMine(REAL.library, 'uploaded_by')
+  },
+  center: {
+    'center/requests': () => CENTER.requests.map(r => r.created_at),
+    'center/partners': () => CENTER.partnerApps.map(r => r.created_at),
+    'center/abroad': () => CENTER.abroad.map(r => r.updated_at),
+    'center/promo': () => CENTER.promoReqs.map(r => r.created_at),
+    'center/admins': () => CENTER.adminApps.filter(a => a.status === 'pending').map(a => a.created_at)
+  }
+};
+// 예시 계정: 처음 들어오면 몇 곳에 점이 보이고, 열어 보면 사라져요
+const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'promo/requests'], teacher: ['approvals', 'learn', 'jobs'],
+  parent: ['news', 'kid/bills', 'abroad'], student: ['todos', 'reports'] };
+function newsKeys() {
+  if (!REAL && !CENTER) return DEMO && !USER ? Object.fromEntries((DEMO_NEWS[ROLE] || []).map(k => [k, () => [`${TODAY}T00:00:00`]])) : {};
+  return { ...(REAL ? NEWS[ROLE] || {} : {}), ...(CENTER ? NEWS.center : {}) };
+}
+// 경로(영역 또는 영역/세부)에 새 소식이 있는지: 영역이면 그 아래 세부 중 하나라도
+function hasNews(path) {
+  const keys = newsKeys();
+  return Object.keys(keys).some(k => (k === path || k.startsWith(`${path}/`)) && newsIn(k, keys[k]));
+}
+function newsIn(k, fn) {
+  let list = [];
+  try { list = fn() || []; } catch (e) { return false; }
+  const seen = SEEN[k] || SEEN_BASE;
+  return list.some(t => t && new Date(t) > new Date(seen));
+}
+// 종 모양: 새 소식이 있는 메뉴 모아 보기
+function newsList() {
+  const keys = newsKeys();
+  return Object.keys(keys).filter(k => newsIn(k, keys[k])).map(k => {
+    const [aid, sid] = k.split('/'), a = MY && MY[aid];
+    if (!a) return null;
+    const s = sid && a.subs ? a.subs[sid] : null;
+    if (sid && !s) return null;
+    return [k, s ? `${a.name} › ${s.name}` : a.name, (s || a).icon];
+  }).filter(Boolean);
+}
+function renderBell() {
+  const bell = $('#bell'), pop = $('#bellPop');
+  if (!bell) return;
+  const list = newsList();
+  bell.querySelector('.dot').hidden = !list.length && !msgUnread();
+  const items = (msgUnread() ? [['messages', `메신저 · 안 읽은 메시지 ${msgUnread()}개`, 'chat']] : []).concat(list);
+  pop.innerHTML = `<b class="bp-title">새 소식</b>${items.length ? items.map(([k, l, i]) => `<a href="#${k}">${ic(i)}<span>${esc(l)}</span><span class="ndot"></span></a>`).join('')
+    : '<p class="muted small">새 소식이 없어요. 새로 올라오면 메뉴 옆에 빨간 점이 생겨요.</p>'}`;
+  bell.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; };
+  pop.onclick = e => { if (e.target.closest('a')) pop.hidden = true; };
+  if (!document.bellClose) { document.bellClose = true; document.addEventListener('click', e => { if (!e.target.closest('#bellPop')) $('#bellPop').hidden = true; }); }
+}
+const ndot = path => hasNews(path) ? '<span class="ndot" title="새 소식"></span>' : '';
+async function loadSeen() {
+  if (USER) {
+    const { data } = await SB.from('user_seen').select('key, seen_at');
+    SEEN = Object.fromEntries((data || []).map(r => [r.key, r.seen_at]));
+  } else {
+    try { SEEN = JSON.parse(sessionStorage.getItem('asc-seen') || '{}'); } catch (e) { SEEN = {}; }
+  }
+}
+// 연 화면의 점을 지워요 (영역 첫 화면은 세부가 따로 있으면 그대로 두고, 세부를 열어야 지워져요)
+function markSeen(path) {
+  const keys = newsKeys();
+  if (!keys[path]) return;
+  const now = new Date().toISOString(), had = newsIn(path, keys[path]);
+  SEEN[path] = now;
+  if (!had && SEEN_WROTE[path] && Date.now() - SEEN_WROTE[path] < 60e3) return;
+  SEEN_WROTE[path] = Date.now();
+  if (USER) SB.from('user_seen').upsert({ key: path, seen_at: now }).then(() => {});
+  else try { sessionStorage.setItem('asc-seen', JSON.stringify(SEEN)); } catch (e) { /* 저장 못 해도 이번 화면에선 사라져요 */ }
+}
+
 /* ---------- 홈 ---------- */
 function tiles() {
   return `<div class="tiles ${Object.keys(MY).length === 5 ? 'five' : ''}">${Object.entries(MY).map(([id, a]) => `
     <a class="tile" href="#${id}">
       <span class="tile-ic">${ic(a.icon)}</span>
-      <b>${a.name}</b>
+      <b>${a.name}${ndot(id)}</b>
       <span class="d">${a.desc}</span>
       <span class="stat-line">${a.stat()}</span>
       <span class="go">열기 →</span>
@@ -3089,7 +3198,7 @@ function subTiles(id, a) {
   return `<div class="tiles">${Object.entries(a.subs).map(([sid, s]) => `
     <a class="tile" href="#${id}/${sid}">
       <span class="tile-ic">${ic(s.icon)}</span>
-      <b>${s.name}</b>
+      <b>${s.name}${ndot(`${id}/${sid}`)}</b>
       <span class="d">${s.desc}</span>
       <span class="stat-line">${s.stat()}</span>
       <span class="go">열기 →</span>
@@ -3145,12 +3254,13 @@ function renderChrome(area) {
   };
   const items = [...(SEEKER ? [] : [['home', '홈', 'home']]), ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
-    <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
+    <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`).join('');
   $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
     if (!PROFILE || !SB) return;
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
   };
+  renderBell();
   const foot = $('#adminApply');
   if (foot) { foot.hidden = !(PROFILE && USER && !CENTER); foot.innerHTML = adminApplyLink(true); bindAdminApplyLink(); }
   document.title = `${ROLE === 'admin' ? '센터 관리' : ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
@@ -3159,6 +3269,7 @@ function renderChrome(area) {
 function render() {
   const parts = (location.hash || '#home').slice(1).split('/');
   const r = resolve(parts);
+  markSeen(parts.slice(0, 2).join('/'));
   renderChrome(r.area);
   // "← 이전": 바로 전에 본 화면으로 한 단계만 (처음 연 화면이면 한 단계 위로)
   const up = r.crumbs.length > 1 ? r.crumbs[r.crumbs.length - 2][1] : '';
@@ -3676,7 +3787,7 @@ async function loadTraining() {
       if (r) reflections.push({ who: t.raw, at: md(r.done_at.slice(0, 10)), text: r.body });
     });
     return { id: x.id, title: esc(x.title), rawTitle: x.title, cat: esc(x.category), len: esc(x.length || ''), due: x.due ? md(x.due) : '없음',
-      desc: esc(x.description || ''), url: x.video_url, status, reflections, myRefl };
+      desc: esc(x.description || ''), url: x.video_url, status, reflections, myRefl, created_at: x.created_at };
   });
 }
 // 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
@@ -3862,7 +3973,7 @@ async function boot() {
       const nm = esc(PROFILE.name || user.user_metadata?.full_name || PROFILE.username || (user.email || '관리자').split('@')[0]);
       ME = { name: nm, av: nm[0], label: '센터 관리자', color: 'var(--navy-700)' };
       DATA.today = todayText();
-      render(); return;
+      await loadSeen(); render(); return;
     }
     PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
@@ -3876,9 +3987,9 @@ async function boot() {
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
-    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary()]);
+    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
-  }
+  } else await loadSeen();
   render();
 }
 boot();

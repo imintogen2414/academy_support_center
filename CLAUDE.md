@@ -50,6 +50,7 @@
   - 성장 리포트: `growth_reports`(학생 · 기간 · 과목 점수 `scores` · 학습 태도 `ratings` · 잘하는 점 · 노력할 점 · 종합 의견 · 다음 목표, 출결 · 할 일 수행 `stats`는 저장할 때 화면이 계산). 원장 · 강사가 쓰고 `status`를 issued로 바꾸면 연결된 가족이 봐요(발급 시각은 트리거). 인쇄 · PDF는 브라우저 인쇄(`@media print`). 화면: 원장 `#members/reports`, 강사 `#reports`, 학부모 `#kid/reports`, 학생 `#reports`.
   - 자료실: `library_items`(제목 · 분류 · 파일 또는 링크 · 공유 범위 `visibility` private 나만 / staff 원장·강사 / class 반 가족 / everyone 모두, 올린 사람은 트리거). 판정은 `private.can_see_library` — 원장은 전부(강사 비공개 포함). 파일은 Storage 비공개 버킷 `library`(50MB, 경로 `학원 id/무작위/file.확장자`), 읽기는 그 자료를 볼 수 있을 때만, 올리기는 원장·강사만. 열기 · 내려받기는 10분짜리 서명 주소. 화면 `#library`(모든 역할).
   - 메신저(1:1): `conversations`(두 사람 `user_a < user_b`, 마지막 메시지는 트리거), `messages`(대화 두 사람만 읽기 · 쓰기, 보낼 때도 아직 대화할 수 있는 사이인지 확인), `conversation_reads`. 누가 누구와: `private.message_academy(a, b)` — 원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생(같은 아이로 연결됐을 때만). RPC `message_contacts()` `start_conversation(상대)` `my_conversations()`(안 읽은 수) `mark_conversation_read(대화)`. 화면 `#messages`(모든 역할 · 관리자 포함), 열어 둔 대화는 5초, 목록은 20초마다 새로 확인.
+  - 새 소식 빨간 점: `user_seen`(메뉴 경로마다 마지막으로 본 시각, 본인 것만). `app.js`의 `NEWS`(역할별 경로 → 남이 올린 것의 시각 목록)보다 새로운 게 있으면 메뉴 · 타일 · 종 모양에 점, 그 화면을 열면 `markSeen`이 지워요. 처음엔 최근 3일 것만. 예시 계정은 `DEMO_NEWS` + sessionStorage.
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
 - 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
 - 학원 코드가 없는 강사: 학원 연결 화면의 "채용 공고 먼저 보기" → `SEEKER` 모드(채용 공고만).
@@ -81,7 +82,7 @@
 15. ~~자료실~~ (완료)
 16. ~~서류·행정 자동 처리~~ (완료)
 17. ~~메신저~~ (완료)
-18. 새 소식 빨간 점 (확인하면 사라짐)
+18. ~~새 소식 빨간 점 (확인하면 사라짐)~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.

@@ -557,3 +557,15 @@ button.tt-blk:hover { background: var(--blue-100); }
 .ct span:last-child { display: grid; }
 .ct small { color: var(--muted); font-size: 12px; }
 @media (max-width: 560px) { .chat { height: calc(100vh - 170px); } .bubble { max-width: 86%; } }
+
+/* 새 소식 빨간 점 */
+.ndot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff4d5e; margin-left: 6px; vertical-align: 3px; box-shadow: 0 0 0 2px rgba(255,77,94,.18); }
+.nav-item .nav-dot { margin-left: auto; vertical-align: 0; }
+.top-right { position: relative; }
+.bell-pop { position: absolute; top: 48px; right: 0; z-index: 30; width: min(320px, calc(100vw - 32px)); background: var(--surface); border-radius: 16px; box-shadow: 0 18px 40px rgba(15,23,80,.18); padding: 14px; display: grid; gap: 4px; }
+.bell-pop .bp-title { font-size: 14px; padding: 0 6px 6px; }
+.bell-pop a { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; font-size: 14px; color: var(--ink); }
+.bell-pop a:hover { background: var(--blue-50); }
+.bell-pop a .icon { width: 18px; height: 18px; color: var(--blue-600); }
+.bell-pop a .ndot { margin-left: auto; vertical-align: 0; }
+.bell-pop p { margin: 0; padding: 0 6px 4px; }
