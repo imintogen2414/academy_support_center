@@ -15,6 +15,7 @@ const ICON = {
   handshake: '<path d="M8 12l3 3 5-5"/><path d="M2 12l5-5 5 3 5-3 5 5-10 9z"/>',
   doc: '<path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/>',
   folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
   calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h4"/>',
   attend: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12l2 2 4-4"/>',
@@ -146,7 +147,7 @@ function billingPage() {
   if (REAL) return realBillingPage();
   // 미납 수 · 금액은 미납 목록에서 계산해서 목록 · 홈 · 메뉴 숫자가 늘 같아요
   const b = DATA.billing, unpaid = DATA.unpaid.length, paid = b.total - unpaid;
-  return head('수납', `${b.month} 청구 ${b.total}건 중 ${paid}건 납부 · 미납 ${unpaid}건`) + `
+  return head('수납', `${b.month} 청구 ${b.total}건 중 ${paid}건 납부 · 미납 ${unpaid}건`, `<button class="btn" data-photo="tuition">${ic('image')}수강료표 사진으로 올리기</button>`) + `
   <div class="stats">
     <div class="stat"><span>청구</span><b class="num">${b.total}건</b></div>
     <div class="stat good"><span>납부 완료</span><b class="num">${paid}건</b></div>
@@ -389,7 +390,7 @@ function plansCard() {
   const ps = REAL.plans, with_ = REAL.students.filter(planOf).length;
   return `
   <section class="card" style="margin-bottom:16px">
-    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
+    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm" data-photo="tuition">${ic('image')}사진으로 올리기</button><button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
     ${ps.length ? `<div class="plan-list">${ps.map(p => {
       const n = REAL.students.filter(x => x.tuition_plan_id === p.id).length;
       return `<button class="plan" data-edit-plan="${p.id}"><b>${esc(p.name)}</b><span class="num">${won(p.amount)}</span><small>${p.class_name ? `${esc(p.class_name)} · ` : ''}학생 ${n}명</small></button>`;
@@ -898,6 +899,153 @@ function importDialog(kind) {
   d.showModal();
 }
 
+/* ---------- 사진으로 올리기 (시간표 · 수강료표) ----------
+   사진을 고르면 줄여서 Edge Function read-photo(Claude가 읽음)로 보내고, 읽은 줄을 칸마다 고칠 수 있게 보여 줘요.
+   원장님이 확인하고 "저장하기"를 눌러야 들어가요. 예시 계정은 예시 결과를 보여 주고 저장은 안 해요. */
+const PHOTO_IMPORTS = {
+  timetable: {
+    title: '시간표 사진으로 올리기', what: '수업', table: 'timetable', after: () => loadSchedule(),
+    hint: '종이 · 칠판 · 엑셀 화면 캡처 모두 돼요. 반 · 요일 · 시간이 보이게 찍어 주세요.',
+    cols: [['class_name', '반', { required: true, max: 50 }], ['weekday', '요일', { type: 'weekday' }], ['start_time', '시작', { type: 'time' }], ['end_time', '끝', { type: 'time' }],
+      ['subject', '과목', { max: 50 }], ['room', '강의실', { max: 30 }], ['teacher_name', '담당 강사', { max: 50 }]],
+    bad: r => !r.class_name ? '반 이름을 넣어 주세요' : !r.start_time || !r.end_time ? '시간을 넣어 주세요' : r.end_time <= r.start_time ? '끝나는 시간이 시작보다 늦어야 해요' : null,
+    dup: r => (REAL ? REAL.timetable : DATA.timetable).some(t => t.class_name === r.class_name && +t.weekday === +r.weekday && hm(t.start_time) === r.start_time),
+    sample: [['초등 A반', 1, '15:00', '16:20', '영어 파닉스', '1강의실', '김민지'], ['초등 A반', 3, '15:00', '16:20', '영어 파닉스', '1강의실', '김민지'], ['초등 B반', 2, '16:30', '17:50', '영어 리딩', '2강의실', '김민지'],
+      ['초등 B반', 4, '16:30', '17:50', '영어 리딩', '2강의실', '김민지'], ['중등 A반', 1, '18:00', '19:50', '영어 문법', '3강의실', '박서준', 1], ['중등 A반', 5, '18:00', '19:50', '영어 독해', '3강의실', '박서준']]
+  },
+  tuition: {
+    title: '수강료표 사진으로 올리기', what: '수강료', table: 'tuition_plans', after: () => loadPlans(),
+    hint: '학원에 붙여 둔 교습비 게시표 · 안내문 · 엑셀 캡처를 찍어 주세요.',
+    cols: [['name', '이름', { required: true, max: 50 }], ['amount', '한 달 금액', { type: 'won' }], ['class_name', '주로 쓰는 반', { max: 50 }], ['memo', '메모', { max: 200 }]],
+    bad: r => !r.name ? '이름을 넣어 주세요' : !(r.amount > 0) ? '금액을 넣어 주세요' : null,
+    dup: r => (REAL ? REAL.plans || [] : []).some(p => p.name === r.name && p.amount === r.amount),
+    sample: [['초등 주 2회', 220000, '', '교재비 별도'], ['초등 주 3회', 300000, '초등 B반', '교재비 별도'], ['중등 주 3회', 340000, '중등 A반', ''], ['고등 내신반', 420000, '', '시험 기간 보강 포함', 1]]
+  }
+};
+// 사진을 긴 쪽 1600px JPEG로 줄여요 (보내는 시간 · 크기 줄이기)
+function shrinkPhoto(file) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      const data = c.toDataURL('image/jpeg', 0.85);
+      ok({ preview: data, b64: data.split(',')[1] });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); no(new Error('bad_image')); };
+    img.src = url;
+  });
+}
+const PHOTO_ERR = {
+  no_key: '사진 읽기가 아직 준비 중이에요. 센터가 설정을 마치면 바로 쓸 수 있어요. 지금은 직접 넣거나 엑셀로 올려 주세요.',
+  owner_only: '사진으로 올리기는 원장님만 쓸 수 있어요.', too_big: '사진이 너무 커요. 조금 멀리서 다시 찍어 주세요.',
+  busy: '지금 사진을 읽는 사람이 많아요. 잠시 후 다시 눌러 주세요.', refused: '이 사진은 읽을 수 없어요. 시간표 · 수강료표만 보이게 다시 찍어 주세요.'
+};
+async function readPhoto(kind, b64) {
+  if (!REAL) { await new Promise(r => setTimeout(r, 1200)); return { rows: PHOTO_IMPORTS[kind].sample, note: '예시 계정이라 예시 결과를 보여 드려요.', demo: true }; }
+  const { data, error } = await SB.functions.invoke('read-photo', { body: { kind, image: b64, media_type: 'image/jpeg' } });
+  if (error) { let code = ''; try { code = (await error.context.json()).error; } catch (e) { /* 연결 오류 */ } throw new Error(code || 'network'); }
+  return data;
+}
+function photoImportDialog(kind) {
+  const cfg = PHOTO_IMPORTS[kind], d = dialogEl();
+  const toRow = x => Array.isArray(x)
+    ? Object.fromEntries([...cfg.cols.map(([k], i) => [k, x[i] ?? '']), ['unsure', !!x[cfg.cols.length]]])
+    : { ...x, start_time: x.start_time ? String(x.start_time).slice(0, 5) : '', end_time: x.end_time ? String(x.end_time).slice(0, 5) : '' };
+  let rows = [], photo = null, note = '';
+  const start = msg => {
+    d.innerHTML = `
+    <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
+      <h2>${cfg.title}</h2>
+      <p class="muted small" style="margin:0">${cfg.hint} 사진을 읽어 표로 먼저 채워 드려요. 저장하기 전에 칸마다 고칠 수 있어요.</p>
+      <div class="ph-drop">
+        <label class="btn primary file-btn">${ic('plus')}사진 고르기 · 찍기<input type="file" id="phFile" accept="image/*"></label>
+        <span class="muted small">JPG · PNG · 휴대폰 사진 · 화면 캡처</span>
+      </div>
+      <p class="msg" id="dlgMsg" ${msg ? '' : 'hidden'}>${msg || ''}</p>
+      <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div>
+    </form>`;
+    $('#dlgCancel').onclick = () => d.close();
+    $('#phFile').onchange = async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) return start('사진 파일만 올릴 수 있어요. 엑셀은 "엑셀로 올리기"를 써 주세요.');
+      try { photo = await shrinkPhoto(f); } catch (err) { return start('사진을 열지 못했어요. 다른 사진으로 해 주세요. (아이폰 HEIC 사진은 캡처해서 올리면 돼요)'); }
+      reading();
+      try {
+        const res = await readPhoto(kind, photo.b64);
+        rows = (res.rows || []).map(toRow); note = res.note || '';
+        if (!rows.length) return start(note || '사진에서 읽을 줄을 찾지 못했어요. 더 밝고 가깝게 찍어 주세요.');
+        review();
+      } catch (err) { start(PHOTO_ERR[err.message] || '사진을 읽지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); }
+    };
+  };
+  const reading = () => {
+    d.innerHTML = `<div class="dlg ph-reading"><img src="${photo.preview}" alt=""><div><span class="spin"></span><b>사진을 읽고 있어요…</b><small class="muted">보통 10~30초쯤 걸려요</small></div></div>`;
+  };
+  const cell = (r, i, [k, lab, o]) => {
+    const v = r[k] ?? '';
+    const input = o.type === 'weekday' ? `<select data-k="${k}">${WEEK.map(w => `<option value="${w}" ${+v === w ? 'selected' : ''}>${WD[w]}요일</option>`).join('')}</select>`
+      : o.type === 'time' ? `<input type="time" step="300" data-k="${k}" value="${esc(v)}">`
+      : o.type === 'won' ? `<input inputmode="numeric" data-k="${k}" value="${v ? Number(v).toLocaleString('ko-KR') : ''}" placeholder="0">`
+      : `<input data-k="${k}" maxlength="${o.max || 100}" value="${esc(v)}">`;
+    return `<label class="ph-f"><span>${lab}</span>${input}</label>`;
+  };
+  const review = () => {
+    const dupN = rows.filter(r => cfg.dup(r)).length;
+    d.innerHTML = `
+    <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
+      <h2>${cfg.title} · 확인하고 고치기</h2>
+      <div class="ph-top"><img src="${photo.preview}" alt="올린 사진"><div>
+        <p style="margin:0"><b>${rows.length}개</b>를 읽었어요. 틀린 칸은 바로 고치고, 넣지 않을 줄은 체크를 끄세요.</p>
+        ${rows.some(r => r.unsure) ? '<p class="small" style="margin:4px 0 0"><span class="chip warn">확인 필요</span> 표시는 흐리거나 짐작한 칸이 있는 줄이에요.</p>' : ''}
+        ${dupN ? `<p class="small muted" style="margin:4px 0 0">이미 있는 ${dupN}줄은 체크를 꺼 두었어요.</p>` : ''}
+        ${note ? `<p class="small muted" style="margin:4px 0 0">${esc(note)}</p>` : ''}
+      </div></div>
+      <div class="ph-rows">${rows.map((r, i) => `
+        <div class="ph-row ${r.unsure ? 'unsure' : ''}" data-i="${i}">
+          <label class="ph-on"><input type="checkbox" ${cfg.dup(r) ? '' : 'checked'}><span>${i + 1}</span></label>
+          <div class="ph-fields">${cfg.cols.map(c => cell(r, i, c)).join('')}</div>
+          <div class="ph-side">${r.unsure ? '<span class="chip warn">확인 필요</span>' : ''}${cfg.dup(r) ? '<span class="chip mute">이미 있음</span>' : ''}<button type="button" class="btn sm ghost" data-ph-del="${i}" aria-label="${i + 1}번 줄 빼기">빼기</button></div>
+          <p class="ph-why" hidden></p>
+        </div>`).join('')}
+      </div>
+      <button type="button" class="btn sm" id="phAdd">${ic('plus')}줄 더하기</button>
+      <p class="msg" id="dlgMsg" hidden></p>
+      <div class="acts"><button type="button" class="btn" id="phAgain">다른 사진</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button>
+        <button class="btn primary" id="phSave"></button></div>
+    </form>`;
+    const f = $('#dlgForm');
+    const read = () => [...f.querySelectorAll('.ph-row')].forEach(el => {
+      const r = rows[+el.dataset.i];
+      el.querySelectorAll('[data-k]').forEach(x => { const k = x.dataset.k, o = cfg.cols.find(c => c[0] === k)[2]; r[k] = o.type === 'won' ? numOf(x.value) : o.type === 'weekday' ? +x.value : x.value.trim(); });
+      r.on = el.querySelector('.ph-on input').checked;
+    });
+    const count = () => { read(); const n = rows.filter(r => r.on).length; $('#phSave').textContent = `${n}개 저장하기`; $('#phSave').disabled = !n; };
+    f.querySelectorAll('input[inputmode=numeric]').forEach(x => x.oninput = () => { const n = numOf(x.value); x.value = n ? n.toLocaleString('ko-KR') : ''; });
+    f.oninput = f.onchange = count; count();
+    f.querySelectorAll('[data-ph-del]').forEach(b => b.onclick = () => { read(); rows.splice(+b.dataset.phDel, 1); review(); });
+    $('#phAdd').onclick = () => { read(); rows.push(toRow(kind === 'timetable' ? ['', 1, '16:00', '17:20', '', '', ''] : ['', 0, '', ''])); review(); };
+    $('#phAgain').onclick = () => start();
+    $('#dlgCancel').onclick = () => d.close();
+    f.onsubmit = async e => {
+      e.preventDefault(); read();
+      let bad = 0;
+      f.querySelectorAll('.ph-row').forEach(el => { const r = rows[+el.dataset.i], why = r.on && cfg.bad(r), p = el.querySelector('.ph-why'); p.hidden = !why; p.textContent = why || ''; el.classList.toggle('bad', !!why); if (why) bad++; });
+      if (bad) { const m = $('#dlgMsg'); m.textContent = `고쳐야 할 줄이 ${bad}개 있어요.`; m.hidden = false; f.querySelector('.ph-row.bad').scrollIntoView({ block: 'center' }); return; }
+      const ok = rows.filter(r => r.on).map(r => Object.fromEntries(cfg.cols.map(([k, , o]) => [k, r[k] === '' ? null : r[k]])));
+      if (!REAL) { d.close(); return toast(`예시 계정이라 저장하지 않았어요 · 실제로는 ${ok.length}개가 바로 들어가요`); }
+      const btn = $('#phSave'); btn.disabled = true; btn.textContent = '저장하는 중…';
+      const { error } = await SB.from(cfg.table).insert(ok.map(r => ({ ...r, academy_id: REAL.academy.id })));
+      if (error) { btn.disabled = false; btn.textContent = '다시 저장'; const m = $('#dlgMsg'); m.textContent = /service|policy|42501/i.test(`${error.code} ${error.message}`) ? '저장할 권한이 없어요. 원장님 계정인지 확인해 주세요.' : '저장하지 못했어요. 잠시 후 다시 눌러 주세요.'; m.hidden = false; return; }
+      d.close(); await cfg.after(); render(); toast(`${cfg.what} ${ok.length}개를 넣었어요 · 칸을 누르면 언제든 고칠 수 있어요`);
+    };
+  };
+  start();
+  d.showModal();
+}
+
 /* ---------- 실제 데이터: 서류·행정 마감 (Supabase paperwork) ---------- */
 // 다음에 돌아오는 "매달 dd일" (month를 주면 매년 그 달 dd일)
 function nextDue(dd, month = null) {
@@ -1383,7 +1531,7 @@ function schedulePage() {
   const { tt, ev } = schData(), staff = isStaff(), c = schClass();
   const classes = [...new Set([...tt.map(t => t.class_name)])].sort();
   const opts = [...(myClasses().length ? [['mine', ROLE === 'student' ? '내 반' : '우리 아이 반']] : []), ['all', '전체'], ...(staff ? classes.map(x => [x, x]) : [])];
-  const acts = [ROLE === 'owner' ? `<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
+  const acts = [ROLE === 'owner' ? `<button class="btn" data-photo="timetable">${ic('image')}사진으로 올리기</button><button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
   const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && classOk(t.class_name)).sort((a, b) => a.start_time.localeCompare(b.start_time));
   const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
   return head('일정·시간표', staff ? '학부모 · 학생에게도 같은 시간표와 일정이 보여요. 강의실 · 담당 강사 · 메모는 원장님과 강사님에게만 보여요.' : '학원 시간표와 시험 · 행사 · 휴원 일정이에요.', acts) + `
@@ -1403,7 +1551,7 @@ function weekView(tt, staff) {
   if (!tt.length) return `
   <section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>아직 시간표가 없어요</h2>
     <p class="muted">${ROLE === 'owner' ? '반마다 요일 · 시간을 넣으면 강사 · 학부모 · 학생 모두에게 같은 시간표가 보여요.' : '원장님이 시간표를 넣으면 여기에 보여요.'}</p>
-    ${ROLE === 'owner' ? `<button class="btn primary" data-act="addTT">시간표 추가</button>` : ''}</section>`;
+    ${ROLE === 'owner' ? `<div class="btns" style="justify-content:center"><button class="btn primary" data-photo="timetable">${ic('image')}시간표 사진으로 올리기</button><button class="btn" data-act="addTT">직접 넣기</button></div><p class="muted small">종이 시간표를 찍어 올리면 반 · 요일 · 시간을 읽어 먼저 채워 드려요.</p>` : ''}</section>`;
   const mon = SCH_WEEK || mondayOf(TODAY), sun = addDays(mon, 6), dateOf = d => addDays(mon, (d + 6) % 7);
   const evs = schData().ev.filter(e => classOk(e.target_class) && e.day <= sun && (e.end_day || e.day) >= mon);
   const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d) || evs.some(e => evOn(e, dateOf(d))));
@@ -3730,7 +3878,8 @@ function parentAbroadPage() {
   const active = promos.filter(p => p.active);
   const mine = REAL ? requests : requests.filter(r => r.parent_name === ME.name);
   const asked = id => mine.some(r => r.promo_id === id && r.status !== 'done');
-  return head('유학 상담', `${DATA.academy.name}에서 안내하는 유학 · 캠프 프로그램이에요. 상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투유학)과 연결해 드려요.`) +
+  const me = ROLE === 'student';
+  return head('유학 상담', `${REAL ? esc(REAL.academy.name) : DATA.academy.name}에서 안내하는 ${me ? '캠프 · 어학연수 · 유학' : '유학 · 캠프'} 프로그램이에요. ${me ? (famOn() ? '보호자와 함께, 또는 직접 ' : '수강생 본인이 직접 ') : ''}상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투유학)와 연결해 드려요.`) +
     (active.length ? `<div class="grid3">${active.map(p => `
       <div class="perk">
         <span class="who">${esc(p.program)}${p.event_date ? ` · ${md(p.event_date)}` : ''}</span>
@@ -3758,8 +3907,8 @@ function abroadApplyDialog(promo) {
     label: () => '상담 신청을', doneText: ROLE === 'teacher' ? '상담 신청을 올렸어요 · 원장님이 확인하고 센터로 넘겨요' : '상담을 신청했어요 · 원장님이 확인하고 연락드려요',
     fields: [
       ['program', '관심 프로그램', { type: 'select', required: true, options: ABROAD_PROGRAMS, value: promo ? promo.program : '', createOnly: true }],
-      ['parent_name', '학부모 이름', { required: true, max: 50, value: ROLE === 'teacher' ? '' : PROFILE.name || '', half: true }], ['phone', '연락처', { type: 'tel', required: true, max: 30, placeholder: '010-0000-0000', half: true }],
-      ['student_name', '학생 이름', { max: 50, half: true }], ['student_grade', '학년', { max: 20, placeholder: '예: 초5', half: true, chips: GRADES }],
+      ['parent_name', ROLE === 'student' ? '신청하는 사람 (본인 또는 보호자)' : '학부모 이름', { required: true, max: 50, value: ROLE === 'teacher' ? '' : PROFILE.name || '', half: true }], ['phone', '연락처', { type: 'tel', required: true, max: 30, placeholder: '010-0000-0000', value: ROLE === 'student' ? fmtPhone(PROFILE.phone || '') : '', half: true }],
+      ['student_name', ROLE === 'student' ? '가는 사람 (학생 · 수강생)' : '학생 이름', { max: 50, half: true, value: ROLE === 'student' ? PROFILE.name || '' : '' }], ['student_grade', ROLE === 'student' && !famOn() ? '나이 · 직업 (선택)' : '학년', { max: 20, placeholder: ROLE === 'student' && !famOn() ? '예: 대학생 · 직장인' : '예: 초5', half: true, chips: ROLE === 'student' && !famOn() ? ['대학생', '직장인', '취업 준비'] : GRADES }],
       ['memo', ROLE === 'teacher' ? '학부모님이 궁금해하신 점' : '궁금한 점', { max: 1000, placeholder: '예: 처음 보내는 거라 안전이 걱정돼요.' }]
     ]
   });
@@ -4869,6 +5018,8 @@ const AREAS = {
   },
   student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, messages: MESSAGES_AREA, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' }, library: LIBRARY_AREA }
 };
+// 학생(성인 수강생 포함)도 학원이 안내하는 유학 · 캠프 · 어학연수를 보고 직접 상담을 신청해요
+AREAS.student.abroad = { ...AREAS.parent.abroad, desc: '학원이 안내하는 캠프 · 어학연수 · 유학 · 직접 상담 신청' };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보 의뢰 · 원장님 결재 뒤 센터로' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done' && r.status !== 'rejected').length : DATA.promoRequests.length;
 // 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 공지
@@ -4897,7 +5048,8 @@ const FAMILY_AREAS = {
     attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea,
     messages: MESSAGES_AREA,
-    library: LIBRARY_AREA
+    library: LIBRARY_AREA,
+    abroad: AREAS.student.abroad
   }
 };
 let MY = AREAS[ROLE];
@@ -5023,7 +5175,7 @@ const NAV_GROUPS = {
   owner: [['학원 운영', '출결 · 돈 · 서류 · 학생 · 일정', ['admin', 'members', 'schedule']], ['강사 · 소통', '강사 교육 · 채용 · 채팅 · 자료', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
   teacher: [['수업', '출결 · 원생 · 상담 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'leads', 'todos', 'reports', 'schedule']], ['소통 · 자료', '채팅 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
-  student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library', 'center']]],
+  student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library']], ['유학 · 캠프', '학원이 안내하는 캠프 · 어학연수 · 유학', ['abroad', 'center']]],
   admin: [['센터', '센터 관리 · 채팅', ['center', 'messages']]]
 };
 // 지금 메뉴(MY)에 있는 것만, 어느 묶음에도 없는 메뉴는 마지막 묶음 뒤에
@@ -5534,7 +5686,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services'],
-    teacher: ['home', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
+    teacher: ['home', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'abroad', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -5567,6 +5719,7 @@ function bind() {
   on('[data-att-rest]', b => markAttendance(REAL.students.filter(s => (s.class_name || '반 미지정') === b.dataset.attRest && !REAL.attend.map[s.id]).map(s => s.id), 'present'));
   on('[data-act="billMonth"]', billMonthDialog);
   on('[data-act="addPlan"]', () => planDialog(null));
+  on('[data-photo]', b => ROLE === 'owner' ? photoImportDialog(b.dataset.photo) : toast('사진으로 올리기는 원장님만 쓸 수 있어요'));
   on('[data-demo-disc]', () => toast('예시 계정에서는 바꿀 수 없어요'));
   on('[data-act="addDisc"]', () => discountDialog(null));
   on('[data-act="applyDisc"]', () => REAL.students.length ? applyDiscountDialog() : toast('먼저 원생을 추가해 주세요'));

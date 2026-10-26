@@ -13,7 +13,7 @@
       b.title = d ? '밝은 화면으로' : '어두운 화면으로';
       b.setAttribute('aria-pressed', d);
     });
-    if (meta()) meta().content = d ? '#05072a' : '#070a3d';
+    if (meta()) meta().content = d ? (meta().dataset.dark || '#05072a') : (meta().dataset.light || '#070a3d');
   }
   const s = saved();
   if (s === 'dark' || s === 'light') root.dataset.theme = s;
