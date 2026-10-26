@@ -35,6 +35,7 @@
   - 행정 지원: `attendance`(학생·날짜마다 출석/지각/결석/조퇴, 원장·강사 읽기, 쓰기는 `mark_attendance(학생들, 날짜, 상태|null)` RPC만), `invoices`(수납·청구, 금액은 원 단위, 학생 이름·반은 트리거가 채움), `expenses`(지출), `paperwork`(서류 마감). 돈·서류는 원장만.
   - 센터 관리: `center_admins`(이메일 목록, RPC로만: `am_center_admin` `list_center_admins` `add_center_admin(이메일|아이디)` `remove_center_admin`, 나 자신은 못 뺌). 판정은 `private.is_center_admin()` — 구글로 확인된 이메일이거나 센터 아이디일 때만. 첫 관리자: `yunji040615@gmail.com`, `imintogen2414@gmail.com`.
   - 강사 교육: `training_videos`(관리자만 쓰기, 원장·강사는 배부된 것만 보기, 영상은 유튜브·비메오 주소), `training_reflections`(영상당 한 사람 하나, 쓰면 이수 완료, 본인·관리자만 보기). 원장은 `academy_training_report(학원)`, 관리자는 `admin_video_reflections(영상)`로 이름과 함께 봐요.
+  - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
   - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
   - 채용: `job_posts`(원장 쓰기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
   - 제휴: `partner_applications`(원장 신청·확인 전 취소, 관리자가 new→contacted→connected→closed 처리). 제휴처 목록 자체는 `data.js`의 `partners`.
@@ -45,6 +46,7 @@
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
 - 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
 - 학원 코드가 없는 강사: 학원 연결 화면의 "채용 공고 먼저 보기" → `SEEKER` 모드(채용 공고만).
+- 관리자 신청 화면: `app.html#apply-admin`(왼쪽 아래 "센터 관리자 신청", 역할 고르기·학원 연결 화면에도 링크). 수락은 센터 관리 → 관리자.
 - 센터 관리자: 학원에 속해 있으면 메뉴에 "센터 관리"가 더 생기고, 학원 없이 관리자만이면 `ROLE = 'admin'`으로 센터 화면만 봐요(역할 고르기도 건너뜀).
 - 재정의 수입 = 그 달에 "납부 확인"한 청구 합계. 지출은 `expenses`. 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
 - 뒤로 가기: 왼쪽 메뉴와 위치 표시(홈 › 분야) 링크는 기록을 바꿔치기(`goReplace`)해서 쌓이지 않아요. 화면 위 "‹ 이전"은 바로 전 화면 한 단계(처음 연 화면이면 한 단계 위).
@@ -57,7 +59,7 @@
 3. ~~강사 채용 → 제휴 신청 · 학부모 유학 상담 신청~~ (완료)
 4. ~~학부모 공지 · 홍보 의뢰 · 학부모·학생 앱~~ (완료)
 5. ~~로그인 유지하기 · 초대 코드 설명 · "예시 계정 들어가보기" · 인투유학 이름 · 이전 버튼~~ (완료)
-6. 센터 관리자 신청 → 지금 관리자가 수락·거절
+6. ~~센터 관리자 신청 → 수락·거절~~ (완료)
 7. 엑셀(.xlsx·.csv)로 원생 명단 · 지출 한꺼번에 올리기 (양식 내려받기 → 미리보기 → 저장)
 8. 첫 화면 분야 상세페이지 디자인: 분야마다 색·포인트, 아이콘·그림, 더 자세한 설명. 특히 인투유학(로고 `assets/brand/intoyuhak-logo.png`)·인투마케팅(로고는 사용자가 나중에 보내 줌)
 

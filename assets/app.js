@@ -1512,6 +1512,10 @@ async function stepRequest(id, status) {
 
 // 관리자 추가 · 빼기
 const ADMIN_ERRORS = {
+  not_verified: '구글로 로그인했거나 아이디로 가입한 계정만 신청할 수 있어요.',
+  already_pending: '이미 신청했어요. 관리자가 확인하고 있어요.',
+  already_admin: '이미 센터 관리자예요.',
+  not_pending: '이미 처리된 신청이에요.',
   no_such_id: '그 아이디로 가입한 회원이 없어요. 가입한 뒤에 추가해 주세요.',
   bad_id: '아이디는 영문 소문자·숫자·밑줄 4–20자예요.',
   bad_email: '이메일 주소를 다시 확인해 주세요.',
@@ -1521,7 +1525,21 @@ const ADMIN_ERRORS = {
 const adminError = e => ADMIN_ERRORS[Object.keys(ADMIN_ERRORS).find(k => (e.message || '').includes(k))] || '문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 function centerAdminsPage() {
   const me = (USER.email || '').toLowerCase();
-  return head('관리자', '센터 관리 화면을 쓸 수 있는 사람이에요. 관리자는 누구나 다른 관리자를 추가하거나 뺄 수 있어요.') + `
+  const apps = CENTER.adminApps, wait = apps.filter(a => a.status === 'pending'), done = apps.filter(a => a.status !== 'pending').slice(0, 5);
+  const who = a => `${esc(a.name || a.email.split('@')[0])} <span class="muted small">${esc(a.email.replace('@id.academysupportcenter.app', ' (아이디)'))}</span>`;
+  return head('관리자', '센터 관리 화면을 쓸 수 있는 사람이에요. 관리자는 누구나 다른 관리자를 추가하거나 빼고, 관리자 신청을 수락할 수 있어요.') + `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>관리자 신청</h2><span class="sub">${wait.length ? `기다리는 신청 ${wait.length}건` : '기다리는 신청 없음'}</span></div>
+    ${wait.length ? `<div class="list stack">${wait.map(a => `
+      <div class="li">
+        <span class="av" style="background:var(--blue-500)">${esc((a.name || a.email)[0].toUpperCase())}</span>
+        <div><div class="t">${who(a)}</div><div class="d">${md(a.created_at.slice(0, 10))} 신청${a.reason ? ` · "${esc(a.reason)}"` : ''}</div></div>
+        <div class="r"><span class="btns"><button class="btn sm danger" data-adm-app="${a.id}:0">거절</button><button class="btn sm primary" data-adm-app="${a.id}:1">수락</button></span></div>
+      </div>`).join('')}</div>` : '<p class="muted small" style="margin:0">로그인한 사람이 왼쪽 아래 "센터 관리자 신청"을 누르면 여기에 와요. 수락하면 바로 관리자가 돼요.</p>'}
+    ${done.length ? `<details class="past"><summary>최근 처리한 신청 ${done.length}건</summary><div class="list">${done.map(a => `
+      <div class="li"><span class="av" style="background:var(--blue-100)">${esc((a.name || a.email)[0].toUpperCase())}</span><div class="t">${who(a)}</div>
+        <div class="r"><span class="chip ${a.status === 'approved' ? 'good' : 'mute'}">${a.status === 'approved' ? '수락' : '거절'}</span><span class="time">${a.decided_at ? md(a.decided_at.slice(0, 10)) : ''}</span></div></div>`).join('')}</div></details>` : ''}
+  </section>` + `
   <section class="card" style="margin-bottom:16px">
     <div class="card-head"><h2>관리자 추가</h2></div>
     <form class="admin-add" id="adminAdd" novalidate>
@@ -1658,6 +1676,8 @@ const centerTodo = () => {
   if (ab) items.push([`유학 상담 연결 요청 ${ab}건`, '인투유학 상담사 연결', '#center/abroad', '<span class="chip warn">연결 필요</span>']);
   const mk = CENTER.promoReqs.filter(r => r.status === 'new');
   if (mk.length) items.push([`새 홍보 의뢰 ${mk.length}건`, mk.slice(0, 3).map(r => `${esc(r.academy_name || '학원')} · ${esc(r.service)}`).join(' / '), '#center/promo', '<span class="chip crit">새 의뢰</span>']);
+  const adm = CENTER.adminApps.filter(a => a.status === 'pending');
+  if (adm.length) items.push([`관리자 신청 ${adm.length}건`, adm.slice(0, 3).map(a => esc(a.name || a.email.split('@')[0])).join(' · '), '#center/admins', '<span class="chip crit">수락 필요</span>']);
   const noUrl = CENTER.videos.filter(v => v.published && !v.video_url).length;
   if (noUrl) items.push([`영상 주소가 없는 교육 ${noUrl}개`, '강사에게 재생 버튼이 안 보여요', '#center/videos', '<span class="chip warn">확인</span>']);
   if (!items.length) items.push(['새로 처리할 일이 없어요', '지원 신청 · 교육 영상을 살펴봤어요', '#center', '<span class="chip good">여유</span>']);
@@ -1673,7 +1693,7 @@ const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 
     partners: { name: '제휴 신청', icon: 'handshake', desc: '원장님이 신청한 제휴 연결', stat: () => `새 신청 ${CENTER.partnerApps.filter(a => a.status === 'new').length}건`, render: centerPartnersPage },
     abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
     promo: { name: '홍보 의뢰', icon: 'megaphone', desc: '원장님 홍보 작업을 인투마케팅에 연결', stat: () => `새 의뢰 ${CENTER.promoReqs.filter(r => r.status === 'new').length}건`, render: centerPromoPage },
-    admins: { name: '관리자', icon: 'shield', desc: '센터 관리자 추가 · 빼기', stat: () => `${CENTER.admins.length}명`, render: centerAdminsPage }
+    admins: { name: '관리자', icon: 'shield', desc: '관리자 신청 수락 · 추가 · 빼기', stat: () => { const n = CENTER.adminApps.filter(a => a.status === 'pending').length; return `${CENTER.admins.length}명${n ? ` · 신청 ${n}건` : ''}`; }, render: centerAdminsPage }
   } };
 
 function applicantStat() {
@@ -1909,6 +1929,8 @@ function renderChrome(area) {
     if (!PROFILE || !SB) return;
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
   };
+  const foot = $('#adminApply');
+  if (foot) { foot.hidden = !(PROFILE && USER && !CENTER); foot.innerHTML = adminApplyLink(); bindAdminApplyLink(); }
   document.title = `${ROLE === 'admin' ? '센터 관리' : ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
 }
 
@@ -2043,6 +2065,14 @@ function bind() {
     if (error) { msg.textContent = adminError(error); msg.hidden = false; return; }
     await loadCenter(); render(); toast(`${who} 님을 관리자로 추가했어요`);
   };
+  on('[data-adm-app]', async b => {
+    const [id, ok] = b.dataset.admApp.split(':'), a = CENTER.adminApps.find(x => x.id === id);
+    const nm = a.name || a.email.split('@')[0];
+    if (!confirm(ok === '1' ? `${nm} 님을 센터 관리자로 수락할까요? 수락하면 센터 관리 화면을 모두 쓸 수 있어요.` : `${nm} 님의 신청을 거절할까요?`)) return;
+    const { error } = await SB.rpc('decide_admin_application', { p_id: id, p_ok: ok === '1' });
+    if (error) { toast(adminError(error)); return; }
+    await loadCenter(); render(); toast(ok === '1' ? `${nm} 님이 관리자가 됐어요` : '신청을 거절했어요');
+  });
   on('[data-act="pickRole"]', (b, e) => { e.preventDefault(); PROFILE.role ? onboarding(USER) : rolePicker(USER); });
   // 채용
   on('[data-act="newJob"]', () => {
@@ -2166,6 +2196,50 @@ function useProfile() {
   }
 }
 
+// 센터 관리자 신청: 로그인한 누구나 신청 → 지금 관리자가 센터 관리 → 관리자에서 수락
+const adminApplyLink = () => `<a class="admin-apply-link" href="app.html#apply-admin" data-apply-admin>${ic('shield')}센터 본부 직원이세요? <b>센터 관리자 신청</b></a>`;
+const bindAdminApplyLink = () => document.querySelectorAll('[data-apply-admin]').forEach(a => a.onclick = e => { e.preventDefault(); location.hash = '#apply-admin'; location.reload(); });
+async function adminApplyScreen(user) {
+  MY = null;
+  const { data } = await SB.rpc('my_admin_application');
+  const last = (data || [])[0], m = user.user_metadata || {};
+  const name = PROFILE.name || m.full_name || m.name || '';
+  const back = `<a class="btn" href="app.html" id="aaBack">돌아가기</a>`;
+  $('.layout').style.display = 'block';
+  $('.layout').innerHTML = `
+  <div class="picker"><div class="card">
+    <span class="logo"><span class="logo-mark">${ic('shield')}</span>학원지원센터 · 센터 관리자 신청</span>
+    ${last && last.status === 'pending' ? `
+    <h1>신청을 받았어요</h1>
+    <p class="muted">${md(last.created_at.slice(0, 10))}에 신청했어요. 지금 센터 관리자가 확인하고 수락하면, 이 화면에서 "다시 확인"을 누르거나 다시 로그인하면 센터 관리 화면이 열려요.</p>
+    <div class="row-btns"><button class="btn primary" id="aaCheck">다시 확인</button>${back}</div>` : `
+    <h1>센터 관리자 신청</h1>
+    <p class="muted">센터 관리자는 강사 교육 영상, 지원 신청, 제휴 · 유학 · 홍보 연결을 처리해요. 학원지원센터 본부 직원만 신청해 주세요. 지금 관리자가 수락하면 바로 쓸 수 있어요.</p>
+    ${last && last.status === 'rejected' ? `<p class="msg">${last.decided_at ? md(last.decided_at.slice(0, 10)) : '지난번'} 신청은 수락되지 않았어요. 필요하면 본부에 먼저 이야기하고 다시 신청해 주세요.</p>` : ''}
+    <form class="f-stack" id="aaForm" novalidate>
+      <label class="f">이름<input name="nm" value="${esc(name)}" maxlength="50" placeholder="예: 김대표"></label>
+      <label class="f">소속 · 하는 일<textarea name="reason" rows="3" maxlength="500" placeholder="예: 본부 운영팀 · 학원 지원 신청 연락 담당"></textarea></label>
+      <p class="muted small">로그인한 계정: <b>${esc((user.email || '').replace('@id.academysupportcenter.app', ' (아이디)'))}</b>${/@id\.academysupportcenter\.app$/.test(user.email || '') ? '' : ' · 구글로 로그인한 계정만 관리자로 인정돼요'}</p>
+      <p class="msg" id="aaMsg" hidden></p>
+      <div class="row-btns"><button class="btn primary">신청하기</button>${back}</div>
+    </form>`}
+  </div></div>`;
+  $('#aaBack').onclick = e => { e.preventDefault(); history.replaceState(null, '', 'app.html'); location.reload(); };
+  if ($('#aaCheck')) $('#aaCheck').onclick = async () => {
+    const { data: ok } = await SB.rpc('am_center_admin');
+    if (ok) { history.replaceState(null, '', 'app.html#center/admins'); location.reload(); }
+    else toast('아직 확인 중이에요. 조금 뒤에 다시 눌러 주세요.');
+  };
+  if ($('#aaForm')) $('#aaForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, nm = el.nm.value.trim(), msg = $('#aaMsg');
+    if (!nm) { msg.textContent = '이름을 적어 주세요.'; msg.hidden = false; return; }
+    const { error } = await SB.rpc('apply_center_admin', { p_name: nm, p_reason: el.reason.value.trim() || null });
+    if (error) { msg.textContent = adminError(error); msg.hidden = false; return; }
+    adminApplyScreen(user);
+  };
+}
+
 // 구글로 처음 가입하면 역할이 없어서, 한 번만 고르게 해요
 function rolePicker(user) {
   MY = null;
@@ -2183,7 +2257,9 @@ function rolePicker(user) {
     <label class="f">학원 이름<input name="academy" placeholder="예: 하늘영어학원" maxlength="100"></label>
     <p class="msg" id="pickMsg" hidden></p>
     <button class="btn primary">시작하기</button>
+    ${adminApplyLink()}
   </form></div>`;
+  bindAdminApplyLink();
   $('#pickForm').onsubmit = async e => {
     e.preventDefault();
     const el = e.target.elements, name = el.fullname.value.trim();
@@ -2251,15 +2327,15 @@ async function loadTraining() {
 // 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
 async function loadCenter() {
   const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
-  const [v, r, q, a, pa, ab, mk] = await Promise.all([
+  const [v, r, q, a, pa, ab, mk, aa] = await Promise.all([
     newest('training_videos'), SB.from('training_reflections').select('video_id'), newest('support_requests'),
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
-    newest('promo_requests')
+    newest('promo_requests'), SB.rpc('list_admin_applications')
   ]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = (done[x.video_id] || 0) + 1; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
-    partnerApps: pa.data || [], abroad: ab.data || [], promoReqs: mk.data || [] };
+    partnerApps: pa.data || [], abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [] };
 }
 // 원장: 우리 공고 + 지원자
 async function loadJobs() {
@@ -2372,6 +2448,7 @@ function onboarding(user) {
       <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
     </form>
     ${PROFILE.role === 'teacher' ? `<a class="btn" href="app.html#jobs" id="seeJobs">아직 코드가 없어요 · 채용 공고 먼저 보기</a>` : ''}
+    ${adminApplyLink()}
     <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
   </div></div>`;
   const fail = (id, t) => { const m = $(id); m.textContent = t; m.hidden = false; };
@@ -2393,6 +2470,7 @@ function onboarding(user) {
   };
   $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
   $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html'; };
+  bindAdminApplyLink();
   // 같은 페이지 주소라 해시만 바뀌니, 새로 열어서 채용 공고 화면으로 시작해요
   if ($('#seeJobs')) $('#seeJobs').onclick = e => { e.preventDefault(); location.hash = '#jobs'; location.reload(); };
 }
@@ -2410,6 +2488,7 @@ async function boot() {
     ]);
     PROFILE = p || {};
     if (admin) await loadCenter();
+    if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', 'app.html#center/admins'); else { adminApplyScreen(user); return; } }
     if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
 
     // 소속 학원 (여러 곳이면 먼저 들어간 곳)
