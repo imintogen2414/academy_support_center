@@ -791,7 +791,8 @@ loginForm.onsubmit = e => {
   busy(loginForm.querySelector('button'), '로그인 중…', async () => {
     const { error } = await SB.auth.signInWithPassword({ email: idToEmail(id), password: pw });
     if (error) return showMsg(loginMsg, authErrorText(error));
-    location.href = '/app' + NEXT;
+    let next = NEXT; try { next = next || sessionStorage.getItem('asc-next') || ''; sessionStorage.removeItem('asc-next'); } catch (e) { /* 저장소를 못 쓰면 홈으로 */ }
+    location.href = '/app' + next;
   });
 };
 
