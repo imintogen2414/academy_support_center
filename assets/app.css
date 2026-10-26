@@ -251,7 +251,7 @@ dialog { border: 0; border-radius: 20px; padding: 0; width: min(600px, calc(100v
 dialog::backdrop { background: rgba(7,10,61,.45); }
 .dlg { display: grid; gap: 12px; padding: 24px 24px 0; }
 .dlg h2 { margin: 0 0 4px; font-size: 20px; }
-.dlg .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dlg .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
 @media (max-width: 520px) { .dlg .two { grid-template-columns: 1fr; } }
 .dlg .f, .picker .f { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
 .dlg input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
@@ -593,3 +593,17 @@ button.tt-blk:hover { background: var(--blue-100); }
 .tt-day .tt-ev { display: block; margin-bottom: 6px; white-space: normal; }
 .tt-day.off .tt-blk { opacity: .45; }
 @media (max-width: 640px) { .week-bar .wk-pick { margin-left: 0; } }
+
+/* 정해 둔 수강료 */
+.plan-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.plan { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; cursor: pointer; font: inherit; color: var(--ink); }
+.plan:hover { border-color: var(--blue-500); }
+.plan b { font-size: 14px; }
+.plan .num { font-size: 16px; font-weight: 800; color: var(--blue-600); }
+.plan small { color: var(--muted); font-size: 12px; }
+.plan-sum { display: grid; gap: 4px; background: var(--blue-50); border-radius: 12px; padding: 10px 12px; font-size: 13px; }
+.plan-sum span { color: var(--muted); }
+.apply-groups { display: grid; gap: 10px; }
+.apply-groups fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 12px; margin: 0; }
+.apply-groups legend { font-size: 13px; font-weight: 700; padding: 0 4px; }
+.apply-groups legend label { display: flex; align-items: center; gap: 6px; cursor: pointer; }

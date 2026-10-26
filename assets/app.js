@@ -239,7 +239,7 @@ function realBillingPage() {
     <div class="card-head"><h2>납부 완료 ${paid.length}건</h2><span class="sub">이름을 누르면 결제 방법·메모를 고칠 수 있어요</span></div>
     <div class="list stack">${paid.map(row).join('')}</div>
   </section>` : ''}`;
-  return head('수납·청구', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료`, acts) + monthBar() + `
+  return head('수납·청구', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료`, acts) + plansCard() + monthBar() + `
   <div class="stats">
     <div class="stat"><span>청구 합계</span><b class="num">${won(sum(list, i => i.amount))}</b></div>
     <div class="stat good"><span>받은 금액</span><b class="num">${won(sum(paid, i => i.amount))}</b></div>
@@ -264,23 +264,88 @@ function invoiceDialog(i) {
       ['memo', '메모', { max: 300 }]
     ]
   });
+  // 학생을 고르면 정해 둔 수강료를 금액에 채워 줘요
+  const pick = $('#dlgForm [name="student_id"]'), amt = $('#dlgForm [name="amount"]');
+  if (pick) pick.onchange = () => { const p = planOf(REAL.students.find(x => x.id === pick.value)); if (p && !amt.value) amt.value = comma(p.amount); };
 }
 
-// 반별 금액으로 이 달 청구서를 한 번에 만들어요
+/* ---------- 수강료 미리 정해 두기 (tuition_plans) ---------- */
+const planOf = s => s && s.tuition_plan_id ? (REAL.plans || []).find(p => p.id === s.tuition_plan_id) : null;
+const planLabel = p => `${p.name} · ${won(p.amount)}`;
+function plansCard() {
+  const ps = REAL.plans, with_ = REAL.students.filter(planOf).length;
+  return `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
+    ${ps.length ? `<div class="plan-list">${ps.map(p => {
+      const n = REAL.students.filter(x => x.tuition_plan_id === p.id).length;
+      return `<button class="plan" data-edit-plan="${p.id}"><b>${esc(p.name)}</b><span class="num">${won(p.amount)}</span><small>${p.class_name ? `${esc(p.class_name)} · ` : ''}학생 ${n}명</small></button>`;
+    }).join('')}</div>
+    <p class="muted small" style="margin:10px 0 0">수강료를 붙인 학생 ${with_}명은 "이 달 청구서 만들기"에서 금액이 저절로 들어가요. 학생마다 하나하나 칠 필요 없어요.</p>`
+    : `<p class="muted small" style="margin:0">"초등 주 3회 300,000원"처럼 수강료를 미리 만들어 두고 학생(반 전체도 한 번에)에게 붙이면, 매달 청구서를 만들 때 금액이 저절로 들어가요.</p>`}
+  </section>`;
+}
+function planDialog(p) {
+  formDialog({
+    title: p ? '수강료 고치기' : '수강료 추가', table: 'tuition_plans', row: p, after: loadPlans,
+    label: r => `${r.name} 수강료를`,
+    fields: [
+      ['name', '이름', { required: true, max: 50, placeholder: '예: 초등 주 3회', chips: ['초등 주 2회', '초등 주 3회', '중등 주 3회', '고등 주 3회', '특강'] }],
+      ['amount', '한 달 금액', { type: 'won', required: true, placeholder: '예: 300,000', half: true }],
+      ['class_name', '주로 쓰는 반', { type: 'select', options: allClassNames(), blank: '반 상관없음', half: true }],
+      ['memo', '메모', { max: 200, placeholder: '예: 교재비 별도' }]
+    ]
+  });
+}
+const allClassNames = () => [...new Set(REAL.students.map(x => x.class_name).filter(Boolean))].sort();
+// 수강료를 학생들에게 한 번에 붙이기 (반마다 "모두" 체크)
+function applyPlanDialog() {
+  const d = dialogEl(), groups = byClass(REAL.students);
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="planForm" novalidate>
+    <h2>수강료를 학생에게 붙이기</h2>
+    <label class="f">수강료<select name="plan">${REAL.plans.map(p => `<option value="${p.id}">${esc(planLabel(p))}</option>`).join('')}<option value="">수강료 떼기</option></select></label>
+    <div class="apply-groups">${groups.map(([cls, ss], n) => `
+      <fieldset><legend><label><input type="checkbox" data-all="${n}"> ${esc(cls)} 모두 <span class="muted small">${ss.length}명</span></label></legend>
+        <div class="checks">${ss.map(x => `<label class="chk"><input type="checkbox" name="st" value="${x.id}" data-g="${n}"><span><b>${esc(x.name)}</b><small>${planOf(x) ? esc(planLabel(planOf(x))) : '수강료 없음'}</small></span></label>`).join('')}</div></fieldset>`).join('')}</div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">붙이기</button></div>
+  </form>`;
+  d.showModal();
+  const sel = d.querySelector('[name=plan]');
+  // 반을 정해 둔 수강료를 고르면 그 반 학생을 미리 체크해 줘요
+  const pre = () => { const p = REAL.plans.find(x => x.id === sel.value); d.querySelectorAll('[name=st]').forEach(c => { const st = REAL.students.find(x => x.id === c.value); c.checked = !!(p && p.class_name && st.class_name === p.class_name); }); };
+  sel.onchange = pre; pre();
+  d.querySelectorAll('[data-all]').forEach(a => a.onchange = () => d.querySelectorAll(`[data-g="${a.dataset.all}"]`).forEach(c => { c.checked = a.checked; }));
+  $('#dlgCancel').onclick = () => d.close();
+  $('#planForm').onsubmit = async e => {
+    e.preventDefault();
+    const ids = [...d.querySelectorAll('[name=st]:checked')].map(c => c.value);
+    if (!ids.length) { const m = $('#dlgMsg'); m.textContent = '학생을 한 명 이상 골라 주세요.'; m.hidden = false; return; }
+    const { error } = await SB.from('students').update({ tuition_plan_id: sel.value || null }).in('id', ids);
+    if (error) { const m = $('#dlgMsg'); m.textContent = '저장하지 못했어요. 다시 시도해 주세요.'; m.hidden = false; return; }
+    d.close(); await loadStudents(); render(); toast(`${ids.length}명에게 ${sel.value ? '수강료를 붙였어요' : '수강료를 뗐어요'}`);
+  };
+}
+
+// 이 달 청구서를 한 번에: 수강료를 붙인 학생은 그 금액으로, 나머지는 반마다 금액을 넣어요
 function billMonthDialog() {
   if (!REAL.students.length) { location.hash = '#members/students'; toast('먼저 원생을 추가해 주세요'); return; }
-  const groups = byClass(REAL.students);
+  const planned = REAL.students.filter(planOf), groups = byClass(REAL.students.filter(x => !planOf(x)));
   const last = {}; // 지난번 수강료를 반별로 미리 채워 줘요
   [...REAL.invoices].filter(i => i.title === '수강료').sort((a, b) => a.month.localeCompare(b.month)).forEach(i => { last[i.class_name || '반 미지정'] = i.amount; });
+  const byPlan = REAL.plans.map(p => [p, planned.filter(x => x.tuition_plan_id === p.id)]).filter(([, ss]) => ss.length);
   // 납부 기한 기본값: 그달 10일, 이번 달인데 10일이 지났으면 말일
   const due = `${MONTH}-10` < TODAY && MONTH === TODAY.slice(0, 7) ? ymd(new Date(+MONTH.slice(0, 4), +MONTH.slice(5), 0)) : `${MONTH}-10`;
   const d = dialogEl();
   d.innerHTML = `
   <form method="dialog" class="dlg" id="billForm" novalidate>
     <h2>${monthLabel(MONTH)} 청구서 만들기</h2>
-    <p class="muted small" style="margin:0">반마다 금액을 넣으면 그 반 학생 모두에게 청구가 만들어져요. 같은 달에 같은 항목이 이미 있는 학생은 건너뛰어요. 금액이 다른 학생은 만든 뒤에 이름을 눌러 고치면 돼요.</p>
+    <p class="muted small" style="margin:0">수강료를 붙인 학생은 그 금액으로 저절로 만들어져요. 나머지는 반마다 금액을 넣으면 그 반 학생 모두에게 만들어져요. 같은 달에 같은 항목이 이미 있는 학생은 건너뛰어요.</p>
     <div class="two"><label class="f">항목<input name="title" value="수강료" maxlength="50"></label><label class="f">납부 기한<input name="due" type="date" value="${due}"></label></div>
+    ${byPlan.length ? `<div class="plan-sum"><b>정해 둔 수강료로 ${planned.length}명</b>${byPlan.map(([p, ss]) => `<span>${esc(p.name)} ${won(p.amount)} × ${ss.length}명</span>`).join('')}</div>` : ''}
     ${groups.map(([cls, ss], n) => `<label class="f">${esc(cls)} <span class="muted small">${ss.length}명 · 비워 두면 건너뛰어요</span><span class="won-wrap"><input name="c${n}" class="won-in" inputmode="numeric" autocomplete="off" placeholder="금액" value="${comma(last[cls])}"><i>원</i></span></label>`).join('')}
+    ${!REAL.plans.length ? '<p class="muted small" style="margin:0">매달 같은 금액이면 "수강료 추가"로 미리 정해 두면 다음부터 넣을 필요가 없어요.</p>' : ''}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">만들기</button></div>
   </form>`;
@@ -291,15 +356,17 @@ function billMonthDialog() {
     e.preventDefault();
     const el = e.target.elements, title = el.title.value.trim() || '수강료', due = el.due.value || null;
     const rows = []; let skipped = 0;
+    const add = (st, amount) => {
+      if (REAL.invoices.some(x => x.student_id === st.id && x.month === MONTH && x.title === title)) skipped++;
+      else rows.push({ academy_id: REAL.academy.id, student_id: st.id, month: MONTH, title, amount, due });
+    };
+    planned.forEach(st => add(st, planOf(st).amount));
     for (const [n, [, ss]] of groups.entries()) {
       const v = el[`c${n}`].value.trim();
       if (v === '') continue;
       const amount = Math.round(numOf(v));
       if (!(amount >= 0)) return fail('금액은 숫자로 적어 주세요.');
-      ss.forEach(s => {
-        if (REAL.invoices.some(x => x.student_id === s.id && x.month === MONTH && x.title === title)) skipped++;
-        else rows.push({ academy_id: REAL.academy.id, student_id: s.id, month: MONTH, title, amount, due });
-      });
+      ss.forEach(st => add(st, amount));
     }
     if (!rows.length) return fail(skipped ? '이 달에 이미 모두 청구했어요.' : '금액을 한 반 이상 넣어 주세요.');
     const { error } = await SB.from('invoices').insert(rows);
@@ -1911,17 +1978,18 @@ function studentsPage() {
 /* ---------- 실제 데이터: 원생 명단 (Supabase students) ---------- */
 function realStudentsPage() {
   const list = REAL.students, canEdit = ROLE === 'owner';
-  const add = canEdit ? `<button class="btn" data-import="students">${ic('doc')}엑셀로 올리기</button><button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>` : '';
+  const add = `${canEdit ? `<button class="btn" data-import="students">${ic('doc')}엑셀로 올리기</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
+  const by = x => x.added_by_role === 'teacher' ? `<span class="d small" style="display:block;margin-top:2px">${esc(x.added_by_name || '강사')} 선생님이 추가</span>` : '';
   const body = list.length ? `
   <section class="card"><div class="table">
     <div class="tr th sv"><span>학생</span><span>반</span><span>학부모</span><span>메모</span><span></span></div>
     ${list.map(s => `
       <div class="tr sv">
-        <span><b>${esc(s.name)}</b> <span class="muted small">${esc(s.grade || '')}</span></span>
-        <span>${esc(s.class_name || '-')}</span>
+        <span><b>${esc(s.name)}</b> <span class="muted small">${esc(s.grade || '')}</span>${canEdit ? by(s) : ''}</span>
+        <span>${esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
         <span>${esc(s.parent_name || '-')} <span class="muted small">${esc(s.parent_phone || '')}</span>${canEdit ? appLinked(s.id) : ''}</span>
         <span class="muted small">${esc(s.memo || '')}</span>
-        <span class="btns">${canEdit ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button><button class="btn sm" data-edit-student="${s.id}">수정</button>` : ''}</span>
+        <span class="btns">${canEdit ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button>` : ''}<button class="btn sm" data-edit-student="${s.id}">수정</button></span>
       </div>`).join('')}
   </div></section>` : `
   <section class="card empty">
@@ -1937,7 +2005,7 @@ function realStudentsPage() {
     <p class="muted small" style="margin:0">학부모·학생용 코드로 가입했지만 아직 아이와 이어지지 않았어요. 아이 줄의 "앱 연결"을 눌러 이어 주면 그 아이의 출결 · 수납 · 반 공지가 앱에 보여요.</p>
     <div class="needs" style="margin-top:10px">${waiting.map(f => `<span class="chip warn">${esc(f.name)} · ${ROLE_NAMES[f.role]}</span>`).join('')}</div>
   </section>` : '';
-  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ''}`, list.length ? add : '') + wait + body +
+  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ' 추가 · 수정한 내용은 원장님 명단에도 바로 보여요.'}`, list.length ? add : '') + wait + body +
     (canEdit ? `<a class="hint" href="#members/invite">${ic('users')}<span>강사님·학부모님을 학원에 초대하려면 초대 코드를 보내 주세요</span><b>초대 코드 →</b></a>` : '');
 }
 
@@ -2072,11 +2140,12 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
 // 원생 추가·수정
 function studentDialog(s) {
   formDialog({
-    title: s ? '원생 정보 고치기' : '원생 추가', table: 'students', row: s, after: loadStudents,
-    label: r => `${r.name} 학생을`,
+    title: s ? '원생 정보 고치기' : '원생 추가', table: 'students', row: s, after: loadStudents, noDelete: ROLE !== 'owner',
+    label: r => `${r.name} 학생을`, doneText: ROLE === 'teacher' ? '원생을 추가했어요 · 원장님 명단에도 바로 보여요' : undefined,
     fields: [
       ['name', '이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초5', half: true }],
-      ['class_name', '반', { max: 50, placeholder: '예: 초등 B반' }],
+      ['class_name', '반', { max: 50, placeholder: '예: 초등 B반', half: true, chips: allClassNames().slice(0, 6) }],
+      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납·청구에서 수강료를 먼저 정해 두세요', half: true }],
       ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
       ['memo', '메모', { max: 500 }]
     ]
@@ -2965,6 +3034,7 @@ const AREAS = {
   },
   teacher: {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
+    students: { name: '원생 명단', icon: 'users', desc: '원생 추가 · 정보 고치기', stat: () => `원생 ${REAL ? REAL.students.length : DATA.academy.students}명`, render: studentsPage },
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
@@ -3034,6 +3104,7 @@ const NEWS = {
   owner: {
     'admin/approvals': () => notMine(apvData().filter(a => a.status === 'pending'), 'requested_by'),
     'members/leads': () => DATA.leads.map(l => l.raw && l.raw.created_at),
+    'members/students': () => REAL.students.filter(x => x.added_by_role === 'teacher').map(x => x.created_at),
     'teachers/hire': () => (REAL.applicants || []).map(a => a.applied_at),
     'teachers/training': () => DATA.training.map(t => t.created_at),
     'mou/abroad': () => REAL.abroad.requests.map(r => r.created_at),
@@ -3329,7 +3400,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
+    teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -3358,6 +3429,9 @@ function bind() {
   on('[data-att]', b => { const [id, k] = b.dataset.att.split(':'); markAttendance([id], REAL.attend.map[id] === k ? null : k); });
   on('[data-att-rest]', b => markAttendance(REAL.students.filter(s => (s.class_name || '반 미지정') === b.dataset.attRest && !REAL.attend.map[s.id]).map(s => s.id), 'present'));
   on('[data-act="billMonth"]', billMonthDialog);
+  on('[data-act="addPlan"]', () => planDialog(null));
+  on('[data-edit-plan]', b => planDialog(REAL.plans.find(p => p.id === b.dataset.editPlan)));
+  on('[data-act="applyPlan"]', () => REAL.students.length ? applyPlanDialog() : toast('먼저 원생을 추가해 주세요'));
   on('[data-act="addInvoice"]', () => REAL.students.length ? invoiceDialog(null) : billMonthDialog());
   on('[data-edit-inv]', b => invoiceDialog(REAL.invoices.find(i => i.id === b.dataset.editInv)));
   on('[data-pay-inv]', b => payInvoice(b.dataset.payInv));
@@ -3823,6 +3897,7 @@ async function loadSchedule() {
   }
 }
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
+const loadPlans = () => loadRows('tuition_plans', 'amount').then(() => { REAL.plans = REAL.tuition_plans; });
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
   const [v, mine, rep] = await Promise.all([
@@ -4035,11 +4110,11 @@ async function boot() {
     PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
-      attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
+      attend: { day: TODAY, map: {} }, plans: [], invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
       approvals: [], reports: [], library: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
-    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);

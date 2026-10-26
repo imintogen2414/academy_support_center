@@ -28,10 +28,11 @@
 - 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
   - `support_requests`: 학원 → 센터 지원 신청. 누구나 넣기만 가능, 읽기는 대시보드에서만.
   - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
-  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 쓰기, 원장·강사 읽기).
+  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`, 나머지는 `join_academy(코드)`.
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).
   - `leads`: 상담·등록(문의→상담→체험수업→등록). 원장·강사 읽기·쓰기, 원장만 삭제. "등록"으로 옮기면 트리거가 `students`에 자동 추가.
+  - 수강료 미리 정하기: `tuition_plans`(이름 · 한 달 금액 · 주로 쓰는 반, 원장 쓰기 · 원장·강사 읽기). 수납·청구 화면 위 "정해 둔 수강료"에서 만들고 "학생에게 붙이기"(반 전체 한 번에). "이 달 청구서 만들기"는 수강료가 붙은 학생을 그 금액으로 저절로 만들어요. 강사 메뉴에도 "원생 명단"(`#students`).
   - 행정 지원: `attendance`(학생·날짜마다 출석/지각/결석/조퇴, 원장·강사 읽기, 쓰기는 `mark_attendance(학생들, 날짜, 상태|null)` RPC만), `invoices`(수납·청구, 금액은 원 단위, 학생 이름·반은 트리거가 채움), `expenses`(지출), `incomes`(수납 밖의 수입: 교재 판매·특강 등), `paperwork`(서류 마감, `repeat` 매달·매년이면 제출 완료할 때 다음 회차를 화면이 만들어요, `auto_key`는 자동으로 찾아 준 서류 표시). 돈·서류는 원장만.
   - 서류 자동 처리(`#admin/paper`): `paperSuggestions()`가 강사 급여 → 원천세(3.3% 예상 세액), 새 강사 → 채용 통보 · 4대보험, 반 수강료 변경 → 교습비 변경 신고, 1월~2월 10일 → 사업장현황신고를 찾아 줘요. `makePaperDoc()`로 원생 명부 · 출석부 · 수강료 납부 내역 · 교습비 표 · 강사 명단 · 원천세 계산표 · 사업장현황 수입 요약을 엑셀로 만들어요.
   - 센터 관리: `center_admins`(이메일 목록, RPC로만: `am_center_admin` `list_center_admins` `add_center_admin(이메일|아이디)` `remove_center_admin`, 나 자신은 못 뺌). 판정은 `private.is_center_admin()` — 구글로 확인된 이메일이거나 센터 아이디일 때만. 첫 관리자: `yunji040615@gmail.com`, `imintogen2414@gmail.com`.
