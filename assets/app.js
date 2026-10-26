@@ -1884,7 +1884,9 @@ function settingsPage() {
       ${ROLE === 'owner' ? row('함께하는 사람', REAL ? `원생 ${REAL.students.length}명 · 강사 ${REAL.members.filter(m => m.role === 'teacher').length}명` : `원생 ${DATA.academy.students}명 · 강사 ${DATA.staff.length}명`) : ''}
       ${ROLE === 'teacher' ? row('담당 반', REAL ? (REAL.myClasses && REAL.myClasses.length ? REAL.myClasses.map(esc).join(' · ') : '<span class="muted">원장님이 정하면 보여요</span>') : DEMO_MY_CLASSES.join(' · ')) : ''}
       ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
-      ${ROLE === 'owner' ? '<div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>' : ''}`);
+      ${ROLE === 'owner' ? `<div class="set-line"><div><b>학부모 기능</b><small>${famOn() ? '켜져 있어요 · 학부모 공지 · 학부모 앱 · 학부모 연락처를 써요' : '꺼져 있어요 · 성인 학원처럼 수강생 본인 연락처만 써요'}</small></div>
+        <label class="switch"><input type="checkbox" data-act="famToggle" ${famOn() ? 'checked' : ''}><span></span></label></div>
+        <div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>` : ''}`);
   }
   const svc = ROLE === 'owner' || ROLE === 'teacher' ? card('이용 중인 센터 지원', `
     <div class="needs">${Object.keys(SVC_AREAS).map(a => `<span class="chip ${SVC_STATE[svcOf(a)][0]}">${SVC_AREAS[a]} · ${SVC_STATE[svcOf(a)][1]}</span>`).join('')}</div>
@@ -1895,7 +1897,7 @@ function settingsPage() {
     ${row('센터 이용료', '분야마다 상담 후 견적')}
     ${row('결제 수단', none)}
     ${row('결제 내역', '<span class="muted">아직 없어요</span>')}
-    ${row('학부모 수강료 입금 계좌', payText(payInfo()) || none)}
+    ${row(`${famOn() ? '학부모 ' : ''}수강료 입금 계좌`, payText(payInfo()) || none)}
     <p class="muted small">센터 이용료는 견적이 정해지면 결제 수단과 내역이 여기에 보여요. 입금 계좌를 넣어 두면 학부모님이 수납 화면에서 "내기"를 눌러 바로 보고, 보낸 뒤 알려 줘요.</p>
     <div class="row-btns"><button class="btn sm primary" data-act="editPayAcct">입금 계좌 ${payInfo() && payInfo().account ? '고치기' : '넣기'}</button><a class="btn sm" href="#admin/billing">수강료 수납 열기</a><a class="btn sm" href="#help">결제 문의하기</a></div>`);
   if (ROLE === 'parent') {
@@ -2522,12 +2524,12 @@ function realStudentsPage() {
   const all = REAL.students;
   const body = list.length ? stuFilterBar(allClassNames(), list.length) + `
   <section class="card"><div class="table">
-    <div class="tr th sv"><span>학생</span><span>반</span><span>학부모</span><span>메모</span><span></span></div>
+    <div class="tr th sv"><span>${famOn() ? '학생' : '수강생'}</span><span>반</span><span>${famOn() ? '학부모' : '연락처'}</span><span>메모</span><span></span></div>
     ${list.map(s => `
       <div class="tr sv">
         <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${canEdit ? by(s) : ''}</span>
         <span>${esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
-        <span>${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>${canEdit ? appLinked(s.id) : ''}</span>
+        <span>${famOn() ? `${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>` : telLink(s.phone || s.parent_phone) || '-'}${canEdit ? appLinked(s.id) : ''}</span>
         <span class="muted small">${esc(s.memo || '')}</span>
         <span class="btns">${canEdit ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button>` : ''}<button class="btn sm" data-edit-student="${s.id}">수정</button></span>
       </div>`).join('')}
@@ -2576,12 +2578,12 @@ function studentDetail(id) {
     const det = STU_DETAIL[id];
     if (!det) loadStudentDetail(id);
     const plan = planOf(x);
-    v = { id, name: x.name, grade: x.grade, cls: x.class_name, parent: x.parent_name, phone: x.parent_phone, memo: x.memo,
+    v = { id, name: x.name, grade: x.grade, cls: x.class_name, parent: famOn() ? x.parent_name : x.name, phone: famOn() ? x.parent_phone : x.phone || x.parent_phone, memo: x.memo,
       loading: !det || det.loading, att: det && det.att || [], todos: (det && det.todos || []).map(t => ({ day: t.day, title: t.title, done: !!t.done_at })),
       bills: owner ? REAL.invoices.filter(i => i.student_id === id).sort((a, b) => b.month.localeCompare(a.month)).map(i => ({ month: i.month, title: i.title, amount: i.amount, paid: i.paid_at, due: i.due, reported: i.reported_at })) : null,
       leads: DATA.leads.filter(l => l.raw && l.raw.student_id === id).map(l => l.raw),
       reports: REAL.reports.filter(r => r.student_id === id),
-      info: [['반', esc(x.class_name || '-')], ['학년', esc(x.grade || '-')], ...(x.birth ? [['생년월일', x.birth.replace(/-/g, '.')]] : []), ...(x.phone ? [['본인 연락처', telLink(x.phone)]] : []), ['수강료', plan ? esc(planLabel(plan)) : '정하지 않음'],
+      info: [['반', esc(x.class_name || '-')], [famOn() ? '학년' : '구분', esc(x.grade || '-')], ...(x.birth ? [['생년월일', x.birth.replace(/-/g, '.')]] : []), ...(x.phone ? [['본인 연락처', telLink(x.phone)]] : []), ['수강료', plan ? esc(planLabel(plan)) : '정하지 않음'],
         ['추가한 사람', x.added_by_name ? `${esc(x.added_by_name)} (${ROLE_NAMES[x.added_by_role] || ''})` : '-'], ['명단에 넣은 날', md(x.created_at.slice(0, 10))]],
       app: owner ? appLinked(id) : '' };
   } else {
@@ -2595,7 +2597,7 @@ function studentDetail(id) {
   const card = (t, body, more = '') => `<section class="card"><div class="card-head"><h2>${t}</h2>${more ? `<span class="btns">${more}</span>` : ''}</div>${body}</section>`;
   const empty = t => `<p class="muted" style="margin:0">${t}</p>`;
   const ph = String(v.phone || '').replace(/[^0-9]/g, '');
-  const contact = card('학부모 연락', `
+  const contact = card(famOn() ? '학부모 연락' : '연락처', `
     <div class="stu-call"><div><b>${esc(v.parent || '학부모 이름 없음')}</b>${v.phone ? `<span class="num">${esc(v.phone)}</span>` : '<span class="muted">연락처 없음</span>'}${v.app}</div>
       ${ph ? `<div class="btns"><a class="btn sm primary" href="tel:${ph}">${ic('phone')}전화</a><a class="btn sm" href="sms:${ph}">문자</a><button class="btn sm" data-copy="${esc(v.phone)}">번호 복사</button></div>` : ''}</div>`);
   const attend = card('출결 <span class="muted small">최근 3개월</span>', v.loading ? empty('불러오는 중…') : `
@@ -2623,7 +2625,7 @@ function studentDetail(id) {
     `<a class="btn sm" href="#${reportBase()}">리포트 쓰기</a>`);
   const info = card('기본 정보', `${v.info.map(([k, val]) => `<div class="set-row"><span>${k}</span><b>${val}</b></div>`).join('')}${v.memo ? `<p class="d pre" style="margin:8px 0 0">${esc(v.memo)}</p>` : ''}`);
   const acts = REAL ? `<button class="btn" data-edit-student="${id}">${ic('pen')}정보 고치기</button>` : '';
-  return head(esc(v.name), [v.grade, v.cls].filter(Boolean).map(esc).join(' · ') + (v.parent ? ` · 학부모 ${esc(v.parent)}` : ''), acts) + `
+  return head(esc(v.name), [v.grade, v.cls].filter(Boolean).map(esc).join(' · ') + (v.parent && famOn() ? ` · 학부모 ${esc(v.parent)}` : ''), acts) + `
   <div class="stu-grid">${contact}${attend}${bills}${leads}${todos}${reps}${info}</div>`;
 }
 
@@ -2661,7 +2663,8 @@ function linkDialog(s) {
 const CODE_INFO = {
   owner: ['원장용', '다른 원장님·부원장님이 가입할 때 넣는 코드예요. 꼭 필요한 분께만 알려 주세요.'],
   teacher: ['강사용', '강사님이 가입할 때 넣는 코드예요.'],
-  family: ['학부모·학생용', '학부모님과 학생이 가입할 때 넣는 코드예요. 공지에 함께 보내면 편해요.']
+  family: ['학부모·학생용', '학부모님과 학생이 가입할 때 넣는 코드예요. 공지에 함께 보내면 편해요.'],
+  adult: ['수강생용', '수강생이 앱으로 출결 · 할 일 · 공지를 보고 싶을 때 가입하며 넣는 코드예요. 안 써도 괜찮아요.']
 };
 function invitePage() {
   const codes = REAL ? REAL.codes : [{ kind: 'owner', code: 'DEMO0WNR' }, { kind: 'teacher', code: 'DEMOTCHR' }, { kind: 'family', code: 'DEMOFAMY' }];
@@ -2669,9 +2672,9 @@ function invitePage() {
   return head('초대 코드', '사이트에서 가입할 때 이 코드를 넣으면 우리 학원에 합류해요. 어떤 코드로 들어오는지에 따라 역할이 정해져요.') + `
   <div class="codes">${codes.map(c => `
     <div class="code-card">
-      <span class="who">${CODE_INFO[c.kind][0]}</span>
+      <span class="who">${CODE_INFO[c.kind === 'family' && !famOn() ? 'adult' : c.kind][0]}</span>
       <b class="num">${esc(c.code)}</b>
-      <p>${CODE_INFO[c.kind][1]}</p>
+      <p>${CODE_INFO[c.kind === 'family' && !famOn() ? 'adult' : c.kind][1]}</p>
       <button class="btn sm" data-copy="${esc(c.code)}">코드 복사</button>
     </div>`).join('')}
   </div>
@@ -2785,10 +2788,13 @@ const SUBJECTS = ['영어', '수학', '국어', '과학', '사회', '논술', '�
 const staffNames = () => REAL ? REAL.members.filter(m => m.role === 'teacher' || m.role === 'owner').map(m => m.name).filter(Boolean).slice(0, 8) : DATA.staff.map(x => x.name);
 const LEAD_SOURCES = ['네이버 플레이스', '인스타그램', '블로그', '재원생 추천', '전단지', '지자체·기관', '직접 방문', '전화', '기타'];
 // 학년 · 생년월일은 둘 다 골라서 (안 넣어도 돼요). 성인 수강생은 학부모 칸을 비우고 본인 연락처만 넣어요
-const personFields = () => [
+const personFields = () => famOn() ? [
   ['grade', '학년 (선택)', { type: 'select', options: GRADES, blank: '선택 안 함', half: true }], ['birth', '생년월일 (선택)', { type: 'date', half: true }],
   ['phone', '학생 본인 연락처 (선택)', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }], ['parent_name', '학부모 이름 (선택)', { max: 50, half: true }],
   ['parent_phone', '학부모 연락처 (선택)', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }]
+] : [
+  ['phone', '연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }], ['birth', '생년월일 (선택)', { type: 'date', half: true }],
+  ['grade', '구분 (선택)', { type: 'select', options: ['대학생', '취업 준비', '직장인', '고등학생', 'N수생', '기타'], blank: '선택 안 함', half: true }]
 ];
 function leadDialog(l) {
   formDialog({
@@ -3787,6 +3793,32 @@ const SVC_GATE = {
   teacher: { learn: 'teachers', 'mou/abroad': 'mou', 'mou/mine': 'mou', 'promo/requests': 'promo' }
 };
 const svcOf = area => !REAL ? 'active' : (REAL.services || {})[area] || 'none';
+// 학부모 기능: 어린이 · 청소년 학원은 켬, 성인 학원(토익 · 자격증 · 취미)은 꺼서 학부모 칸 · 메뉴를 숨겨요 (academies.family)
+const famOn = () => !REAL || REAL.academy.family !== false;
+const SVC_WHOLE = { mou: 'mou', promo: 'promo' }; // 메뉴 전체가 센터 지원인 분야
+// 이용 중이 아닌 센터 지원은 메뉴 · 타일에서 숨겨요 (주소로 들어오면 신청 안내). 원장은 "이용 중인 센터 지원"에서 더 신청해요
+function tailorMenus() {
+  if (!REAL || !MY || (ROLE !== 'owner' && ROLE !== 'teacher')) return;
+  MY = { ...MY };
+  Object.entries(SVC_WHOLE).forEach(([k, area]) => { if (MY[k] && !svcOn(area)) delete MY[k]; });
+  Object.entries(SVC_GATE[ROLE] || {}).forEach(([path, area]) => {
+    if (svcOn(area)) return;
+    const [a, sub] = path.split('/');
+    if (!MY[a]) return;
+    if (!sub) { delete MY[a]; return; }
+    if (MY[a].subs) { MY[a] = { ...MY[a], subs: { ...MY[a].subs } }; delete MY[a].subs[sub]; }
+  });
+  if (famOn()) return;
+  // 성인 학원: 학생·학부모 → 수강생 말로 바꿔요
+  const sub = (o, k, ch) => { if (o && o[k]) o[k] = { ...o[k], ...ch }; };
+  if (MY.members) {
+    MY.members = { ...MY.members, name: '수강생 관리', desc: '상담·등록부터 수강생 명단, 공지까지', subs: { ...MY.members.subs } };
+    sub(MY.members.subs, 'students', { name: '수강생 명단', desc: '수강생 연락처 · 출석 · 수납' });
+    sub(MY.members.subs, 'invite', { desc: '원장 · 강사 · 수강생을 우리 학원에 초대' });
+    sub(MY.members.subs, 'notices', { desc: '수강생 공지 보내고 읽음 확인' });
+  }
+  sub(MY, 'students', { name: '수강생 명단', desc: '담당 반 수강생 · 추가 · 고치기' });
+}
 const svcOn = area => svcOf(area) === 'active';
 const svcGateOf = path => (SVC_GATE[ROLE] || {})[path];
 const svcChip = area => { const [c, l] = SVC_STATE[svcOf(area)]; return `<span class="chip ${c}">${l}</span>`; };
@@ -4678,6 +4710,9 @@ function resolve(parts) {
   if (aid === 'settings') return { html: settingsPage(), crumbs: [...crumbs, ['설정', '#settings']], area: 'settings' };
   if (aid === 'services' && ROLE === 'owner') return { html: svcOverviewPage(), crumbs: [...crumbs, ['이용 중인 센터 지원', '#services']], area: 'services' };
   const a = MY[aid];
+  // 숨긴 센터 지원 주소로 들어오면 "없는 화면" 대신 신청 안내
+  const hid = !a ? SVC_WHOLE[aid] || svcGateOf(aid) : sid && a.subs && !a.subs[sid] ? svcGateOf(`${aid}/${sid}`) : null;
+  if (hid && !svcOn(hid)) return { html: svcLockPage(hid, SVC_AREAS[hid]), crumbs: [...crumbs, [SVC_AREAS[hid], '']], area: aid };
   if (!a) return { html: notFound(), crumbs, area: '' };
   crumbs.push([a.name, `#${aid}`]);
   if (!a.subs) {
@@ -5117,6 +5152,14 @@ function bind() {
     await loadFamily(); render(); toast('알림을 취소했어요');
   });
   on('[data-act="editPayAcct"]', payAcctDialog);
+  document.querySelectorAll('[data-act="famToggle"]').forEach(x => x.onchange = async () => {
+    if (!REAL) { x.checked = !x.checked; toast('예시 계정에서는 바꿀 수 없어요'); return; }
+    const on = x.checked;
+    if (!confirm(on ? '학부모 기능을 켤까요? 학부모 공지 · 학부모 앱 · 학부모 연락처가 다시 보여요.' : '학부모 기능을 끌까요? 성인 학원처럼 학부모 칸이 숨겨지고 수강생 본인 연락처만 써요. 이미 넣은 학부모 정보는 지워지지 않아요.')) { x.checked = !on; return; }
+    const { error } = await SB.from('academies').update({ family: on }).eq('id', REAL.academy.id);
+    if (error) { x.checked = !on; toast('바꾸지 못했어요'); return; }
+    location.reload();
+  });
   document.querySelectorAll('[data-hw]').forEach(c => c.onchange = () => { DATA.child.homework[c.dataset.hw].done = c.checked; render(); });
 }
 
@@ -5451,6 +5494,10 @@ function onboarding(user) {
       <p class="muted">처음이시면 우리 학원을 만들어 주세요. 만들면 강사·학부모 초대 코드가 생겨요.</p>
       <label class="f">학원 이름<input name="aname" value="${esc(PROFILE.academy_name || '')}" maxlength="100" placeholder="예: 하늘영어학원"></label>
       <div class="f">지역 <span class="muted small">시·도를 고르면 시·군·구가 나와요</span>${regionPicker('region')}</div>
+      <div class="f">어떤 학원인가요?
+        <label class="chk-line"><input type="radio" name="family" value="1" checked><span><b>어린이 · 청소년 학원</b> · 학부모님과 함께 써요 (학부모 공지 · 학부모 앱 · 학부모 연락처)</span></label>
+        <label class="chk-line"><input type="radio" name="family" value="0"><span><b>성인 학원</b> · 토익 · 자격증 · 취미처럼 수강생 본인만 써요 (학부모 칸이 없어요)</span></label>
+        <small class="muted">나중에 설정에서 바꿀 수 있어요.</small></div>
       <p class="msg" id="makeMsg" hidden></p>
       <button class="btn primary">학원 만들기</button>
     </form>
@@ -5473,7 +5520,7 @@ function onboarding(user) {
     const el = e.target.elements, name = el.aname.value.trim();
     if (!name) return fail('#makeMsg', '학원 이름을 적어 주세요.');
     if (!el.region.value) return fail('#makeMsg', '지역을 골라 주세요. 채용 공고 · 제휴 연결에 쓰여요.');
-    const { error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null });
+    const { error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null, p_family: el.family.value === '1' });
     if (error) return fail('#makeMsg', joinError(error));
     location.reload();
   };
@@ -5512,7 +5559,7 @@ async function boot() {
     if (!PROFILE.name && !PROFILE.username) { rolePicker(user, true); return; }
 
     // 소속 학원 (여러 곳이면 먼저 들어간 곳)
-    const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region, pay_bank, pay_account, pay_holder, pay_note)')
+    const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region, family, pay_bank, pay_account, pay_holder, pay_note)')
       .eq('user_id', user.id).order('created_at').limit(1);
     if (!mem || !mem.length) {
       // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요
@@ -5542,6 +5589,7 @@ async function boot() {
     if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen()]);
+    tailorMenus();
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   } else await loadSeen();
   render();
