@@ -686,6 +686,7 @@ function realOwnerTodo() {
   if (left) items.push([`오늘 출결 ${left}명 입력 전`, '강사님이 수업 중에 입력해도 돼요', '#admin/attend', '<span class="chip warn">오늘</span>']);
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
+  items.push(...scheduleTodo().filter(i => !i[0].startsWith('오늘 수업')));
   const apv = REAL.approvals.filter(a => a.status === 'pending');
   if (apv.length) items.push([`강사 결재 ${apv.length}건 확인하기`, apv.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">결재 대기</span>']);
   const fresh = REAL.applicants.filter(a => a.status === 'applied');
@@ -699,6 +700,139 @@ function realOwnerTodo() {
   const waiting = REAL.family.filter(f => !f.students.length);
   if (waiting.length && REAL.students.length) items.push([`앱 가입한 가족 ${waiting.length}명 아이와 연결하기`, waiting.slice(0, 3).map(f => esc(f.name)).join(' · '), '#members/students', '<span class="chip info">앱 연결</span>']);
   if (!items.length) items.push(['오늘 급하게 챙길 일은 없어요', '서류 마감 · 미납 · 출결 · 급한 문의를 살펴봤어요', '#admin', '<span class="chip good">여유</span>']);
+  return items;
+}
+
+/* ================= 학원 일정 · 시간표 (Supabase timetable · academy_events) =================
+   원장 · 강사 · 학부모 · 학생 모두 같은 화면을 봐요. 강의실 · 담당 강사 · 메모 같은 세부 사항은 원장 · 강사에게만 보여요.
+   시간표는 원장이, 일정은 원장 · 강사가 넣어요(강사는 내가 넣은 일정만 고쳐요). */
+const WEEK = [1, 2, 3, 4, 5, 6, 0]; // 월요일부터
+const WD = '일월화수목금토';
+const EV_KINDS = ['수업', '시험', '행사', '휴원', '상담', '설명회', '기타'];
+const EV_COLOR = { 수업: 'info', 시험: 'crit', 행사: 'good', 휴원: 'mute', 상담: 'warn', 설명회: 'info', 기타: 'mute' };
+let SCH_VIEW = 'week', SCH_CLASS = null;
+const isStaff = () => ROLE === 'owner' || ROLE === 'teacher';
+const hm = t => t ? t.slice(0, 5) : '';
+const schData = () => REAL ? { tt: REAL.timetable, ev: REAL.events } : { tt: DATA.timetable, ev: DATA.events };
+const myClasses = () => REAL && !isStaff() ? [...new Set(REAL.kids.map(k => k.class_name).filter(Boolean))] : !REAL && !isStaff() ? [DATA.child.cls] : [];
+const allClasses = () => [...new Set([...schData().tt.map(t => t.class_name), ...(REAL ? REAL.students.map(s => s.class_name) : DATA.students.map(s => s.cls))].filter(Boolean))].sort();
+// 반 고르기: 가족은 우리 아이 반이 먼저, 원장 · 강사는 전체가 먼저
+function schClass() {
+  if (SCH_CLASS === null) SCH_CLASS = myClasses().length ? 'mine' : 'all';
+  return SCH_CLASS;
+}
+const classOk = cls => { const c = schClass(); return c === 'all' || (c === 'mine' ? !cls || myClasses().includes(cls) : !cls || cls === c); };
+const evOn = (e, d) => e.day <= d && (e.end_day || e.day) >= d;
+
+function schedulePage() {
+  const { tt, ev } = schData(), staff = isStaff(), c = schClass();
+  const classes = [...new Set([...tt.map(t => t.class_name)])].sort();
+  const opts = [...(myClasses().length ? [['mine', ROLE === 'student' ? '내 반' : '우리 아이 반']] : []), ['all', '전체'], ...(staff ? classes.map(x => [x, x]) : [])];
+  const acts = [ROLE === 'owner' ? `<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
+  const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && classOk(t.class_name)).sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
+  return head('일정 · 시간표', staff ? '학부모 · 학생에게도 같은 시간표와 일정이 보여요. 강의실 · 담당 강사 · 메모는 원장님과 강사님에게만 보여요.' : '학원 시간표와 시험 · 행사 · 휴원 일정이에요.', acts) + `
+  <div class="sch-bar">
+    <div class="filters">${[['week', '주간 시간표'], ['month', '월간 일정']].map(([k, l]) => `<button class="${SCH_VIEW === k ? 'on' : ''}" data-sch-view="${k}">${l}</button>`).join('')}</div>
+    ${opts.length > 1 ? `<div class="filters">${opts.map(([k, l]) => `<button class="${c === k ? 'on' : ''}" data-sch-class="${esc(k)}">${esc(l)}</button>`).join('')}</div>` : ''}
+  </div>
+  <section class="card today-strip">
+    <b>오늘 ${todayText().split(' ').slice(1).join(' ')}</b>
+    ${todayTT.length || todayEv.length ? [...todayEv.map(e => `<span class="chip ${EV_COLOR[e.kind]}">${esc(e.kind)} · ${esc(e.title)}</span>`), ...todayTT.map(t => `<span class="chip mute">${hm(t.start_time)} ${esc(t.class_name)}${t.subject ? ` ${esc(t.subject)}` : ''}</span>`)].join('')
+      : '<span class="muted small">오늘은 수업 · 일정이 없어요</span>'}
+  </section>` + (SCH_VIEW === 'week' ? weekView(tt, staff) : monthView(ev, staff));
+}
+
+function weekView(tt, staff) {
+  const list = tt.filter(t => classOk(t.class_name));
+  if (!tt.length) return `
+  <section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>아직 시간표가 없어요</h2>
+    <p class="muted">${ROLE === 'owner' ? '반마다 요일 · 시간을 넣으면 강사 · 학부모 · 학생 모두에게 같은 시간표가 보여요.' : '원장님이 시간표를 넣으면 여기에 보여요.'}</p>
+    ${ROLE === 'owner' ? `<button class="btn primary" data-act="addTT">시간표 추가</button>` : ''}</section>`;
+  const today = day0(TODAY).getDay();
+  const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d));
+  return `
+  <div class="tt" style="--d:${days.length}">${days.map(d => {
+    const blks = list.filter(t => +t.weekday === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    return `
+    <section class="tt-day ${d === today ? 'today' : ''}">
+      <h3>${WD[d]}${d === today ? ' <span class="chip info">오늘</span>' : ''}</h3>
+      ${blks.length ? blks.map(t => `
+      <${ROLE === 'owner' ? `button type="button" data-edit-tt="${t.id}"` : 'div'} class="tt-blk">
+        <span class="tm num">${hm(t.start_time)}–${hm(t.end_time)}</span>
+        <b>${esc(t.class_name)}</b>${t.subject ? `<span>${esc(t.subject)}</span>` : ''}
+        ${staff && (t.room || t.teacher_name) ? `<span class="sub">${[t.room, t.teacher_name].filter(Boolean).map(esc).join(' · ')}</span>` : ''}
+        ${staff && t.note ? `<span class="note">${esc(t.note)}</span>` : ''}
+      </${ROLE === 'owner' ? 'button' : 'div'}>`).join('') : '<p class="muted small">수업 없음</p>'}
+    </section>`;
+  }).join('')}</div>
+  ${ROLE === 'owner' ? '<p class="muted small">시간표 칸을 누르면 고치거나 지울 수 있어요.</p>' : ''}`;
+}
+
+function monthView(ev, staff) {
+  const first = day0(`${MONTH}-01`), last = +monthEnd(MONTH).slice(8), pad = first.getDay();
+  const list = ev.filter(e => classOk(e.target_class) && e.day <= monthEnd(MONTH) && (e.end_day || e.day) >= `${MONTH}-01`).sort((a, b) => a.day.localeCompare(b.day) || hm(a.start_time).localeCompare(hm(b.start_time)));
+  const canEdit = e => ROLE === 'owner' || (ROLE === 'teacher' && (!REAL || e.created_by === USER.id));
+  const cells = [...Array(pad)].map(() => '<div class="cal-c off"></div>').concat([...Array(last)].map((_, i) => {
+    const d = `${MONTH}-${String(i + 1).padStart(2, '0')}`, es = list.filter(e => evOn(e, d)), w = day0(d).getDay();
+    return `<div class="cal-c ${d === TODAY ? 'today' : ''} ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}"><span class="dn">${i + 1}</span>${es.slice(0, 3).map(e => `<span class="ev ${EV_COLOR[e.kind]}" title="${esc(e.title)}">${esc(e.title)}</span>`).join('')}${es.length > 3 ? `<span class="more">+${es.length - 3}</span>` : ''}</div>`;
+  }));
+  return monthBar() + `
+  <section class="card">
+    <div class="cal">${[...WD].map((x, i) => `<div class="cal-h ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${x}</div>`).join('')}${cells.join('')}</div>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>${+MONTH.slice(5)}월 일정 ${list.length}개</h2>${staff ? '<span class="sub">메모는 원장 · 강사만 보여요</span>' : ''}</div>
+    ${list.length ? `<div class="list">${list.map(e => `
+      <${canEdit(e) ? `a href="#schedule" data-edit-ev="${e.id}"` : 'div'} class="li ${canEdit(e) ? 'link' : ''}">
+        <span class="av time-av num">${md(e.day)}${e.end_day && e.end_day !== e.day ? `<small>~${md(e.end_day)}</small>` : ''}</span>
+        <div><div class="t">${esc(e.title)} <span class="chip ${EV_COLOR[e.kind]}">${esc(e.kind)}</span></div>
+          <div class="d">${e.start_time ? `${hm(e.start_time)}${e.end_time ? `–${hm(e.end_time)}` : ''} · ` : ''}${e.target_class ? esc(e.target_class) : '전체'}</div>
+          ${staff && e.detail ? `<div class="d pre">${esc(e.detail)}</div>` : ''}</div>
+        <div class="r">${dday(e.day) >= 0 && dday(e.day) <= 14 ? ddChip(e.day) : ''}</div>
+      </${canEdit(e) ? 'a' : 'div'}>`).join('')}</div>` : `<p class="muted small" style="margin:0">이 달 일정이 없어요.${staff ? ' 시험 · 행사 · 휴원을 넣어 두면 학부모 · 학생에게도 보여요.' : ''}</p>`}
+  </section>`;
+}
+
+function ttDialog(t) {
+  const classes = allClasses();
+  formDialog({
+    title: t ? '시간표 고치기' : '시간표 추가', table: 'timetable', row: t, after: loadSchedule,
+    label: r => `${r.class_name} 수업을`,
+    check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    fields: [
+      ['class_name', '반', { required: true, max: 50, chips: classes, placeholder: '예: 초등 B반' }],
+      ['weekday', '요일', { type: 'select', required: true, options: WEEK.map(d => [d, `${WD[d]}요일`]), value: 1, half: true }],
+      ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', half: true }],
+      ['start_time', '시작', { type: 'time', required: true, value: '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: '17:30', half: true }],
+      ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지' }],
+      ['note', '메모 (원장·강사만)', { max: 300, placeholder: '예: 격주 단어 시험' }]
+    ]
+  });
+}
+function evDialog(e) {
+  formDialog({
+    title: e ? '일정 고치기' : '일정 추가', table: 'academy_events', row: e, after: loadSchedule,
+    label: r => `${r.title} 일정을`,
+    check: d => d.end_day && d.end_day < d.day ? '끝나는 날이 시작하는 날보다 앞이에요.' : d.end_time && d.start_time && d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    fields: [
+      ['title', '일정', { required: true, max: 100, placeholder: '예: 11월 월말 평가' }],
+      ['kind', '종류', { type: 'select', required: true, options: EV_KINDS, value: '행사', half: true }],
+      ['target_class', '누구에게', { type: 'select', options: allClasses(), blank: '전체', half: true }],
+      ['day', '날짜', { type: 'date', required: true, value: MONTH === TODAY.slice(0, 7) ? TODAY : `${MONTH}-01`, half: true }], ['end_day', '끝나는 날 (여러 날이면)', { type: 'date', half: true }],
+      ['start_time', '시작 시간', { type: 'time', half: true }], ['end_time', '끝 시간', { type: 'time', half: true }],
+      ['detail', '메모 (원장·강사만 보여요)', { type: 'area', rows: 3, max: 1000, placeholder: '예: 시험지 30부 출력 · 2강의실' }]
+    ]
+  });
+}
+// 오늘 시간표 · 일정 → 홈 "오늘 챙길 일"
+function scheduleTodo(link = '#schedule') {
+  const { tt, ev } = schData(), w = day0(TODAY).getDay(), mine = myClasses();
+  const fit = cls => !mine.length || !cls || mine.includes(cls);
+  const items = ev.filter(e => (evOn(e, TODAY) || e.day === addDays(TODAY, 1)) && fit(e.target_class)).slice(0, 2)
+    .map(e => [`${e.day === TODAY || evOn(e, TODAY) ? '오늘' : '내일'} ${esc(e.title)}`, `${esc(e.kind)}${e.start_time ? ` · ${hm(e.start_time)}` : ''}${e.target_class ? ` · ${esc(e.target_class)}` : ''}`, link, `<span class="chip ${EV_COLOR[e.kind]}">${esc(e.kind)}</span>`]);
+  const today = tt.filter(t => +t.weekday === w && fit(t.class_name)).sort((a, b) => a.start_time.localeCompare(b.start_time));
+  if (today.length) items.push([`오늘 수업 ${today.length}개`, today.slice(0, 3).map(t => `${hm(t.start_time)} ${esc(t.class_name)}`).join(' · '), link, '<span class="chip info">시간표</span>']);
   return items;
 }
 
@@ -1183,9 +1317,9 @@ function invitePage() {
    fields: [이름, 라벨, { type, placeholder, max, required, half, options }]
    chips: 눌러서 채우는 예시 목록. half: 두 칸을 한 줄에. type: text(기본) · tel · date · month · number · select · check · area(여러 줄)
    options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. blank: 고르지 않았을 때 보이는 글자. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
-   academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김 */
+   academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김. check(data): 저장 전 확인, 문제가 있으면 안내 글 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
-function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText }) {
+function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
   const cur = (k, o) => row ? row[k] : o.value;
@@ -1233,6 +1367,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       if (o.url && v && !/^https:\/\/\S+$/.test(v)) return fail(`${lab}은(는) https:// 로 시작하는 주소로 넣어 주세요.`);
       data[k] = v === '' ? null : o.type === 'number' ? Math.round(Number(v)) : v;
     }
+    const bad = check && check(data);
+    if (bad) return fail(bad);
     const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) });
     const { error } = await q;
     if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
@@ -1758,6 +1894,7 @@ function familyTodo() {
   });
   if (ROLE === 'parent') abroadData().promos.filter(p => p.active).slice(0, 1)
     .forEach(p => items.push([esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']));
+  items.push(...scheduleTodo());
   if (!REAL.kids.length) items.unshift([ROLE === 'student' ? '학원에 앱 가입을 알려 주세요' : '아이 연결을 기다리고 있어요', '원장님이 원생 명단에서 연결하면 출결이 보여요', ROLE === 'student' ? '#attend' : '#kid', '<span class="chip warn">연결 전</span>']);
   if (!items.length) items.push(['새로 챙길 일이 없어요', '공지 · 수납 · 오늘 출결을 살펴봤어요', '#news', '<span class="chip good">여유</span>']);
   return items;
@@ -2082,6 +2219,9 @@ function attendStat() {
 
 /* ================= 역할별 메뉴 구조 =================
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
+// 예시 일정 날짜를 이번 달로 맞춰요
+DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
+const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
     admin: { name: '행정 지원', icon: 'shield', desc: '출결·수납·재정·서류 처리를 한곳에서',
@@ -2111,6 +2251,7 @@ const AREAS = {
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
+    schedule: SCHEDULE_AREA,
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
         ? `진행 중 제휴 ${REAL.partnerApps.filter(a => a.status !== 'closed').length}건 · 유학 상담 새 신청 ${REAL.abroad.requests.filter(r => r.status === 'new').length}건`
         : `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
@@ -2127,6 +2268,7 @@ const AREAS = {
   },
   teacher: {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
+    schedule: SCHEDULE_AREA,
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
     jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
@@ -2140,10 +2282,11 @@ const AREAS = {
         record: { name: '기록·성적', icon: 'doc', desc: '출석률·시험·선생님 코멘트', stat: () => `출석 ${DATA.child.record.attend}%`, render: kidRecordPage },
         bills: { name: '수납', icon: 'card', desc: '학원별 수강료 결제', stat: () => { const n = DATA.child.bills.filter(b => !b.paid).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: kidBillsPage }
       } },
+    schedule: SCHEDULE_AREA,
     news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
-  student: {}
+  student: { schedule: SCHEDULE_AREA }
 };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
@@ -2158,10 +2301,12 @@ const FAMILY_AREAS = {
         attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH) && (!REAL.kids.length || a.student_id === kidNow().id)).length}일 기록`, render: kidAttendPage },
         bills: { name: '수납', icon: 'card', desc: '학원 청구와 납부 확인', stat: () => { const n = REAL.kidBills.filter(b => !b.paid_at).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: realKidBillsPage }
       } },
+    schedule: SCHEDULE_AREA,
     news: newsArea,
     abroad: AREAS.parent.abroad
   },
   student: {
+    schedule: SCHEDULE_AREA,
     attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea
   }
@@ -2209,6 +2354,7 @@ function home() {
       todo(left.slice(0, 2).map(t => [t.title, `센터 교육 영상 · ${t.len}`, `#learn/${t.id}`, `<span class="chip warn">마감 ${t.due}</span>`])
         .concat(apvData().filter(a => a.status !== 'pending' && a.decided_at && dday(a.decided_at.slice(0, 10)) >= -3).slice(0, 2)
           .map(a => [`결재 ${APV_STATE[a.status][1]}: ${esc(a.title)}`, a.owner_comment ? esc(a.owner_comment) : '원장님이 결재했어요', '#approvals', `<span class="chip ${APV_STATE[a.status][0]}">${APV_STATE[a.status][1]}</span>`]))
+        .concat(REAL ? scheduleTodo() : [])
         .concat([['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : '초등 B반 17:00 · 수업 중에 입력해 주세요', '#attend', '<span class="chip info">오늘</span>']])) +
       `<h2 class="sec-title">바로 가기</h2>` + tiles();
   }
@@ -2358,8 +2504,8 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}" data-up>${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav></div>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'news', 'abroad', 'center'], student: ['home', 'attend', 'news', 'center'], admin: ['home', 'center']
+    owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'mou', 'promo', 'center'],
+    teacher: ['home', 'attend', 'schedule', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'schedule', 'attend', 'news', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -2531,6 +2677,13 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 일정 · 시간표
+  on('[data-sch-view]', b => { SCH_VIEW = b.dataset.schView; render(); });
+  on('[data-sch-class]', b => { SCH_CLASS = b.dataset.schClass; render(); });
+  on('[data-act="addTT"]', () => REAL ? ttDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
+  on('[data-act="addEv"]', () => REAL ? evDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
+  on('[data-edit-tt]', b => REAL && ttDialog(REAL.timetable.find(t => t.id === b.dataset.editTt)));
+  on('[data-edit-ev]', (b, e) => { e.preventDefault(); if (REAL) evDialog(REAL.events.find(x => x.id === b.dataset.editEv)); });
   // 결재
   on('[data-act="newApv"]', () => approvalDialog(null));
   on('[data-edit-apv]', b => approvalDialog(REAL.approvals.find(a => a.id === b.dataset.editApv)));
@@ -2741,6 +2894,22 @@ const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadIncomes = () => loadRows('incomes', 'day', false);
 const loadApprovals = () => loadRows('approvals', 'created_at', false);
+// 일정 · 시간표: 원장 · 강사는 표를 바로, 가족은 세부 사항을 뺀 RPC로 (지난 6개월 ~ 앞으로 1년)
+async function loadSchedule() {
+  if (isStaff()) {
+    const [t, e] = await Promise.all([
+      SB.from('timetable').select('*').eq('academy_id', REAL.academy.id).order('start_time'),
+      SB.from('academy_events').select('*').eq('academy_id', REAL.academy.id).order('day')
+    ]);
+    REAL.timetable = t.data || []; REAL.events = e.data || [];
+  } else {
+    const [t, e] = await Promise.all([
+      SB.rpc('family_timetable', { p_academy: REAL.academy.id }),
+      SB.rpc('family_events', { p_academy: REAL.academy.id, p_from: addDays(TODAY, -183), p_to: addDays(TODAY, 365) })
+    ]);
+    REAL.timetable = t.data || []; REAL.events = e.data || [];
+  }
+}
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
@@ -2955,14 +3124,14 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
-      approvals: [], family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], timetable: [], events: [], family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
-    await loadAbroad();
+    await Promise.all([loadAbroad(), loadSchedule()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();

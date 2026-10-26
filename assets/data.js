@@ -96,6 +96,23 @@ const DATA = {
 
   /* ---------- 홍보 지원 (인투마케팅 연결) ---------- */
   marketingUrl: 'https://intomarketing.co.kr',
+  /* ---------- 일정 · 시간표 (예시: 날짜는 app.js가 이번 달로 맞춰요) ---------- */
+  timetable: [
+    { id: 'tt1', class_name: '초등 A반', weekday: 1, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '정하윤' },
+    { id: 'tt2', class_name: '초등 B반', weekday: 1, start_time: '16:30', end_time: '18:00', subject: '리딩', room: '2강의실', teacher_name: '김민지', note: '단어 시험' },
+    { id: 'tt3', class_name: '중등 기초반', weekday: 2, start_time: '18:00', end_time: '19:30', subject: '문법', room: '1강의실', teacher_name: '이도현' },
+    { id: 'tt4', class_name: '초등 B반', weekday: 3, start_time: '16:30', end_time: '18:00', subject: '라이팅', room: '2강의실', teacher_name: '김민지' },
+    { id: 'tt5', class_name: '초등 A반', weekday: 4, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '정하윤' },
+    { id: 'tt6', class_name: '중등 기초반', weekday: 4, start_time: '18:00', end_time: '19:30', subject: '독해', room: '1강의실', teacher_name: '이도현', note: '교재 3단원' },
+    { id: 'tt7', class_name: '초등 B반', weekday: 5, start_time: '16:30', end_time: '18:00', subject: '스피킹', room: '2강의실', teacher_name: '김민지' }
+  ],
+  events: [
+    { id: 'ev1', d: 3, kind: '시험', title: '월말 평가', target_class: null, start_time: '16:00', detail: '시험지 반별 출력 · 결과는 다음 날 학부모 공지' },
+    { id: 'ev2', d: 9, kind: '설명회', title: '겨울방학 특강 설명회', start_time: '19:00', end_time: '20:00', detail: '인투마케팅 전단지 배포' },
+    { id: 'ev3', d: 15, end: 17, kind: '휴원', title: '학원 정기 휴원' },
+    { id: 'ev4', d: 22, kind: '행사', title: '할로윈 영어 파티', target_class: '초등 B반', detail: '간식 결재 완료' }
+  ],
+
   /* ---------- 결재 (강사 → 원장) ---------- */
   approvals: [
     { id: 'a1', kind: '물품 구입', title: '초등 B반 화이트보드 마커 12개', amount: 28000, requester_name: '김민지', detail: '검정 6 · 파랑 3 · 빨강 3\n쿠팡 링크로 주문할게요.', want_by: '2026-10-28', status: 'pending', created_at: '2026-10-25T09:00:00Z' },
@@ -148,7 +165,7 @@ const DATA = {
 
   /* ---------- 학부모 · 학생 화면 ---------- */
   child: {
-    name: '이서연', grade: '초5', academies: 3,
+    name: '이서연', grade: '초5', cls: '초등 B반', academies: 3,
     today: [
       { time: '15:00', what: '한빛태권도', where: '같은 건물 2층' },
       { time: '17:00', what: '하늘영어학원 · 초등 B반', where: '단어시험 있음' },
