@@ -303,48 +303,141 @@ async function payInvoice(id) {
   i.paid_at = TODAY; render(); toast(`${i.student_name} 학생 납부를 확인했어요`);
 }
 
-/* ---------- 실제 데이터: 재정 = 받은 수납 + 지출 (Supabase expenses) ---------- */
+/* ---------- 실제 데이터: 재정 = 매출(받은 수납 + 직접 넣은 수입) - 지출 (Supabase incomes · expenses) ----------
+   기간: 오늘 · 최근 7일 · 월별 · 3개월 · 6개월 · 1년. 기간이 길면 달마다, 짧으면 날마다 묶어서 그래프로 보여 줘요. */
 const EXP_CATS = ['강사 급여', '임대료', '교재비', '공과금', '홍보비', '차량·간식', '기타'];
-function realFinancePage() {
-  const inc = REAL.invoices.filter(i => i.paid_at && i.paid_at.slice(0, 7) === MONTH);
-  const exp = REAL.expenses.filter(x => x.day.slice(0, 7) === MONTH);
-  const income = sum(inc, i => i.amount), expense = sum(exp, x => x.amount), left = income - expense;
-  const cats = Object.entries(exp.reduce((a, x) => (a[x.category] = (a[x.category] || 0) + x.amount, a), {})).sort((a, b) => b[1] - a[1]);
-  const max = Math.max(1, ...cats.map(c => c[1]));
-  return head('재정', `${monthLabel(MONTH)} · 수입은 수납·청구에서 납부 확인한 금액이 저절로 들어와요.`, `<button class="btn" data-import="expenses">${ic('doc')}엑셀로 올리기</button><button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`) + monthBar() + `
-  <div class="stats">
-    <div class="stat"><span>수입 (납부 ${inc.length}건)</span><b class="num">${won(income)}</b></div>
-    <div class="stat"><span>지출 ${exp.length}건</span><b class="num">${won(expense)}</b></div>
-    <div class="stat ${left < 0 ? 'crit' : 'good'}"><span>남은 금액</span><b class="num">${left < 0 ? '-' : ''}${won(Math.abs(left))}</b></div>
-  </div>
-  <div class="grid2 even">
-    <section class="card">
-      <div class="card-head"><h2>지출 항목</h2></div>
-      ${cats.length ? `<div class="rows">${cats.map(([n, v]) => `<div class="row-bar wide"><span>${esc(n)}</span>${bar(v / max * 100)}<b class="num">${won(v)}</b></div>`).join('')}</div>`
-        : '<p class="muted small" style="margin:0">이 달에 적은 지출이 없어요. 급여·임대료부터 넣어 보세요.</p>'}
-    </section>
-    <section class="card">
-      <div class="card-head"><h2>지출 내역</h2><span class="sub">누르면 고칠 수 있어요</span></div>
-      ${exp.length ? `<div class="list">${exp.map(x => `
-        <a class="li link" href="#admin/finance" data-edit-exp="${x.id}">
-          <span class="av time-av num">${md(x.day)}</span>
-          <div><div class="t">${esc(x.category)}</div><div class="d">${esc(x.memo || '')}</div></div>
-          <div class="r"><b class="num">${won(x.amount)}</b></div>
-        </a>`).join('')}</div>` : '<p class="muted small" style="margin:0">아직 없어요.</p>'}
-    </section>
-  </div>
-  <a class="hint" href="#admin/billing">${ic('card')}<span>수입은 수납·청구에서 "납부 확인"한 금액이에요</span><b>수납·청구 →</b></a>`;
+const INC_CATS = ['교재 판매', '특강', '방학 캠프', '입학금', '기타'];
+const FIN_PERIODS = { day: '오늘', week: '최근 7일', month: '월별', m3: '3개월', m6: '6개월', y1: '1년' };
+let FIN = 'month';
+const addDays = (s, n) => { const d = day0(s); d.setDate(d.getDate() + n); return ymd(d); };
+const monthEnd = m => ymd(new Date(+m.slice(0, 4), +m.slice(5), 0));
+// 기간 → { from, to, buckets: [{ label, from, to }], prev: 바로 앞 같은 길이 기간 }
+function finRange(p = FIN) {
+  if (p === 'day') return { from: TODAY, to: TODAY, buckets: [], prev: [addDays(TODAY, -1), addDays(TODAY, -1)], label: '오늘', prevLabel: '어제' };
+  if (p === 'week') {
+    const from = addDays(TODAY, -6);
+    return { from, to: TODAY, buckets: [...Array(7)].map((_, i) => { const d = addDays(from, i); return { label: md(d), from: d, to: d }; }),
+      prev: [addDays(from, -7), addDays(from, -1)], label: '최근 7일', prevLabel: '그 전 7일' };
+  }
+  if (p === 'month') {
+    const last = +monthEnd(MONTH).slice(8);
+    return { from: `${MONTH}-01`, to: monthEnd(MONTH), buckets: [...Array(last)].map((_, i) => { const d = `${MONTH}-${String(i + 1).padStart(2, '0')}`; return { label: String(i + 1), from: d, to: d }; }),
+      prev: [`${shiftMonth(MONTH, -1)}-01`, monthEnd(shiftMonth(MONTH, -1))], label: monthLabel(MONTH), prevLabel: '지난달' };
+  }
+  const n = { m3: 3, m6: 6, y1: 12 }[p], cur = TODAY.slice(0, 7), first = shiftMonth(cur, 1 - n);
+  return { from: `${first}-01`, to: monthEnd(cur), buckets: [...Array(n)].map((_, i) => { const m = shiftMonth(first, i); return { label: `${+m.slice(5)}월`, from: `${m}-01`, to: monthEnd(m) }; }),
+    prev: [`${shiftMonth(first, -n)}-01`, monthEnd(shiftMonth(first, -1))], label: `${monthLabel(first)} – ${monthLabel(cur)}`, prevLabel: `그 전 ${n}개월` };
+}
+// 모든 돈의 흐름을 한 모양으로: { day, kind: in|out, cat, amount, memo, src, id }
+function ledger() {
+  return [
+    ...REAL.invoices.filter(i => i.paid_at).map(i => ({ day: i.paid_at, kind: 'in', cat: i.title || '수강료', amount: i.amount, memo: `${i.student_name}${i.class_name ? ` · ${i.class_name}` : ''}`, src: 'inv', id: i.id })),
+    ...REAL.incomes.map(x => ({ day: x.day, kind: 'in', cat: x.category, amount: x.amount, memo: x.memo || '', src: 'inc', id: x.id })),
+    ...REAL.expenses.map(x => ({ day: x.day, kind: 'out', cat: x.category, amount: x.amount, memo: x.memo || '', src: 'exp', id: x.id }))
+  ];
+}
+const inRange = (e, a, b) => e.day >= a && e.day <= b;
+const finTotals = list => { const inc = sum(list.filter(e => e.kind === 'in'), e => e.amount), out = sum(list.filter(e => e.kind === 'out'), e => e.amount); return { inc, out, net: inc - out }; };
+const signWon = n => `${n < 0 ? '-' : ''}${won(Math.abs(n))}`;
+const versus = (now, before, label) => {
+  if (!before) return now ? `${label}엔 없었어요` : '';
+  const pct = Math.round((now - before) / Math.abs(before) * 100);
+  return `${label}보다 ${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)}%`;
+};
+const groupCats = list => Object.entries(list.reduce((a, e) => (a[e.cat] = (a[e.cat] || 0) + e.amount, a), {})).sort((a, b) => b[1] - a[1]);
+const catBars = (cats, cls) => { const max = Math.max(1, ...cats.map(c => c[1])); return `<div class="rows">${cats.map(([n, v]) => `<div class="row-bar wide"><span>${esc(n)}</span><div class="pbar ${cls}"><span style="width:${v / max * 100}%"></span></div><b class="num">${won(v)}</b></div>`).join('')}</div>`; };
+
+// 매출 · 지출 막대 그래프 (칸마다 두 막대, 올리면 금액이 보여요)
+function finChart(r, all) {
+  const rows = r.buckets.map(b => ({ ...b, ...finTotals(all.filter(e => inRange(e, b.from, b.to))) }));
+  const max = Math.max(1, ...rows.map(x => Math.max(x.inc, x.out)));
+  const every = rows.length > 14 ? 5 : 1; // 날이 많으면 눈금 글자는 5일마다
+  return `
+  <section class="card">
+    <div class="card-head"><h2>기간별 매출 · 지출</h2><span class="legend"><i class="sw in"></i>매출<i class="sw out"></i>지출</span></div>
+    <div class="fchart" style="--n:${rows.length}">${rows.map((x, i) => `
+      <div class="fc-col" tabindex="0" data-tip="${esc(x.label)}${r.buckets.length > 12 ? '일' : ''}&#10;매출 ${won(x.inc)}&#10;지출 ${won(x.out)}&#10;순이익 ${signWon(x.net)}">
+        <div class="fc-bars"><span class="in" style="height:${x.inc / max * 100}%"></span><span class="out" style="height:${x.out / max * 100}%"></span></div>
+        <small>${(i + 1) % every === 0 || i === 0 ? esc(x.label) : ''}</small>
+      </div>`).join('')}
+    </div>
+    ${rows.length <= 12 ? `<div class="ftable"><div class="tr th"><span>기간</span><span>매출</span><span>지출</span><span>순이익</span></div>${rows.map(x => `
+      <div class="tr"><span>${esc(x.label)}</span><span class="num">${won(x.inc)}</span><span class="num">${won(x.out)}</span><b class="num ${x.net < 0 ? 'neg' : ''}">${signWon(x.net)}</b></div>`).join('')}</div>` : ''}
+  </section>`;
 }
 
+function realFinancePage() {
+  const r = finRange(), all = ledger();
+  const list = all.filter(e => inRange(e, r.from, r.to)).sort((a, b) => b.day.localeCompare(a.day) || (a.kind === b.kind ? 0 : a.kind === 'in' ? -1 : 1));
+  const t = finTotals(list), p = finTotals(all.filter(e => inRange(e, ...r.prev)));
+  // 못 받은 돈: 이 기간에 걸친 달의 청구 중 아직 납부 확인 안 한 것
+  const months = new Set(FIN === 'month' ? [MONTH] : FIN === 'day' || FIN === 'week' ? [TODAY.slice(0, 7)] : r.buckets.map(b => b.from.slice(0, 7)));
+  const unpaid = REAL.invoices.filter(i => !i.paid_at && months.has(i.month));
+  const rate = t.inc ? Math.round(t.net / t.inc * 100) : null;
+  const acts = `<button class="btn" data-act="finXlsx">${ic('doc')}엑셀로 내려받기</button><button class="btn" data-import="expenses">${ic('doc')}지출 엑셀로 올리기</button>
+    <button class="btn" data-act="addIncome">${ic('plus')}수입 추가</button><button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`;
+  return head('재정', `${r.label} · 매출은 수납·청구에서 "납부 확인"한 금액에 직접 넣은 수입(교재 판매 · 특강 등)을 더한 거예요.`, acts) + `
+  <div class="filters">${Object.entries(FIN_PERIODS).map(([k, l]) => `<button class="${FIN === k ? 'on' : ''}" data-fin="${k}">${l}</button>`).join('')}</div>
+  ${FIN === 'month' ? monthBar() : ''}
+  <div class="stats">
+    <div class="stat"><span>매출</span><b class="num">${won(t.inc)}</b><small class="muted">${versus(t.inc, p.inc, r.prevLabel)}</small></div>
+    <div class="stat"><span>지출</span><b class="num">${won(t.out)}</b><small class="muted">${versus(t.out, p.out, r.prevLabel)}</small></div>
+    <div class="stat ${t.net < 0 ? 'crit' : 'good'}"><span>순이익</span><b class="num">${signWon(t.net)}</b><small class="muted">${rate === null ? '매출이 없어요' : `이익률 ${rate}%`}</small></div>
+    <div class="stat ${unpaid.length ? 'crit' : ''}"><span>아직 못 받은 돈 ${unpaid.length}건</span><b class="num">${won(sum(unpaid, i => i.amount))}</b><small class="muted">${months.size > 3 ? `최근 ${months.size}개월` : [...months].map(m => `${+m.slice(5)}월`).join(' · ')} 청구 중 미납</small></div>
+  </div>
+  ${r.buckets.length ? finChart(r, all) : ''}
+  <div class="grid2 even">
+    <section class="card"><div class="card-head"><h2>매출 구성</h2><span class="sub">수강료 · 직접 넣은 수입</span></div>
+      ${t.inc ? catBars(groupCats(list.filter(e => e.kind === 'in')), '') : '<p class="muted small" style="margin:0">이 기간에 들어온 돈이 없어요.</p>'}</section>
+    <section class="card"><div class="card-head"><h2>지출 항목</h2></div>
+      ${t.out ? catBars(groupCats(list.filter(e => e.kind === 'out')), 'out') : '<p class="muted small" style="margin:0">이 기간에 적은 지출이 없어요. 급여 · 임대료부터 넣어 보세요.</p>'}</section>
+  </div>
+  <section class="card">
+    <div class="card-head"><h2>거래 내역 ${list.length}건</h2><span class="sub">누르면 고칠 수 있어요 · 수강료는 수납·청구에서 고쳐요</span></div>
+    ${list.length ? `<div class="list">${list.slice(0, 200).map(e => `
+      <a class="li link" href="#admin/finance" data-ledger="${e.src}:${e.id}">
+        <span class="av time-av num">${md(e.day)}</span>
+        <div><div class="t">${esc(e.cat)} <span class="chip ${e.kind === 'in' ? 'info' : 'mute'}">${e.kind === 'in' ? (e.src === 'inv' ? '수납' : '수입') : '지출'}</span></div><div class="d">${esc(e.memo)}</div></div>
+        <div class="r"><b class="num ${e.kind === 'out' ? 'neg' : ''}">${e.kind === 'out' ? '-' : '+'}${won(e.amount)}</b></div>
+      </a>`).join('')}</div>${list.length > 200 ? '<p class="muted small">최근 200건까지 보여 줘요. 전부 보려면 엑셀로 내려받아 주세요.</p>' : ''}` : '<p class="muted small" style="margin:0">아직 없어요.</p>'}
+  </section>
+  <a class="hint" href="#admin/billing">${ic('card')}<span>수강료 매출은 수납·청구에서 "납부 확인"을 누르면 저절로 들어와요</span><b>수납·청구 →</b></a>`;
+}
+
+// 보고 있는 기간의 거래 내역을 엑셀로
+function finXlsx() {
+  const r = finRange();
+  const list = ledger().filter(e => inRange(e, r.from, r.to)).sort((a, b) => a.day.localeCompare(b.day));
+  const t = finTotals(list);
+  const rows = [['날짜', '구분', '항목', '금액(원)', '내용'],
+    ...list.map(e => [e.day, e.kind === 'in' ? (e.src === 'inv' ? '수납' : '수입') : '지출', e.cat, String(e.kind === 'out' ? -e.amount : e.amount), e.memo]),
+    [], ['', '', '매출 합계', String(t.inc), ''], ['', '', '지출 합계', String(t.out), ''], ['', '', '순이익', String(t.net), '']];
+  downloadXlsx(`finance_${r.from}_${r.to}.xlsx`, rows, [12, 8, 14, 14, 30]);
+  toast('거래 내역을 내려받았어요');
+}
+
+const finDay = () => FIN === 'month' ? (MONTH === TODAY.slice(0, 7) ? TODAY : `${MONTH}-01`) : TODAY;
 function expenseDialog(x) {
   formDialog({
     title: x ? '지출 고치기' : '지출 추가', table: 'expenses', row: x, after: loadExpenses,
     label: r => `${r.category} 지출을`,
     fields: [
-      ['day', '날짜', { type: 'date', required: true, value: MONTH === TODAY.slice(0, 7) ? TODAY : `${MONTH}-01`, half: true }],
+      ['day', '날짜', { type: 'date', required: true, value: finDay(), half: true }],
       ['category', '항목', { type: 'select', required: true, options: EXP_CATS, half: true }],
       ['amount', '금액(원)', { type: 'number', required: true, placeholder: '예: 2000000' }],
       ['memo', '메모', { max: 200, placeholder: '예: 10월 김민지 강사 급여' }]
+    ]
+  });
+}
+function incomeDialog(x) {
+  formDialog({
+    title: x ? '수입 고치기' : '수입 추가', table: 'incomes', row: x, after: loadIncomes,
+    label: r => `${r.category} 수입을`,
+    fields: [
+      ['day', '날짜', { type: 'date', required: true, value: finDay(), half: true }],
+      ['category', '항목', { type: 'select', required: true, options: INC_CATS, half: true }],
+      ['amount', '금액(원)', { type: 'number', required: true, placeholder: '예: 150000' }],
+      ['memo', '메모', { max: 200, placeholder: '예: 겨울 특강 5명' }]
     ]
   });
 }
@@ -1874,10 +1967,10 @@ const AREAS = {
       subs: {
         attend: { name: '출결 관리', icon: 'attend', desc: '반별 출석 체크와 결석 확인', stat: attendStat, render: attendPage },
         billing: { name: '수납·청구', icon: 'card', desc: '청구서 만들기와 미납 안내', stat: () => REAL ? `${+MONTH.slice(5)}월 미납 ${REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).length}건` : `미납 ${DATA.unpaid.filter(u => !u.sent).length}건`, render: billingPage },
-        finance: { name: '재정', icon: 'chart', desc: '수입·지출과 남은 금액', stat: () => {
+        finance: { name: '재정', icon: 'chart', desc: '기간별 매출 · 지출 · 순이익', stat: () => {
           if (!REAL) return `이번 달 +${DATA.finance.income - DATA.finance.expense}만 원`;
-          const n = sum(REAL.invoices.filter(i => i.paid_at && i.paid_at.startsWith(MONTH)), i => i.amount) - sum(REAL.expenses.filter(x => x.day.startsWith(MONTH)), x => x.amount);
-          return `${+MONTH.slice(5)}월 ${n < 0 ? '-' : '+'}${won(Math.abs(n))}`;
+          const m = TODAY.slice(0, 7), t = finTotals(ledger().filter(e => e.day.startsWith(m)));
+          return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
         paper: { name: '서류·행정', icon: 'doc', desc: '교육청·세무서·공단 신고 서류', stat: () => `작성 필요 ${(REAL ? REAL.paperwork : DATA.paperwork).filter(p => p.status === 'todo').length}건`, render: paperPage }
       } },
@@ -2143,7 +2236,16 @@ function bind() {
   });
   on('[data-act="addExpense"]', () => expenseDialog(null));
   on('[data-import]', b => REAL ? importDialog(b.dataset.import) : toast('예시 계정에서는 올릴 수 없어요'));
-  on('[data-edit-exp]', (b, e) => { e.preventDefault(); expenseDialog(REAL.expenses.find(x => x.id === b.dataset.editExp)); });
+  on('[data-act="addIncome"]', () => incomeDialog(null));
+  on('[data-act="finXlsx"]', finXlsx);
+  on('[data-fin]', b => { FIN = b.dataset.fin; render(); });
+  on('[data-ledger]', (b, e) => {
+    e.preventDefault();
+    const [src, id] = b.dataset.ledger.split(':');
+    if (src === 'exp') expenseDialog(REAL.expenses.find(x => x.id === id));
+    else if (src === 'inc') incomeDialog(REAL.incomes.find(x => x.id === id));
+    else invoiceDialog(REAL.invoices.find(x => x.id === id));
+  });
   on('[data-act="addPaper"]', () => paperDialog(null));
   on('[data-act="presetPaper"]', addPaperPresets);
   on('[data-edit-paper]', b => paperDialog(REAL.paperwork.find(p => p.id === b.dataset.editPaper)));
@@ -2458,6 +2560,7 @@ async function loadRows(table, order, ascending = true) {
 }
 const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
+const loadIncomes = () => loadRows('incomes', 'day', false);
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
@@ -2671,12 +2774,12 @@ async function boot() {
     PROFILE.role = mem[0].role; // 실제 역할은 초대 코드로 정해진 소속 역할
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
-      attend: { day: TODAY, map: {} }, invoices: [], expenses: [], paperwork: [],
+      attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
       family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining()]);
-    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork(), loadJobs(), loadPartnerApps(),
+    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await loadJobBoard();
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
