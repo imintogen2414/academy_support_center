@@ -17,6 +17,11 @@
 - 홈 순서: 오늘 챙길 일(급한 일) → 자주 쓰는 메뉴(`favCard`, "바꾸기"로 최대 8개 고르기, 이 기기 localStorage `asc-fav-역할-…`, 기본은 `FAV_DEFAULT`) → "처음이세요? 이렇게 시작해요"(`startSteps`, 휴대폰에선 접혀 있음 · 실제 데이터로 저절로 체크 · 다 하거나 숨기면 사라짐) → 전체 메뉴 타일.
 - 위쪽 검색창: 원장 · 강사는 학생 이름 · 반 · 학부모 · 연락처(`searchPeople`, 누르면 원생 명단이 그 이름으로 걸러짐 `STU_Q`)와 상담 학생, 그리고 메뉴(`searchMenus` + 비슷한 말 `SEARCH_WORDS`). 휴대폰에서도 보여요.
 - 메뉴 이름은 역할이 달라도 같은 기능이면 같은 이름: 출결 · 수납 · 오늘 할 일 · 공지 · 결재 · 유학 상담 · 일정·시간표 · 내 제휴 · 내 의뢰 · 강사 채용.
+- 분야별 이용(`academy_services`): 원생 · 출결 · 일정 · 메신저 같은 기본 프로그램은 누구나 쓰고, 센터가 직접 해 주는 지원만 학원마다 분야(행정 · 강사 · 학생·학부모 · 제휴 · 홍보)가 "이용 중"(active)일 때 열려요. 상담 중(consulting) · 이용 끝남(ended) · 줄 없음(신청 전)이면 `app.js`의 `SVC_GATE` 화면 대신 `svcLockPage`(신청 안내)가 보이고, 신청 · 의뢰 버튼은 `svcGuard`가 막아요. DB도 `private.has_service(학원, 분야)` · `private.my_service(분야)`로 제휴 신청 · 유학 안내/상담 · 홍보 의뢰 · 채용 공고 · 강사 교육 영상 · 리플렉션 · 센터에 맡기기를 막아요. 이 기능 전에 있던 학원은 다섯 분야 모두 이용 중으로 넣어 뒀고, 새로 만든 학원은 신청 전부터 시작해요.
+  - 원장: `#services`(이용 중인 센터 지원 · 분야 더 신청하기 `request_academy_services` → 센터 "지원 신청"에 학원과 이어진 채로 들어가고 그 분야는 상담 중), 첫 화면 접수 번호로 잇기 `claim_support_request(학원, 번호)`. 홈에 안 쓰는 분야가 있으면 한 줄 안내(`svcHint`), `#help` 위에도 요약.
+  - 관리자: 센터 관리 → 학원 · 이용 분야(`#center/academies`, `admin_academies()` · `set_academy_service(학원, 분야, 상태|null)`).
+  - 학부모 · 학생: 제휴가 꺼져 있으면 유학 메뉴가 안 보여요.
+- 센터에 맡기기(`center_tasks`, 행정 · 강사 관리 · 학생·학부모 관리 아래 `…/center`): 원장이 서류 대신 작성 · 명단 옮기기 · 채용 대행 · 설명회 준비 같은 일(`TASK_KINDS`)을 맡기면, 관리자가 센터 관리 → 맡긴 일(`#center/tasks`)에서 접수 → 진행 중 → 완료 + 센터 메모(원장 화면에 보여요). 원장은 접수 단계에서만 고치기 · 취소, 상태 · 메모는 트리거가 관리자만 바꾸게 해요.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
 - 예시 계정의 날짜는 실제 오늘(`DATA.today = todayText()`), 오늘 출결 · 아이 오늘 일정은 오늘 요일에 수업이 있는 것만(일요일엔 없음). 예시 수납은 미납 목록(`DATA.unpaid`)으로 미납 수 · 금액을 계산해서 홈 · 목록 · 메뉴 숫자가 같아요.
 - 입력 칸은 되도록 눌러서 고르게: `chips`(학년 `GRADES`, 과목 `SUBJECTS`, 반, 강사 `staffNames()`, 서류 이름 · 내는 곳, 다음 할 일 …), 지역은 `regionPicker`, 전화번호 칸(type tel)은 치는 동안 하이픈이 저절로.
@@ -48,7 +53,7 @@
   - 센터 관리: `center_admins`(이메일 목록, RPC로만: `am_center_admin` `list_center_admins` `add_center_admin(이메일|아이디)` `remove_center_admin`, 나 자신은 못 뺌). 판정은 `private.is_center_admin()` — 구글로 확인된 이메일이거나 센터 아이디일 때만. 첫 관리자: `yunji040615@gmail.com`, `imintogen2414@gmail.com`.
   - 강사 교육: `training_videos`(관리자만 쓰기, 원장·강사는 배부된 것만 보기, 영상은 유튜브·비메오 주소), `training_reflections`(영상당 한 사람 하나, 쓰면 이수 완료). 원장도 듣고 써요. 리플렉션 내용은 본인만 바로 읽고, 원장은 `academy_training_report(학원)`로 우리 강사 것까지 봐요. 관리자는 내용 없이 `admin_training_progress()`(이수 수) · `admin_video_reflections(영상)`(이름·학원·날짜)만.
   - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
-  - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
+  - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기. `academy_id`는 학원과 이어진 신청(프로그램에서 신청 · 접수 번호로 잇기).
   - 채용: 공고 게시판(`JOBS_AREA`)은 학원에 아직 연결 안 된 강사(`SEEKER`)만 봐요 — 학원 강사 메뉴에는 없어요. `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
   - 제휴: `partner_applications`(원장 · 강사 신청, 신청한 사람은 트리거. 강사가 올리면 `owner_review` → 원장이 `decide_partner_request(신청, 승인?, 의견)`으로 승인하면 new, 반려하면 closed. 관리자는 owner_review를 못 보고 new→contacted→connected→closed 처리). 강사 메뉴 `#mou`(제휴처 · 유학 안내 · 내 제휴 신청). 제휴처 목록 자체는 `data.js`의 `partners`.
   - 유학: `abroad_promos`(원장이 학부모에게 안내, 강사도 봐요), `abroad_requests`(학부모·학생 신청 · 강사가 학부모 대신 신청하면 `via_name`·`via_role` → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
@@ -103,7 +108,7 @@
 # 파일 구조
 - `index.html`: 첫 화면. 홈페이지가 아니라 프로그램 입구처럼 반반으로 나눈다.
   - 왼쪽(남색) "지원받기": 분야 고르기 → `#area/admin` 분야 상세 → `#apply/admin` 지원 신청 → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
-  - 분야 상세페이지: 그림(`HERO_ART`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅은 로고가 오면 `PARTNERS.promo.logo`에 넣기(지금은 글자 로고).
+  - 분야 상세페이지: 그림(`HERO_ART`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅 로고 `assets/brand/intomarketing-logo.png`(가로) · `intomarketing-mark.png`(세로, 앱 제휴 · 홍보 소개 칸).
   - 오른쪽(흰색) "프로그램 쓰기": 아이디 로그인·회원가입(`?signup=1`), 구글로 계속하기, "예시 계정 들어가보기"(데모), "초대 코드가 뭐예요?" 설명, "로그인 유지하기"
   - 휴대폰에서는 위쪽 탭(지원받기 / 프로그램 이용하기)으로 바로 오간다.
   - 왼쪽 첫 화면 순서: 센터가 무엇인지(지원 서비스 + 운영 프로그램) → 이렇게 시작해요 → 지원 분야 → 비용 안내(상담 후 견적, `SITE_PRICE`) → 이용 사례(예시, `SITE_STORIES`) → 자주 묻는 질문(`SITE_FAQ`) → 운영 정보(예시, `SITE_ORG` — 실제 정보가 정해지면 여기만 바꾸기). 모두 `assets/areas.js`.
