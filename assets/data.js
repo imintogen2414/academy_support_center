@@ -122,10 +122,11 @@ const DATA = {
   ],
 
   /* ---------- 자료실 (예시) ---------- */
+  libraryFolders: [{ id: 'f1', name: '초등 B반', sort: 0 }, { id: 'f2', name: '학부모 안내', sort: 1 }, { id: 'f3', name: '행정 서식', sort: 2 }],
   library: [
-    { id: 'l1', title: '11월 초등 B반 단어장', category: '수업 자료', visibility: 'class', target_class: '초등 B반', uploader_name: '김민지', uploader_role: 'teacher', created_at: '2026-10-24T09:00:00Z', file_path: 'x', file_name: '11월_단어장.pdf', file_size: 820000, mime: 'application/pdf', description: '매주 월요일 단어 시험 범위예요.' },
-    { id: 'l2', title: '겨울방학 특강 안내문', category: '학부모 안내', visibility: 'everyone', uploader_name: '정수민', uploader_role: 'owner', created_at: '2026-10-22T09:00:00Z', file_path: 'x', file_name: '겨울특강_안내.pdf', file_size: 1400000, mime: 'application/pdf' },
-    { id: 'l3', title: '수업 일지 양식', category: '행정 서식', visibility: 'staff', uploader_name: '정수민', uploader_role: 'owner', created_at: '2026-10-20T09:00:00Z', file_path: 'x', file_name: '수업일지.xlsx', file_size: 24000, mime: 'application/vnd.ms-excel' },
+    { id: 'l1', folder_id: 'f1', title: '11월 초등 B반 단어장', category: '수업 자료', visibility: 'class', target_class: '초등 B반', uploader_name: '김민지', uploader_role: 'teacher', created_at: '2026-10-24T09:00:00Z', file_path: 'x', file_name: '11월_단어장.pdf', file_size: 820000, mime: 'application/pdf', description: '매주 월요일 단어 시험 범위예요.' },
+    { id: 'l2', folder_id: 'f2', title: '겨울방학 특강 안내문', category: '학부모 안내', visibility: 'everyone', uploader_name: '정수민', uploader_role: 'owner', created_at: '2026-10-22T09:00:00Z', file_path: 'x', file_name: '겨울특강_안내.pdf', file_size: 1400000, mime: 'application/pdf' },
+    { id: 'l3', folder_id: 'f3', title: '수업 일지 양식', category: '행정 서식', visibility: 'staff', uploader_name: '정수민', uploader_role: 'owner', created_at: '2026-10-20T09:00:00Z', file_path: 'x', file_name: '수업일지.xlsx', file_size: 24000, mime: 'application/vnd.ms-excel' },
     { id: 'l4', title: '리딩 수업 아이디어 모음', category: '강사 공유', visibility: 'private', uploader_name: '김민지', uploader_role: 'teacher', created_at: '2026-10-18T09:00:00Z', link_url: 'https://docs.google.com' }
   ],
 
