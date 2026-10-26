@@ -32,10 +32,11 @@
     <div class="acad-switch" id="acad"></div>
     <nav id="nav"></nav>
     <div class="side-foot">
-      <div class="plan-card">
-        <b>담당 매니저 · 학원지원센터</b>
-        <span>궁금한 점은 언제든 물어보세요 · 평일 9–18시</span>
-      </div>
+      <!-- 원장 · 강사만: 센터에 문의하기 (학부모 · 학생 화면에는 안 보여요) -->
+      <a class="plan-card" id="helpCard" href="#help" hidden>
+        <b>센터에 문의하기</b>
+        <span>사용 방법 · 오류 · 바라는 기능 · 평일 9:30~18:30</span>
+      </a>
       <div id="adminApply" hidden></div>
     </div>
   </aside>
