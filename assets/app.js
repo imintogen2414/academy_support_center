@@ -4,6 +4,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const ICON = {
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   leads: '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
   page: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h5"/>',
@@ -1697,6 +1698,106 @@ function groupInfoDialog(c) {
 }
 
 // 내 프로필: 사진 · 이름 · 상태 메시지 (사진은 공개 버킷 avatars/내 id/…)
+/* ---------- 중복 확인: 이름 · 아이디 · 전화번호는 다른 회원과 겹치지 않아요 (profiles 유일 인덱스 + check_profile_taken) ---------- */
+const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호' };
+const hasJong = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 > 0; };
+const takenMsg = list => { const w = list.map(k => TAKEN_TEXT[k]).join(' · '), j = hasJong(w); return `이미 있는 ${w}${j ? '이에요' : '예요'}! 다른 ${w}${j ? '을' : '를'} 써 주세요.`; };
+async function checkTaken(name, phone) {
+  const { data } = await SB.rpc('check_profile_taken', { p_username: null, p_name: name || null, p_phone: phone || null });
+  return data || [];
+}
+const uniqueError = e => e && e.code === '23505' ? takenMsg([/phone/.test(e.message || '') ? 'phone' : 'name']) : '';
+
+/* ---------- 설정 (#settings): 내 정보 · 우리 학원 · 이용 중인 지원 · 결제 · 화면 · 계정 ---------- */
+const loginKind = () => !USER ? '예시 계정' : /@id\.academysupportcenter\.app$/.test(USER.email || '') ? '아이디 · 비밀번호' : `구글 (${esc(USER.email || '')})`;
+const themeMode = () => { try { return localStorage.getItem('asc-theme') || 'system'; } catch (e) { return 'system'; } };
+const keepOn = () => { try { return localStorage.getItem('asc-keep-login') !== '0'; } catch (e) { return true; } };
+function settingsPage() {
+  const P = PROFILE || {}, demo = !USER, idLogin = USER && /@id\.academysupportcenter\.app$/.test(USER.email || '');
+  const row = (k, v) => `<div class="set-row"><span>${k}</span><b>${v}</b></div>`;
+  const none = '<span class="muted">등록 전</span>';
+  const roleName = ROLE === 'admin' ? '센터 관리자' : SEEKER ? '강사 (학원 연결 전)' : `${ROLE_NAMES[ROLE] || ''}${CENTER ? ' · 센터 관리자' : ''}`;
+  const card = (title, body, sub = '') => `<section class="card set-card"><div class="card-head"><h2>${title}</h2>${sub}</div>${body}</section>`;
+  const me = card('내 정보', `
+    <div class="set-me">${pfp(ME.name, P.avatar_url, ROLE, 'lg')}<div><b>${ME.name}</b><span class="muted small">${esc(P.status_msg || '상태 메시지 없음')}</span></div></div>
+    ${row('이름', ME.name)}
+    ${row('아이디', P.username ? `${esc(P.username)} <span class="muted small">(바꿀 수 없어요)</span>` : demo ? 'demo' : '<span class="muted">구글로 로그인해서 아이디가 없어요</span>')}
+    ${row('휴대폰 번호', P.phone ? fmtPhone(P.phone) : demo ? '010-1234-5678' : none)}
+    ${row('로그인 방법', loginKind())}
+    ${row('역할', roleName)}
+    ${USER && USER.created_at ? row('가입한 날', USER.created_at.slice(0, 10).replace(/-/g, '.')) : ''}
+    <div class="row-btns"><button class="btn sm primary" data-act="editProfile">내 정보 고치기</button>${idLogin ? '<button class="btn sm" data-act="changePw">비밀번호 바꾸기</button>' : ''}</div>
+    <p class="muted small">이름 · 아이디 · 휴대폰 번호는 다른 회원과 겹칠 수 없어요. 휴대폰 번호는 센터와 우리 학원 원장님만 연락용으로 써요.</p>`);
+  let acad = '';
+  if (ROLE !== 'admin' && !SEEKER) {
+    const fam = ROLE === 'parent' || ROLE === 'student';
+    const kids = REAL ? (REAL.kids || []).map(k => esc(k.name)).join(' · ') : DATA.child.name;
+    acad = card('우리 학원', `
+      ${row('학원', DATA.academy.name)}
+      ${row('지역', DATA.academy.area || '-')}
+      ${row('내 역할', ROLE_NAMES[ROLE])}
+      ${ROLE === 'owner' ? row('함께하는 사람', REAL ? `원생 ${REAL.students.length}명 · 강사 ${REAL.members.filter(m => m.role === 'teacher').length}명` : `원생 ${DATA.academy.students}명 · 강사 ${DATA.staff.length}명`) : ''}
+      ${ROLE === 'teacher' ? row('담당 반', REAL ? (REAL.myClasses && REAL.myClasses.length ? REAL.myClasses.map(esc).join(' · ') : '<span class="muted">원장님이 정하면 보여요</span>') : DEMO_MY_CLASSES.join(' · ')) : ''}
+      ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
+      ${ROLE === 'owner' ? '<div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>' : ''}`);
+  }
+  const svc = ROLE === 'owner' || ROLE === 'teacher' ? card('이용 중인 센터 지원', `
+    <div class="needs">${Object.keys(SVC_AREAS).map(a => `<span class="chip ${SVC_STATE[svcOf(a)][0]}">${SVC_AREAS[a]} · ${SVC_STATE[svcOf(a)][1]}</span>`).join('')}</div>
+    <p class="muted small">${ROLE === 'owner' ? '분야마다 센터가 직접 해 주는 지원이에요. 기본 기능(원생 · 출결 · 일정 · 메신저)은 분야와 상관없이 써요.' : '원장님이 신청한 분야예요. 더 필요한 분야가 있으면 원장님께 말씀해 주세요.'}</p>
+    ${ROLE === 'owner' ? '<div class="row-btns"><a class="btn sm primary" href="#services">분야 보기 · 더 신청하기</a></div>' : ''}`) : '';
+  let pay = '';
+  if (ROLE === 'owner') pay = card('결제 정보', `
+    ${row('센터 이용료', '분야마다 상담 후 견적')}
+    ${row('결제 수단', none)}
+    ${row('결제 내역', '<span class="muted">아직 없어요</span>')}
+    <p class="muted small">견적이 정해지면 결제 수단과 내역이 여기에 보여요. 학부모 수강료 청구 · 납부 확인은 행정 지원 → 수납에서 해요.</p>
+    <div class="row-btns"><a class="btn sm" href="#admin/billing">수강료 수납 열기</a><a class="btn sm" href="#help">결제 문의하기</a></div>`);
+  if (ROLE === 'parent') {
+    const bills = REAL ? REAL.kidBills.filter(b => !b.paid_at) : DATA.child.bills.filter(b => !b.paid);
+    const total = REAL ? sum(bills, b => b.amount) : sum(bills, b => b.amount * 1e4); // 예시 금액은 만 원 단위
+    pay = card('결제 정보', `
+      ${row('낼 수강료', bills.length ? `${bills.length}건${total ? ` · ${won(total)}` : ''}` : '모두 냈어요')}
+      ${row('결제 방법', '학원 안내에 따라 (카드 · 계좌)')}
+      <div class="row-btns"><a class="btn sm" href="#kid/bills">수납 내역 보기</a></div>`);
+  }
+  const tm = themeMode();
+  const app = card('화면 · 사용', `
+    <div class="set-line"><div><b>화면 밝기</b><small>기기 설정을 따르거나 밝게 · 어둡게 고정해요</small></div>
+      <div class="seg">${[['system', '기기 설정'], ['light', '밝게'], ['dark', '어둡게']].map(([k, l]) => `<button class="${tm === k ? 'on' : ''}" data-theme-set="${k}">${l}</button>`).join('')}</div></div>
+    <div class="set-line"><div><b>로그인 유지하기</b><small>끄면 다음 로그인부터 창을 닫을 때 로그아웃돼요 · 공용 PC라면 꺼 주세요</small></div>
+      <label class="switch"><input type="checkbox" data-act="keepLogin" ${keepOn() ? 'checked' : ''}><span></span></label></div>
+    <div class="set-line"><div><b>홈 "자주 쓰는 메뉴"</b><small>홈에 둘 메뉴를 최대 8개 골라요 (이 기기에 저장)</small></div><button class="btn sm" data-act="editFav">바꾸기</button></div>
+    ${startSteps().length ? `<div class="set-line"><div><b>처음 시작 안내</b><small>숨긴 안내를 홈에 다시 띄워요</small></div><a class="btn sm" href="#home" data-act="showGuide">다시 보기</a></div>` : ''}
+    <div class="set-line"><div><b>왼쪽 메뉴 묶음</b><small>접어 둔 묶음을 모두 펼쳐요</small></div><button class="btn sm" data-act="navOpenAll">모두 펼치기</button></div>`);
+  const acct = card('계정', `
+    <div class="set-line"><div><b>로그아웃</b><small>이 기기에서 로그아웃해요</small></div><button class="btn sm" data-act="logoutNow">로그아웃</button></div>
+    ${USER && !CENTER ? `<div class="set-line"><div><b>센터 관리자 신청</b><small>학원지원센터 본부 직원만 신청해 주세요</small></div>${adminApplyLink(true)}</div>` : ''}
+    <div class="set-line"><div><b>회원 탈퇴</b><small>${ROLE === 'owner' || ROLE === 'teacher' ? '학원 자료 정리가 필요해서 센터에 문의로 받아요' : '학원 원장님이나 센터에 말씀해 주세요'}</small></div>${ROLE === 'owner' || ROLE === 'teacher' ? '<a class="btn sm" href="#help">센터에 문의하기</a>' : ''}</div>`);
+  return head('설정', '내 정보와 학원 · 이용 중인 지원 · 결제 정보를 보고, 화면과 계정 설정을 바꿔요.') +
+    `<div class="set-grid"><div>${me}${acad}</div><div>${svc}${pay}${app}${acct}</div></div>`;
+}
+function pwDialog() {
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="pwForm" novalidate><h2>비밀번호 바꾸기</h2>
+    <label class="f">새 비밀번호 <span class="muted small">8자 이상</span><input name="pw" type="password" autocomplete="new-password"></label>
+    <label class="f">한 번 더<input name="pw2" type="password" autocomplete="new-password"></label>
+    <p class="msg" id="pwMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="pwCancel">취소</button><button class="btn primary">바꾸기</button></div></form>`;
+  d.showModal(); $('#pwCancel').onclick = () => d.close();
+  $('#pwForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, m = $('#pwMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (el.pw.value.length < 8) return fail('비밀번호는 8자 이상으로 정해 주세요.');
+    if (el.pw.value !== el.pw2.value) return fail('두 비밀번호가 달라요.');
+    const { error } = await SB.auth.updateUser({ password: el.pw.value });
+    if (error) return fail(/different from the old/i.test(error.message || '') ? '지금 비밀번호와 다른 비밀번호로 정해 주세요.' : '바꾸지 못했어요. 다시 로그인한 뒤 시도해 주세요.');
+    d.close(); toast('비밀번호를 바꿨어요');
+  };
+}
+// 홈: 휴대폰 번호가 없으면 한 줄 안내 (학생은 빼요)
+const phoneHint = () => USER && PROFILE && !PROFILE.phone && ROLE !== 'student' && ROLE !== 'admin'
+  ? `<a class="hint" href="#settings">${ic('users')}<span>휴대폰 번호를 등록해 주세요 · 센터와 학원이 연락할 때 써요</span><b>설정에서 등록 →</b></a>` : '';
+
 function profileDialog() {
   if (!USER) { toast('예시 계정에서는 바꿀 수 없어요'); return; }
   const d = dialogEl();
@@ -1704,7 +1805,8 @@ function profileDialog() {
   d.innerHTML = `<form method="dialog" class="dlg" id="pfForm" novalidate><h2>프로필 편집</h2>
     <div class="pf-edit"><span id="pfPic">${pfp(ME.name, url, ROLE, 'lg')}</span>
       <div class="pf-btns"><label class="btn sm">사진 고르기<input type="file" id="pfFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>${url ? '<button type="button" class="btn sm" id="pfNoPic">사진 빼기</button>' : ''}<span class="muted small">5MB 이하 이미지</span></div></div>
-    <label class="f">이름<input name="name" maxlength="50" value="${esc(PROFILE.name || '')}"></label>
+    <label class="f">이름 <span class="muted small">다른 회원과 겹치지 않게</span><input name="name" maxlength="50" value="${esc(PROFILE.name || '')}"></label>
+    <label class="f">휴대폰 번호${ROLE === 'student' ? ' <span class="muted small">없으면 비워 두세요</span>' : ''}<input name="phone" type="tel" inputmode="numeric" maxlength="13" value="${PROFILE.phone ? fmtPhone(PROFILE.phone) : ''}" placeholder="010-0000-0000"></label>
     <label class="f">상태 메시지 <span class="muted small">친구에게 보여요</span><input name="status" maxlength="60" value="${esc(PROFILE.status_msg || '')}" placeholder="예: 평일 14–21시 연락 가능해요"></label>
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div></form>`;
@@ -1724,11 +1826,14 @@ function profileDialog() {
   if ($('#pfNoPic')) $('#pfNoPic').onclick = () => { url = null; $('#pfPic').innerHTML = pfp(ME.name, null, ROLE, 'lg'); };
   $('#pfForm').onsubmit = async e => {
     e.preventDefault();
-    const el = e.target.elements, name = el.name.value.trim();
+    const el = e.target.elements, name = el.name.value.trim(), phone = el.phone.value.replace(/\D/g, '');
     if (!name) return fail('이름을 적어 주세요.');
-    const row = { name, status_msg: el.status.value.trim() || null, avatar_url: url };
+    if (phone && !phoneOk(phone)) return fail('휴대폰 번호 형식이 맞지 않아요. 예: 010-1234-5678');
+    const taken = await checkTaken(name, phone);
+    if (taken.length) return fail(takenMsg(taken));
+    const row = { name, phone: phone || null, status_msg: el.status.value.trim() || null, avatar_url: url };
     const { error } = await SB.from('profiles').update(row).eq('id', USER.id);
-    if (error) return fail('저장하지 못했어요. 다시 시도해 주세요.');
+    if (error) return fail(uniqueError(error) || '저장하지 못했어요. 다시 시도해 주세요.');
     Object.assign(PROFILE, row); ME.name = esc(name); ME.av = ME.name[0];
     d.close(); render(); toast('프로필을 저장했어요');
   };
@@ -3943,16 +4048,17 @@ let NAV_OPEN = (() => { try { return JSON.parse(localStorage.getItem('asc-nav') 
 function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
-  if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('');
+  const set = `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>`;
+  if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   const gs = navGroups();
-  if (Object.keys(MY).length <= 4) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('');
+  if (Object.keys(MY).length <= 4) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('') + set;
   // 처음엔 모든 묶음을 펼쳐 두고, 접은 묶음은 기억해요 (지금 보는 메뉴가 든 묶음은 늘 펼침)
   return item('home', '홈', 'home') + gs.map(([label, , ids], i) => {
     const open = !NAV_OPEN || NAV_OPEN[label] !== false || ids.includes(area);
     const news = ids.some(id => hasNews(id) || (id === 'messages' && msgUnread()));
     return `<div class="nav-group ${open ? 'open' : ''}"><button type="button" class="nav-gh" data-navg="${esc(label)}" aria-expanded="${open}"><span>${label}</span>${!open && news ? '<span class="ndot"></span>' : ''}<i>${open ? '−' : '+'}</i></button>
       <div class="nav-gi">${ids.map(id => item(id, MY[id].name, MY[id].icon)).join('')}</div></div>`;
-  }).join('') + `<a class="nav-item guide-link ${area === 'guide' ? 'on' : ''}" href="#guide">${ic('star')}<span>전체 메뉴 안내</span></a>`;
+  }).join('') + `<a class="nav-item guide-link ${area === 'guide' ? 'on' : ''}" href="#guide">${ic('star')}<span>전체 메뉴 안내</span></a>` + set;
 }
 function bindNav() {
   document.querySelectorAll('[data-navg]').forEach(b => b.onclick = () => {
@@ -4030,6 +4136,7 @@ const SEARCH_WORDS = { 수납: '청구 납부 미납 수강료 돈', 재정: '�
 function searchMenus(q) {
   q = q.trim(); if (!q) return [];
   const out = [], hit = (...t) => t.join(' ').includes(q);
+  if (hit('설정 내 정보 개인정보 프로필 비밀번호 전화번호 휴대폰 다크 모드 화면 결제 로그아웃 로그인 유지')) out.push(['#settings', '설정', '내 정보 · 학원 · 결제 · 화면 · 계정', 'gear']);
   Object.entries(MY || {}).forEach(([id, a]) => {
     const extra = Object.entries(SEARCH_WORDS).filter(([k]) => a.name.includes(k)).map(([, v]) => v).join(' ');
     if (hit(a.name, a.desc, extra)) out.push([`#${id}`, a.name, a.desc, a.icon]);
@@ -4184,7 +4291,7 @@ function home() {
         [`새 문의 ${urgent}건에 전화하기`, '네이버 플레이스 · 전단지', '#members/leads', '<span class="chip crit">오늘</span>'],
         ['설명회 전단지 시안 확인', '인투마케팅 · 디자인 지원', '#promo/requests', '<span class="chip warn">확인 필요</span>'],
         [`김민지 강사 교육 미이수 ${DATA.training.filter(t => t.status['김민지'] !== 'done').length}건`, '센터 교육 영상 · 가장 빠른 마감 10/31', '#teachers/training', '<span class="chip mute">알림 보내기</span>']
-      ]) + favCard() + startGuide() + svcHint() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
+      ]) + favCard() + phoneHint() + startGuide() + svcHint() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
   }
   if (ROLE === 'teacher') {
     const left = DATA.training.filter(t => t.status[ME.name] !== 'done');
@@ -4194,13 +4301,13 @@ function home() {
           .map(a => [`결재 ${APV_STATE[a.status][1]}: ${esc(a.title)}`, a.owner_comment ? esc(a.owner_comment) : '원장님이 결재했어요', '#approvals', `<span class="chip ${APV_STATE[a.status][0]}">${APV_STATE[a.status][1]}</span>`]))
         .concat(REAL ? scheduleTodo() : [])
         .concat(REAL || myDemoClassesToday().length ? [['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : `${myDemoClassesToday().map(c => `${c.cls} ${c.time}`).join(' · ')} · 수업 중에 입력해 주세요`, '#attend', '<span class="chip info">오늘</span>']] : [['오늘은 수업이 없어요', '다음 수업은 시간표에서 확인해요', '#schedule', '<span class="chip good">쉬는 날</span>']])) +
-      favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (REAL && (ROLE === 'parent' || ROLE === 'student')) {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
       `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
-      todayTodoCard() + todo(familyTodo()) + favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      todayTodoCard() + todo(familyTodo()) + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -4213,7 +4320,7 @@ function home() {
         c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
         ...promos
-      ]) + favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      ]) + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   // 학생
   const c = DATA.child;
@@ -4223,7 +4330,7 @@ function home() {
       ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
     </div></section>
     <section class="card"><div class="card-head"><h2>오늘 할 숙제</h2><span class="sub">다 하면 체크!</span></div>${homeworkList()}</section>
-  </div>` + favCard() + startGuide();
+  </div>` + favCard() + phoneHint() + startGuide();
 }
 
 /* ---------- 영역 첫 화면 (세부 메뉴 고르기) ---------- */
@@ -4289,6 +4396,7 @@ function resolve(parts) {
   if (aid === 'home' || !aid) return { html: home(), crumbs: [], area: 'home' };
   if (aid === 'guide') return { html: guidePage(), crumbs: [...crumbs, ['전체 메뉴 안내', '#guide']], area: 'guide' };
   if (aid === 'help' && (ROLE === 'owner' || ROLE === 'teacher')) return { html: helpPage(), crumbs: [...crumbs, ['센터에 문의하기', '#help']], area: 'help' };
+  if (aid === 'settings') return { html: settingsPage(), crumbs: [...crumbs, ['설정', '#settings']], area: 'settings' };
   if (aid === 'services' && ROLE === 'owner') return { html: svcOverviewPage(), crumbs: [...crumbs, ['이용 중인 센터 지원', '#services']], area: 'services' };
   const a = MY[aid];
   if (!a) return { html: notFound(), crumbs, area: '' };
@@ -4338,7 +4446,7 @@ function renderChrome(area) {
   if (si) si.placeholder = stuPath() ? (innerWidth < 560 ? '학생 · 반 · 메뉴 찾기' : '학생 · 반 · 메뉴 찾기 (예: 이서연, 초등 B반, 청구)') : '메뉴 찾기 (예: 시간표, 메신저)';
   const hc = $('#helpCard'); if (hc) { hc.hidden = !(ROLE === 'owner' || ROLE === 'teacher') || SEEKER; hc.classList.toggle('on', area === 'help'); }
   bindNav();
-  $('#me').innerHTML = `${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
+  $('#me').innerHTML = `<a class="me-link" href="#settings" title="설정 · 내 정보">${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div></a><a href="index.html" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
     if (!PROFILE || !SB) return;
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
@@ -4364,7 +4472,7 @@ function render() {
     teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
-  const isReal = path === 'members' || path === 'guide' || path === 'help' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
+  const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
     ? '이 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
@@ -4569,6 +4677,12 @@ function bind() {
   on('[data-act="newGroup"]', () => pickFriendsDialog({ group: true }));
   on('[data-act="addFriend"]', addFriendDialog);
   on('[data-act="editProfile"]', profileDialog);
+  // 설정
+  on('[data-act="changePw"]', pwDialog);
+  on('[data-theme-set]', b => { window.setThemeMode && setThemeMode(b.dataset.themeSet); render(); });
+  document.querySelectorAll('[data-act="keepLogin"]').forEach(c => c.onchange = () => { setKeepLogin(c.checked); toast(c.checked ? '로그인을 유지해요' : '다음 로그인부터 창을 닫으면 로그아웃돼요'); });
+  on('[data-act="navOpenAll"]', () => { NAV_OPEN = null; try { localStorage.removeItem('asc-nav'); } catch (e) { /* 이번 화면에서만 */ } render(); toast('왼쪽 메뉴 묶음을 모두 펼쳤어요'); });
+  on('[data-act="logoutNow"]', async () => { if (SB && USER) await SB.auth.signOut(); location.href = 'index.html'; });
   on('[data-msg-tab]', b => { MSG_TAB = b.dataset.msgTab; render(); });
   on('[data-friend]', (b, e) => { e.preventDefault(); const f = friendsData().find(x => x.user_id === b.dataset.friend); if (f) friendDialog(f); });
   on('[data-act="groupInfo"]', () => groupInfoDialog(convsData().find(x => x.id === location.hash.split('/')[1])));
@@ -4803,20 +4917,21 @@ async function adminApplyScreen(user) {
 }
 
 // 구글로 처음 가입하면 역할이 없어서, 한 번만 고르게 해요
-function rolePicker(user) {
+function rolePicker(user, nameOnly = false) {
   MY = null;
   const m = user.user_metadata || {};
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><form class="card" id="pickForm" novalidate>
     <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
-    <h1>반가워요! 한 가지만 알려 주세요</h1>
-    <p class="muted">역할에 맞는 화면으로 안내해 드려요. 나중에 바꿀 수 있어요.</p>
-    <label class="f">어떤 분이세요?
+    <h1>${nameOnly ? '이름을 정해 주세요' : '반가워요! 한 가지만 알려 주세요'}</h1>
+    <p class="muted">${nameOnly ? '구글 계정 이름이 다른 회원과 같아요. 이름은 다른 회원과 겹칠 수 없어서, 구별되는 이름으로 정해 주세요. (예: 홍길동2, 홍길동 하늘영어)' : '역할에 맞는 화면으로 안내해 드려요. 나중에 바꿀 수 있어요.'}</p>
+    ${nameOnly ? '' : `<label class="f">어떤 분이세요?
       <span class="role-pick">${Object.entries(ROLE_NAMES).map(([v, l], i) => `<label><input type="radio" name="role" value="${v}" ${i ? '' : 'checked'}><span>${l}</span></label>`).join('')}</span>
-    </label>
-    <label class="f">이름<input name="fullname" value="${esc(m.full_name || m.name || '')}" maxlength="50"></label>
-    <label class="f">학원 이름<input name="academy" placeholder="예: 하늘영어학원" maxlength="100"></label>
+    </label>`}
+    <label class="f">이름 <span class="muted small">다른 회원과 겹치지 않게</span><input name="fullname" value="${esc(nameOnly ? '' : m.full_name || m.name || '')}" maxlength="50"></label>
+    <label class="f">휴대폰 번호 <span class="muted small">학생은 없으면 비워 두세요</span><input name="phone" type="tel" inputmode="numeric" maxlength="13" value="${PROFILE.phone ? fmtPhone(PROFILE.phone) : ''}" placeholder="010-0000-0000"></label>
+    ${nameOnly ? '' : '<label class="f">학원 이름<input name="academy" placeholder="예: 하늘영어학원" maxlength="100"></label>'}
     <p class="msg" id="pickMsg" hidden></p>
     <button class="btn primary">시작하기</button>
     ${adminApplyLink()}
@@ -4824,13 +4939,18 @@ function rolePicker(user) {
   bindAdminApplyLink();
   $('#pickForm').onsubmit = async e => {
     e.preventDefault();
-    const el = e.target.elements, name = el.fullname.value.trim();
-    const msg = $('#pickMsg');
-    if (!name) { msg.textContent = '이름을 적어 주세요.'; msg.hidden = false; return; }
-    const { error } = await SB.from('profiles')
-      .update({ role: el.role.value, name: name.slice(0, 50), academy_name: el.academy.value.trim().slice(0, 100) || null })
-      .eq('id', user.id);
-    if (error) { msg.textContent = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; msg.hidden = false; return; }
+    const el = e.target.elements, name = el.fullname.value.trim(), phone = el.phone.value.replace(/\D/g, '');
+    const msg = $('#pickMsg'), fail = t => { msg.textContent = t; msg.hidden = false; };
+    const role = nameOnly ? PROFILE.role : el.role.value;
+    if (!name) return fail('이름을 적어 주세요.');
+    if (!phone && role !== 'student') return fail('휴대폰 번호를 적어 주세요.');
+    if (phone && !phoneOk(phone)) return fail('휴대폰 번호 형식이 맞지 않아요. 예: 010-1234-5678');
+    const taken = await checkTaken(name, phone);
+    if (taken.length) return fail(takenMsg(taken));
+    const row = nameOnly ? { name: name.slice(0, 50), phone: phone || null }
+      : { role, name: name.slice(0, 50), phone: phone || null, academy_name: el.academy.value.trim().slice(0, 100) || null };
+    const { error } = await SB.from('profiles').update(row).eq('id', user.id);
+    if (error) return fail(uniqueError(error) || '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     location.reload();
   };
 }
@@ -5076,7 +5196,7 @@ async function boot() {
     if (!data.session) { location.replace('index.html'); return; }
     const user = USER = data.session.user;
     const [{ data: p }, { data: admin }] = await Promise.all([
-      SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg').eq('id', user.id).maybeSingle(),
+      SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg, phone').eq('id', user.id).maybeSingle(),
       SB.rpc('am_center_admin')
     ]);
     PROFILE = p || {};
@@ -5084,6 +5204,8 @@ async function boot() {
     await Promise.all([loadConvs(), loadFriends()]);
     if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', 'app.html#center/admins'); else { adminApplyScreen(user); return; } }
     if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
+    // 구글 이름이 다른 회원과 같아서 이름이 비어 있으면, 먼저 이름을 정해요
+    if (!PROFILE.name && !PROFILE.username) { rolePicker(user, true); return; }
 
     // 소속 학원 (여러 곳이면 먼저 들어간 곳)
     const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region)')
