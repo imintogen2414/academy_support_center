@@ -132,7 +132,7 @@ function attendPage() {
   const rows = demoAttendRows();
   const sum = rows.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]);
   if (!rows.length) return head('출결', `${DATA.today} · 오늘은 수업이 없는 날이에요.`) + `<section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>오늘은 수업이 없어요</h2><p class="muted">시간표에 오늘 요일 수업이 없어요. 다른 날 출결은 수업이 있는 날 열어 보세요.</p><a class="btn" href="#schedule">시간표 보기</a></section>`;
-  return head('출결', `오늘 ${sum[0]}/${sum[1]}명 출석 · 강사가 수업 중에 입력하면 학부모에게 바로 알림이 가요.`) + `
+  return head('출결', `오늘 ${sum[0]}/${sum[1]}명 출석 · 강사가 수업 중에 입력하면 학부모에게 바로 알림이 가요. 입구 출석 화면을 켜 두면 학생이 QR로 직접 출석해요.`, `<a class="btn primary" href="#kiosk">${ic('attend')}입구 출석 화면 열기</a>`) + `
   <section class="card"><div class="list">
     ${rows.map(c => `
       <div class="li">
@@ -218,7 +218,7 @@ function realAttendPage() {
     <div class="pager"><button class="btn sm" data-day="-1" aria-label="전날">‹</button><input type="date" id="attDay" value="${day}"><button class="btn sm" data-day="1" aria-label="다음 날">›</button>${day !== TODAY ? '<button class="btn sm" data-day="0">오늘</button>' : ''}</div>`;
   if (!list.length) return head('출결', '') + noStudents();
   const cnt = k => list.filter(s => map[s.id] === k).length;
-  return head('출결', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요.`) + pager + `
+  return head('출결', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요. 입구 출석 화면을 켜 두면 학생이 QR · 출석 번호로 직접 출석해요.`, `<a class="btn primary" href="#kiosk">${ic('attend')}입구 출석 화면 열기</a>`) + pager + `
   <div class="stats">
     <div class="stat good"><span>출석</span><b class="num">${cnt('present')}명</b></div>
     <div class="stat"><span>지각 · 조퇴</span><b class="num">${cnt('late') + cnt('early')}명</b></div>
@@ -231,12 +231,127 @@ function realAttendPage() {
     <div class="list">${ss.map(s => `
       <div class="li">
         <span class="av" style="background:${map[s.id] ? 'var(--navy-700)' : 'var(--blue-100)'}">${esc(s.name[0])}</span>
-        <div class="t">${esc(s.name)} <span class="muted small">${esc(s.grade || '')}</span></div>
+        <div class="t">${esc(s.name)} <span class="muted small">${esc(s.grade || '')}</span>${REAL.attend.how && REAL.attend.how[s.id] && REAL.attend.how[s.id].method !== 'staff' ? ` <span class="chip info">${ATT_METHOD[REAL.attend.how[s.id].method]} ${REAL.attend.how[s.id].at ? msgTime(REAL.attend.how[s.id].at) : ''}</span>` : ''}</div>
         <div class="seg">${Object.entries(ATT).map(([k, [l, c]]) => `<button class="${map[s.id] === k ? `on ${c}` : ''}" data-att="${s.id}:${k}">${l}</button>`).join('')}</div>
       </div>`).join('')}
     </div>
   </section>`).join('');
 }
+
+/* ---------- 학원에 와야만 되는 출석 (QR · 출석 번호) ----------
+   원장 · 강사가 입구 태블릿 · 모니터에서 "입구 출석 화면"(#kiosk)을 켜 두면 20초마다 바뀌는 QR이 보여요.
+   학생 · 학부모가 휴대폰 카메라로 찍으면 /app#checkin/토큰 → qr_check_in이 출석(수업 시작 10분 뒤면 지각).
+   휴대폰이 없는 학생은 같은 화면에서 출석 번호(학부모 · 본인 휴대폰 뒤 4자리)를 눌러요(kiosk_find · kiosk_check_in). */
+const KIOSK = { token: '', recent: [], code: '', pick: null, timers: [], lock: null };
+const ATT_METHOD = { qr: 'QR', kiosk: '출석 번호', staff: '선생님' };
+const qrSvg = text => { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); };
+const checkinUrl = t => `${location.origin}${DEMO ? '/demo/student' : '/app'}#checkin/${t}`;
+function kioskStop() { KIOSK.timers.forEach(clearInterval); KIOSK.timers = []; if (KIOSK.lock) { KIOSK.lock.release().catch(() => {}); KIOSK.lock = null; } document.body.classList.remove('kiosk-on'); }
+function kioskPage() {
+  return `
+  <div class="kiosk">
+    <div class="k-top"><b>${esc(REAL ? REAL.academy.name : DATA.academy.name)} 출석</b><span class="k-clock" id="kClock"></span><button class="btn sm" data-kiosk-exit>닫기</button></div>
+    <div class="k-main">
+      <section class="k-qr">
+        <div class="k-code-img" id="kQr"><span class="spin"></span></div>
+        <div class="k-bar"><i id="kBar"></i></div>
+        <h2>휴대폰 카메라로 QR을 찍어 주세요</h2>
+        <p>학생 · 학부모 계정으로 로그인돼 있으면 바로 출석돼요. QR은 20초마다 바뀌어서 사진으로 찍어 가도 출석이 안 돼요.</p>
+      </section>
+      <section class="k-pad">
+        <h3>휴대폰이 없어요</h3>
+        <p>출석 번호를 눌러 주세요 <small>(부모님 휴대폰 뒤 4자리)</small></p>
+        <div class="k-digits" id="kDigits">${[0, 1, 2, 3].map(i => `<span>${KIOSK.code[i] || ''}</span>`).join('')}</div>
+        <div class="k-keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" data-key="${n}">${n}</button>`).join('')}<button type="button" data-key="del">지우기</button><button type="button" data-key="0">0</button><button type="button" data-key="clr">처음부터</button></div>
+        <div id="kPick" class="k-pick"></div>
+      </section>
+    </div>
+    <section class="k-recent"><b>방금 출석</b><div id="kRecent">${kioskRecent()}</div></section>
+  </div>`;
+}
+const kioskRecent = () => KIOSK.recent.length ? KIOSK.recent.map(r => `<span class="chip ${r.status === 'late' ? 'warn' : 'good'}">${esc(r.name)} · ${r.checked_at ? msgTime(r.checked_at) : ''} ${r.status === 'late' ? '지각' : '출석'} <small>${ATT_METHOD[r.method] || ''}</small></span>`).join('') : '<span class="muted small">아직 없어요</span>';
+async function kioskTick() {
+  if (REAL) {
+    const { data, error } = await SB.rpc('checkin_qr', { p_academy: REAL.academy.id });
+    if (error || !data) { const el = $('#kQr'); if (el) el.innerHTML = '<p class="muted">QR을 만들지 못했어요. 인터넷 연결을 확인해 주세요.</p>'; return; }
+    KIOSK.token = data;
+  } else KIOSK.token = `demo.${Math.floor(Date.now() / 20000)}.demo`;
+  const el = $('#kQr'); if (el) el.innerHTML = qrSvg(checkinUrl(KIOSK.token));
+  const bar = $('#kBar'); if (bar) { bar.style.transition = 'none'; bar.style.width = '100%'; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = 'width 20s linear'; bar.style.width = '0%'; })); }
+}
+async function kioskLoadRecent() {
+  if (!REAL) return;
+  const { data } = await SB.rpc('kiosk_recent', { p_academy: REAL.academy.id });
+  KIOSK.recent = data || []; const el = $('#kRecent'); if (el) el.innerHTML = kioskRecent();
+}
+function bindKiosk() {
+  kioskStop(); document.body.classList.add('kiosk-on');
+  kioskTick(); kioskLoadRecent();
+  const clock = () => { const el = $('#kClock'); if (el) el.textContent = new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }); };
+  clock();
+  KIOSK.timers.push(setInterval(kioskTick, 20000), setInterval(kioskLoadRecent, 8000), setInterval(clock, 15000));
+  if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { KIOSK.lock = l; }, () => {});
+  on('[data-kiosk-exit]', () => { kioskStop(); location.hash = ROLE === 'owner' ? '#admin/attend' : '#attend'; });
+  const digits = () => { const el = $('#kDigits'); if (el) el.innerHTML = [0, 1, 2, 3].map(i => `<span>${KIOSK.code[i] || ''}</span>`).join(''); };
+  const pickEl = () => $('#kPick');
+  const done = r => {
+    KIOSK.code = ''; digits();
+    pickEl().innerHTML = `<div class="k-done ${r.status === 'late' ? 'late' : ''}"><b>${esc(r.name)}</b> ${r.already ? '이미 출석했어요' : r.status === 'late' ? '지각으로 출석했어요' : '출석했어요'}</div>`;
+    setTimeout(() => { if (pickEl() && !KIOSK.code) pickEl().innerHTML = ''; }, 4000);
+    if (!r.already) { KIOSK.recent.unshift({ name: r.name, status: r.status, method: 'kiosk', checked_at: new Date().toISOString() }); $('#kRecent').innerHTML = kioskRecent(); }
+  };
+  const find = async () => {
+    let list;
+    if (REAL) { const { data } = await SB.rpc('kiosk_find', { p_academy: REAL.academy.id, p_code: KIOSK.code }); list = data || []; }
+    else list = DATA.students.filter(s => (s.phone || '').replace(/\D/g, '').endsWith(KIOSK.code)).slice(0, 6).map(s => ({ student_id: s.name, name: s.name, class_name: s.cls }));
+    if (!list.length) { pickEl().innerHTML = '<p class="k-miss">맞는 학생이 없어요. 번호를 다시 확인하거나 선생님께 말씀해 주세요.</p>'; KIOSK.code = ''; digits(); return; }
+    pickEl().innerHTML = `<p class="muted small">내 이름을 눌러 주세요</p>${list.map(s => `<button type="button" class="btn" data-kpick="${esc(s.student_id)}">${esc(s.name)} <small class="muted">${esc(s.class_name || '')}</small></button>`).join('')}`;
+    pickEl().querySelectorAll('[data-kpick]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      if (!REAL) return done({ name: list.find(s => s.student_id === b.dataset.kpick).name, status: 'present' });
+      const { data, error } = await SB.rpc('kiosk_check_in', { p_academy: REAL.academy.id, p_student: b.dataset.kpick });
+      if (error || !data) { b.disabled = false; toast('출석하지 못했어요. 다시 눌러 주세요.'); return; }
+      done(data); kioskLoadRecent();
+    });
+  };
+  on('[data-key]', b => {
+    const k = b.dataset.key;
+    if (k === 'del') KIOSK.code = KIOSK.code.slice(0, -1); else if (k === 'clr') KIOSK.code = ''; else if (KIOSK.code.length < 4) KIOSK.code += k;
+    digits(); pickEl().innerHTML = '';
+    if (KIOSK.code.length === 4) find();
+  });
+}
+
+// QR을 찍고 들어온 학생 · 학부모: #checkin/토큰
+let CHECKIN = null; // { token, state: 'busy'|'ok'|'err', list, err }
+const CHECKIN_ERR = {
+  qr_expired: 'QR이 바뀌었어요. 입구 화면의 새 QR을 다시 찍어 주세요.',
+  bad_qr: '우리 학원 출석 QR이 아니에요. 입구 화면의 QR을 다시 찍어 주세요.',
+  not_family: 'QR 출석은 학생 · 학부모 계정으로 해요. 원장님 · 강사님은 출결 화면에서 넣어 주세요.',
+  not_linked: '아직 원생과 연결되지 않았어요. 원장님께 앱 연결을 요청해 주세요.',
+  not_signed_in: '로그인한 뒤 다시 찍어 주세요.'
+};
+async function runCheckin(token) {
+  CHECKIN = { token, state: 'busy' };
+  if (!REAL) { await new Promise(r => setTimeout(r, 600)); CHECKIN = { token, state: 'ok', list: [{ name: DATA.child.name, status: 'present', already: false, at: new Date().toISOString() }] }; render(); return; }
+  const { data, error } = await SB.rpc('qr_check_in', { p_token: token });
+  const code = error && Object.keys(CHECKIN_ERR).find(k => (error.message || '').includes(k));
+  CHECKIN = error ? { token, state: 'err', err: CHECKIN_ERR[code] || '출석하지 못했어요. 인터넷 연결을 확인하고 QR을 다시 찍어 주세요.' } : { token, state: 'ok', list: data };
+  if (!error) loadFamily().catch(() => {});
+  render();
+}
+function checkinPage(token) {
+  if (!CHECKIN || CHECKIN.token !== token) { setTimeout(() => runCheckin(token)); return `<section class="card checkin"><span class="spin"></span><h2>출석하는 중이에요…</h2></section>`; }
+  if (CHECKIN.state === 'busy') return `<section class="card checkin"><span class="spin"></span><h2>출석하는 중이에요…</h2></section>`;
+  if (CHECKIN.state === 'err') return `<section class="card checkin err"><span class="ck-ic">!</span><h2>출석하지 못했어요</h2><p>${CHECKIN.err}</p><a class="btn primary" href="#home">홈으로</a></section>`;
+  return `<section class="card checkin ok">${CHECKIN.list.map(r => `
+    <div class="ck-one ${r.status === 'late' ? 'late' : ''}"><span class="ck-ic">✓</span><h2>${esc(r.name)} ${r.already ? '이미 출석했어요' : r.status === 'late' ? '지각으로 출석했어요' : '출석했어요'}</h2>
+      <p class="muted">${r.at ? `${msgTime(r.at)} · ` : ''}${REAL ? esc(REAL.academy.name) : DATA.academy.name}${r.status === 'late' && !r.already ? ' · 수업 시작 10분이 지났어요' : ''}</p></div>`).join('')}
+    <p class="muted small">${ROLE === 'parent' ? '출결 화면에도 바로 보여요.' : '부모님 화면에도 바로 보여요.'}</p>
+    <div class="row-btns" style="justify-content:center"><a class="btn" href="#${ROLE === 'parent' ? 'kid/attend' : 'attend'}">출결 보기</a><a class="btn primary" href="#home">홈으로</a></div></section>`;
+}
+const checkinHint = () => ROLE === 'student' || ROLE === 'parent'
+  ? `<div class="hint">${ic('attend')}<span>학원에 도착하면 입구 화면의 <b>QR을 휴대폰 카메라로 찍어</b> 출석해요${ROLE === 'parent' ? ' (아이와 함께 왔을 때)' : ''}</span></div>` : '';
 
 async function markAttendance(ids, status) {
   const before = { ...REAL.attend.map };
@@ -2160,7 +2275,7 @@ async function openLib(id, download) {
    채팅: 1:1과 그룹. 누구와 이야기할 수 있는지는 DB(private.message_academy)가 정해요:
    원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 가족만).
    새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
-const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false };
+const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false, readAt: {} };
 let MSG_TAB = null; // 'friends' | 'chats'
 const WHO = { admin: '센터 관리자', owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
 // 예시 계정: 역할마다 대화할 수 있는 사람만 (원장↔센터·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생)
@@ -2249,12 +2364,14 @@ function chatPage(id) {
   const c = convsData().find(x => x.id === id);
   if (!c) return notFound();
   if (USER && !(id in MSG.msgs)) loadMessages(id);
+  else if (USER && (+c.unread || !MSG.readAt[id])) setTimeout(() => { if (chatOpen(id)) markRead(id); });
   if (USER && c.kind === 'group' && !MSG.people[id]) loadPeople(id).then(() => drawChatLog(id, true));
   const msgs = USER ? MSG.msgs[id] : [{ sender_id: 'o', body: c.last_text, created_at: c.last_at }];
   return `
   <section class="card chat">
-    <div class="chat-head">${c.kind === 'group' ? groupPfp(c) : pfp(c.other_name, c.other_avatar, c.other_role)}
-      <div><b>${esc(convName(c))}</b><span class="muted small">${c.kind === 'group' ? `${c.members}명` : `${WHO[c.other_role] || ''}${c.academy_name ? ` · ${esc(c.academy_name)}` : ''}`}</span></div>
+    <div class="chat-head">${c.kind === 'group' ? `${groupPfp(c)}
+      <div><b>${esc(convName(c))}</b><span class="muted small">${c.members}명</span></div>` : `<button type="button" class="chat-who" data-act="chatProfile" title="프로필 보기">${pfp(c.other_name, c.other_avatar, c.other_role)}
+      <div><b>${esc(convName(c))}</b><span class="muted small">${WHO[c.other_role] || ''}${c.academy_name ? ` · ${esc(c.academy_name)}` : ''} · 프로필 보기</span></div></button>`}
       ${c.kind === 'group' ? `<button class="btn sm" data-act="groupInfo" style="margin-left:auto">${ic('users')}대화 상대 ${c.members}</button>` : ''}</div>
     <div class="chat-log" id="chatLog">${chatLog(msgs, c)}</div>
     ${c.can_send === false ? '<p class="muted small chat-off">학원을 나갔거나 연결이 끊겨서 더 이상 메시지를 보낼 수 없어요.</p>' : `
@@ -2273,7 +2390,7 @@ function chatLog(msgs, c) {
     let who = '';
     if (people && !mine && (prev !== m.sender_id || sep)) {
       const p = people.find(x => x.user_id === m.sender_id) || { name: '나간 사람' };
-      who = `<div class="bub-who">${pfp(p.name, p.avatar_url, p.role, 'sm')}<b>${esc(p.name)}</b></div>`;
+      who = `<div class="bub-who">${p.user_id ? `<button type="button" class="who-btn" data-person="${p.user_id}" title="프로필 보기">` : '<span class="who-btn">'}${pfp(p.name, p.avatar_url, p.role, 'sm')}<b>${esc(p.name)}</b>${p.user_id ? '</button>' : '</span>'}</div>`;
     }
     day = d; prev = m.sender_id;
     return `${sep}${who}<div class="bubble ${mine ? 'mine' : ''} ${people && !mine ? 'in-grp' : ''}"><p>${esc(m.body)}</p><time>${msgTime(m.created_at)}</time></div>`;
@@ -2296,6 +2413,38 @@ function friendDialog(f) {
     if (!confirm(`${f.name} 님을 친구에서 뺄까요? 지난 채팅은 그대로 남아요.`)) return;
     await SB.rpc('remove_friend', { p_user: f.user_id }); d.close(); await loadFriends(); render(); toast('친구에서 뺐어요');
   };
+}
+// 채팅 상대 프로필: 사진 · 이름 · 역할 · 학원 · 상태 메시지 + 친구 추가 · 1:1 채팅
+async function personDialog(p, conv) {
+  if (!p) return;
+  if (USER && MSG.friends === null) await loadFriends();
+  const d = dialogEl(), me = USER && p.user_id === USER.id;
+  const friend = !USER ? !!p.demoFriend : friendsData().some(f => f.user_id === p.user_id);
+  const direct = conv && conv.kind !== 'group';
+  d.innerHTML = `<div class="dlg pf-card">
+    ${pfp(p.name, p.avatar_url, p.role, 'lg')}
+    <h2>${esc(p.name)}</h2><p class="muted small" style="margin:0">${whoLine(p)}</p>
+    ${p.status_msg ? `<p class="pf-msg">${esc(p.status_msg)}</p>` : '<p class="muted small" style="margin:0">상태 메시지가 없어요</p>'}
+    ${me ? '' : `<p style="margin:0">${friend ? '<span class="chip good">친구</span>' : '<span class="chip mute">아직 친구가 아니에요</span>'}</p>`}
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>
+      ${me ? '' : `${friend ? '' : '<button type="button" class="btn" id="pfAdd">친구 추가</button>'}${direct ? '' : '<button type="button" class="btn primary" id="pfChat">1:1 채팅</button>'}`}</div></div>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  if ($('#pfChat')) $('#pfChat').onclick = () => { d.close(); openDirect(p.user_id); };
+  if ($('#pfAdd')) $('#pfAdd').onclick = async () => {
+    if (!USER) { toast('예시 계정에서는 친구를 추가할 수 없어요'); return; }
+    const b = $('#pfAdd'); b.disabled = true;
+    const { error } = await SB.rpc('add_friend', { p_user: p.user_id });
+    if (error) { b.disabled = false; toast('친구로 추가할 수 없는 사람이에요'); return; }
+    await loadFriends(); toast(`${p.name} 님을 친구로 추가했어요`); personDialog(p, conv);
+  };
+}
+// 1:1 채팅 위쪽에서 상대 프로필 열기 (상태 메시지까지 불러와요)
+async function chatProfile(c) {
+  if (!USER) return personDialog({ user_id: 'demo', name: c.other_name, role: c.other_role, avatar_url: c.other_avatar, academy_name: c.academy_name || DATA.academy.name, status_msg: '', demoFriend: true }, c);
+  if (!MSG.people[c.id]) await loadPeople(c.id);
+  const p = (MSG.people[c.id] || []).find(x => x.user_id !== USER.id) || { user_id: c.other_id, name: c.other_name, role: c.other_role, avatar_url: c.other_avatar, academy_name: c.academy_name };
+  personDialog(p, c);
 }
 async function openDirect(uid) {
   if (!USER) { toast('예시 계정에서는 대화를 시작할 수 없어요'); return; }
@@ -2380,9 +2529,11 @@ function groupInfoDialog(c) {
   const d = dialogEl(), people = MSG.people[c.id] || [];
   d.innerHTML = `<form method="dialog" class="dlg" id="grpForm" novalidate><h2>대화 상대 ${people.length}명</h2>
     <label class="f">방 이름<input name="title" maxlength="50" value="${esc(c.title || '')}"></label>
-    <div class="ct-list">${people.map(p => `<div class="ct">${pfp(p.name, p.avatar_url, p.role)}<span><b>${esc(p.name)}${p.user_id === USER.id ? ' (나)' : ''}</b><small>${whoLine(p)}</small></span></div>`).join('')}</div>
+    <div class="ct-list">${people.map(p => p.user_id === USER.id ? `<div class="ct">${pfp(p.name, p.avatar_url, p.role)}<span><b>${esc(p.name)} (나)</b><small>${whoLine(p)}</small></span></div>`
+      : `<button type="button" class="ct" data-gperson="${p.user_id}">${pfp(p.name, p.avatar_url, p.role)}<span><b>${esc(p.name)}</b><small>${whoLine(p)}</small></span><span class="muted small" style="margin-left:auto">프로필 ›</span></button>`).join('')}</div>
     <div class="acts"><button type="button" class="btn danger" id="grpLeave">나가기</button><button type="button" class="btn" id="grpInvite">초대</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">저장</button></div></form>`;
   d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  d.querySelectorAll('[data-gperson]').forEach(b => b.onclick = () => personDialog(people.find(p => p.user_id === b.dataset.gperson), c));
   $('#grpInvite').onclick = () => { d.close(); pickFriendsDialog({ group: true, conv: c }); };
   $('#grpLeave').onclick = async () => {
     if (!confirm('이 그룹 채팅에서 나갈까요? 나가면 대화 내용이 목록에서 사라져요.')) return;
@@ -2589,7 +2740,27 @@ function profileDialog() {
 async function loadConvs() {
   const { data } = await SB.rpc('my_chats');
   MSG.convs = data || []; MSG.loaded = true;
+  // 보고 있는 대화는 서버 숫자가 늦게 와도 안 읽음으로 되돌리지 않아요
+  MSG.convs.forEach(c => { if (chatOpen(c.id) || (MSG.readAt[c.id] && c.last_at && new Date(c.last_at).getTime() <= MSG.readAt[c.id])) { if (+c.unread && chatOpen(c.id)) markRead(c.id); c.unread = 0; } });
 }
+// 지금 화면에 열려 있는 대화인지 (창이 보일 때만)
+const chatOpen = id => location.hash === `#messages/${id}` && document.visibilityState === 'visible';
+// 읽음: 화면 숫자 · 메뉴 빨간 숫자를 바로 지우고 서버에도 남겨요
+function markRead(id) {
+  const c = MSG.convs.find(x => x.id === id);
+  if (c) c.unread = 0;
+  MSG.readAt[id] = Date.now();
+  updateMsgBadge();
+  // supabase 요청은 then을 붙여야 실제로 보내져요 (전에는 빠져 있어서 서버에 읽음이 안 남았어요)
+  return SB.rpc('mark_conversation_read', { p_conv: id }).then(() => {}, () => {});
+}
+// 그룹 채팅 말풍선 위 이름 · 사진을 누르면 프로필 (대화창은 새 메시지마다 다시 그려서 위임으로 받아요)
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-person]'); if (!b) return;
+  const id = location.hash.split('/')[1], c = convsData().find(x => x.id === id);
+  personDialog((MSG.people[id] || []).find(p => p.user_id === b.dataset.person), c);
+});
+document.addEventListener('visibilitychange', () => { const m = (location.hash || '').match(/^#messages\/([0-9a-f-]{36})$/); if (m && USER && SB && chatOpen(m[1])) markRead(m[1]); });
 async function loadFriends() {
   const { data } = await SB.rpc('my_friends');
   MSG.friends = data || [];
@@ -2603,10 +2774,11 @@ async function loadMessages(id, since) {
   if (since) q = q.gt('created_at', since);
   const { data } = await q;
   const before = MSG.msgs[id];
-  MSG.msgs[id] = since ? [...(before || []), ...(data || []).filter(m => !(before || []).some(x => x.id === m.id))] : (data || []);
+  const fresh = (data || []).filter(m => !(before || []).some(x => x.id === m.id));
+  MSG.msgs[id] = since ? [...(before || []), ...fresh] : (data || []);
   const c = MSG.convs.find(x => x.id === id);
-  if (c && +c.unread) { c.unread = 0; SB.rpc('mark_conversation_read', { p_conv: id }); }
-  else if (!since) SB.rpc('mark_conversation_read', { p_conv: id });
+  // 이 대화를 보고 있는 동안 온 메시지는 바로 읽음 (전에는 처음 열 때만 읽음이라 새로 온 메시지에 다시 알림이 떴어요)
+  if (chatOpen(id) && (!since || fresh.some(m => m.sender_id !== USER.id) || (c && +c.unread))) markRead(id);
   const grew = !before || MSG.msgs[id].length !== before.length;
   // 그룹에 새로 들어온 사람이 쓰면 대화 상대를 다시 불러와요
   if (c && c.kind === 'group' && MSG.people[id] && MSG.msgs[id].some(m => !MSG.people[id].some(p => p.user_id === m.sender_id))) await loadPeople(id);
@@ -5533,7 +5705,7 @@ function home() {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
       `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
-      todayTodoCard() + todo(familyTodo()) + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      checkinHint() + todayTodoCard() + todo(familyTodo()) + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -5547,11 +5719,11 @@ function home() {
         c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
         ...promos
-      ]) + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      ]) + checkinHint() + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   // 학생
   const c = DATA.child;
-  return head(`${ME.name}, 오늘도 힘내요!`, DATA.today) + `
+  return head(`${ME.name}, 오늘도 힘내요!`, DATA.today) + checkinHint() + `
   <div class="grid2 even">
     <section class="card"><div class="card-head"><h2>오늘 학원</h2></div><div class="list">
       ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
@@ -5689,6 +5861,13 @@ function renderChrome(area) {
 
 function render() {
   const parts = (location.hash || '#home').slice(1).split('/');
+  // 입구 출석 화면 (원장 · 강사): 메뉴 없이 화면 전체
+  if (parts[0] === 'kiosk' && (ROLE === 'owner' || ROLE === 'teacher')) { $('#view').innerHTML = kioskPage(); bindKiosk(); return; }
+  kioskStop();
+  if (parts[0] === 'checkin' && parts[1]) {
+    renderChrome(null);
+    $('#view').innerHTML = checkinPage(parts.slice(1).join('/')); bind(); return;
+  }
   const r = resolve(parts);
   markSeen(parts.slice(0, 2).join('/'));
   renderChrome(r.area);
@@ -5962,6 +6141,7 @@ function bind() {
   on('[data-msg-tab]', b => { MSG_TAB = b.dataset.msgTab; render(); });
   on('[data-friend]', (b, e) => { e.preventDefault(); const f = friendsData().find(x => x.user_id === b.dataset.friend); if (f) friendDialog(f); });
   on('[data-act="groupInfo"]', () => groupInfoDialog(convsData().find(x => x.id === location.hash.split('/')[1])));
+  on('[data-act="chatProfile"]', () => chatProfile(convsData().find(x => x.id === location.hash.split('/')[1])));
   const chatForm = $('#chatSend');
   if (chatForm) {
     const id = location.hash.split('/')[1], ta = chatForm.elements.body;
@@ -6282,8 +6462,8 @@ async function loadLeads() {
 }
 // 행정 지원: 출결은 날짜별로, 수납·지출·서류는 학원 것을 모두 불러와요
 async function loadAttendance(day = TODAY) {
-  const { data } = await SB.from('attendance').select('student_id, status').eq('academy_id', REAL.academy.id).eq('day', day);
-  REAL.attend = { day, map: Object.fromEntries((data || []).map(r => [r.student_id, r.status])) };
+  const { data } = await SB.from('attendance').select('student_id, status, method, checked_at').eq('academy_id', REAL.academy.id).eq('day', day);
+  REAL.attend = { day, map: Object.fromEntries((data || []).map(r => [r.student_id, r.status])), how: Object.fromEntries((data || []).map(r => [r.student_id, { method: r.method, at: r.checked_at }])) };
 }
 async function loadRows(table, order, ascending = true) {
   const { data } = await SB.from(table).select('*').eq('academy_id', REAL.academy.id).order(order, { ascending });
@@ -6524,7 +6704,8 @@ async function boot() {
     if (!SB) { location.replace('/'); return; }
     const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
     if (params.has('code')) history.replaceState(null, '', '/app' + location.hash);
-    if (!data.session) { location.replace('/'); return; }
+    // 로그인 전에 출석 QR을 찍었으면 로그인 뒤 다시 출석으로 (QR은 1분 안에만 받아서, 늦으면 "다시 찍어 주세요")
+    if (!data.session) { if (location.hash.startsWith('#checkin/')) { try { sessionStorage.setItem('asc-next', location.hash); } catch (e) { /* 그냥 로그인 */ } location.replace('/#login'); } else location.replace('/'); return; }
     const user = USER = data.session.user;
     const [{ data: p }, { data: admin }] = await Promise.all([
       SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg, phone').eq('id', user.id).maybeSingle(),
