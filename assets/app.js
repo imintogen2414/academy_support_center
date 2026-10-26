@@ -925,6 +925,181 @@ function todayTodoCard() {
   </section>`;
 }
 
+/* ================= 성장 리포트 (Supabase growth_reports) =================
+   원장 · 강사가 학생기록부처럼 써서 "발급"하면 연결된 학부모 · 학생이 봐요. 출결 · 할 일 수행은 기간에 맞춰 저절로 채워요.
+   인쇄 · PDF 저장은 브라우저 인쇄(window.print)로, 인쇄할 때는 리포트만 보여요(app.css @media print). */
+const RATING_ITEMS = ['수업 태도', '참여도', '과제 수행', '이해도', '성장 의지'];
+const RATING_WORD = ['', '노력 필요', '보통', '좋음', '우수', '매우 우수'];
+const DEMO_REPORT = { id: 'demo', student_name: '이서연', class_name: '초등 B반', title: '2026년 10월 성장 리포트', period_from: '2026-10-01', period_to: '2026-10-31', status: 'issued', issued_at: '2026-10-31T09:00:00Z', writer_name: '김민지',
+  scores: [{ subject: '단어 시험', score: '95', note: '4주 연속 90점 이상' }, { subject: '리딩', score: '88', note: '긴 지문 이해가 좋아졌어요' }, { subject: '라이팅', score: 'B+', note: '문장 연결을 연습 중' }],
+  ratings: { '수업 태도': 5, '참여도': 4, '과제 수행': 5, '이해도': 4, '성장 의지': 5 },
+  strengths: '수업 시간에 손을 들고 발표하는 일이 많아졌고, 숙제를 빠짐없이 해 와요.', improve: '라이팅에서 접속사를 써서 문장을 길게 이어 쓰는 연습이 더 필요해요.',
+  comment: '한 달 동안 단어 시험 점수가 꾸준히 올랐어요. 특히 리딩 시간에 모르는 단어를 문맥으로 추측하는 힘이 생겼어요. 집에서도 하루 10분 소리 내어 읽기를 함께 해 주시면 큰 도움이 돼요.',
+  goals: '11월 목표: 라이팅 한 문단(5문장) 혼자 쓰기 · 단어 시험 평균 95점', stats: { total: 13, present: 12, late: 1, absent: 0, early: 0, todos: 18, todosDone: 17 } };
+const reportsData = () => REAL ? REAL.reports : [DEMO_REPORT];
+const reportBase = () => ROLE === 'owner' ? 'members/reports' : ROLE === 'parent' ? 'kid/reports' : 'reports';
+let rpEditing = null; // 고치는 중인 발급 리포트 id
+const RP_STATS = {};  // 리포트 id → 기간 출결 · 할 일 (불러오는 중이면 null)
+
+const stars = n => `<span class="stars" aria-label="${n}점">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}">★</i>`).join('')}</span>`;
+const attRate = st => st && st.total ? Math.round((st.present + st.late) / st.total * 100) : null;
+
+function reportsPage() {
+  const list = reportsData(), staff = isStaff();
+  if (!staff) {
+    const k = REAL && REAL.kids.length ? kidNow() : null;
+    const mine = REAL ? list.filter(r => k && r.student_id === k.id) : list;
+    if (REAL && !k) return head('성장 리포트', '') + noKid();
+    return head('성장 리포트', `학원 선생님이 발급한 ${ROLE === 'student' ? '내' : `${k ? esc(k.name) : DATA.child.name}의`} 성장 기록이에요. 열어서 인쇄하거나 PDF로 저장할 수 있어요.`) + (REAL ? kidPicker() : '') + (mine.length ? `
+    <section class="card"><div class="list">${mine.map(r => `
+      <a class="li link" href="#${reportBase()}/${r.id}"><span class="av" style="background:var(--blue-600)">${ic('doc')}</span>
+        <div><div class="t">${esc(r.title)}</div><div class="d">${md(r.period_from)} – ${md(r.period_to)} · ${esc(r.writer_name || '학원')} 선생님 · ${md((r.issued_at || r.created_at).slice(0, 10))} 발급</div></div>
+        <div class="r"><span class="chip good">열기</span></div></a>`).join('')}</div></section>` : `
+    <section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>아직 발급된 리포트가 없어요</h2><p class="muted">선생님이 성장 리포트를 발급하면 여기에 보여요.</p></section>`);
+  }
+  const acts = REAL ? `<button class="btn primary" data-act="newReport">${ic('plus')}리포트 만들기</button>` : '';
+  const drafts = list.filter(r => r.status === 'draft'), issued = list.filter(r => r.status === 'issued');
+  const row = r => `
+    <a class="li link" href="#${reportBase()}/${r.id}"><span class="av" style="background:${r.status === 'issued' ? 'var(--good)' : 'var(--navy-700)'}">${esc((r.student_name || '학')[0])}</span>
+      <div><div class="t">${esc(r.student_name || '')} <span class="muted small">${esc(r.class_name || '')}</span></div><div class="d">${esc(r.title)} · ${esc(r.writer_name || '')}</div></div>
+      <div class="r">${r.status === 'issued' ? `<span class="chip good">발급</span><span class="time">${md(r.issued_at.slice(0, 10))}</span>` : '<span class="chip warn">작성 중</span>'}</div></a>`;
+  return head('성장 리포트', '학생기록부처럼 과목 점수 · 평가 · 선생님 의견을 적어 발급하면 학부모 · 학생 앱에 바로 보여요. 출결과 할 일 수행은 기간에 맞춰 저절로 채워요.', acts) + (list.length ? `
+  ${drafts.length ? `<section class="card" style="margin-bottom:16px"><div class="card-head"><h2>작성 중 ${drafts.length}개</h2><span class="sub">학부모에게는 아직 안 보여요</span></div><div class="list">${drafts.map(row).join('')}</div></section>` : ''}
+  ${issued.length ? `<section class="card"><div class="card-head"><h2>발급 ${issued.length}개</h2></div><div class="list">${issued.map(row).join('')}</div></section>` : ''}` : `
+  <section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>첫 성장 리포트를 만들어 보세요</h2>
+    <p class="muted">학생 한 명이나 반 전체를 고르면 리포트 틀이 만들어져요. 점수와 의견을 채워 발급하면 돼요.</p>${acts}</section>`);
+}
+
+function newReportDialog() {
+  if (!REAL.students.length) { toast('먼저 원생을 추가해 주세요'); return; }
+  const groups = byClass(REAL.students), last = shiftMonth(TODAY.slice(0, 7), Number(TODAY.slice(8)) <= 10 ? -1 : 0);
+  const d = dialogEl();
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="rpNew" novalidate>
+    <h2>성장 리포트 만들기</h2>
+    <label class="f">누구 리포트인가요?<select name="who">${groups.map(([cls, ss]) => `<option value="c:${esc(cls)}">${esc(cls)} 전체 (${ss.length}명)</option>`).join('')}${groups.map(([cls, ss]) => `<optgroup label="${esc(cls)}">${ss.map(s => `<option value="s:${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    <label class="f">제목<input name="title" maxlength="100" value="${monthLabel(last)} 성장 리포트"></label>
+    <div class="two"><label class="f">기간 시작<input type="date" name="from" value="${last}-01"></label><label class="f">기간 끝<input type="date" name="to" value="${monthEnd(last)}"></label></div>
+    <p class="muted small" style="margin:0">반 전체를 고르면 학생마다 따로 리포트가 만들어져요. 다 쓴 리포트만 골라서 발급하면 돼요.</p>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">만들기</button></div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#rpNew').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, who = el.who.value, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+    const title = el.title.value.trim(), from = el.from.value, to = el.to.value;
+    if (!title || !from || !to) return fail('제목과 기간을 넣어 주세요.');
+    if (to < from) return fail('기간 끝이 시작보다 앞이에요.');
+    const ids = who.startsWith('c:') ? REAL.students.filter(s => (s.class_name || '반 미지정') === who.slice(2)).map(s => s.id) : [who.slice(2)];
+    const { data, error } = await SB.from('growth_reports').insert(ids.map(student_id => ({ academy_id: REAL.academy.id, student_id, title, period_from: from, period_to: to,
+      scores: [], ratings: {} }))).select('id');
+    if (error) return fail('만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+    d.close(); await loadReports();
+    if (ids.length === 1 && data && data[0]) location.hash = `#${reportBase()}/${data[0].id}`; else render();
+    toast(`${ids.length}명 리포트를 만들었어요`);
+  };
+}
+
+// 기간의 출결 · 할 일 수행을 불러와요 (원장 · 강사만)
+async function loadReportStats(r) {
+  RP_STATS[r.id] = null;
+  const [a, t] = await Promise.all([
+    SB.from('attendance').select('status').eq('student_id', r.student_id).gte('day', r.period_from).lte('day', r.period_to),
+    SB.from('student_todos').select('done_at').eq('student_id', r.student_id).gte('day', r.period_from).lte('day', r.period_to)
+  ]);
+  const at = a.data || [], td = t.data || [];
+  const c = k => at.filter(x => x.status === k).length;
+  RP_STATS[r.id] = { total: at.length, present: c('present'), late: c('late'), absent: c('absent'), early: c('early'), todos: td.length, todosDone: td.filter(x => x.done_at).length };
+  if (location.hash.endsWith(r.id)) render();
+}
+
+function reportDetail(id) {
+  const r = reportsData().find(x => x.id === id);
+  if (!r) return notFound();
+  const staff = isStaff() && REAL;
+  if (staff && (r.status === 'draft' || rpEditing === r.id)) return reportEditor(r);
+  const acts = `<button class="btn" data-act="printReport">${ic('doc')}인쇄 · PDF 저장</button>${staff ? `<button class="btn" data-act="copyReport">안내 문구</button><button class="btn" data-rp-edit="${r.id}">고치기</button>` : ''}`;
+  return `<div class="rp-acts no-print">${acts}</div>` + reportDoc(r, r.stats);
+}
+
+// 발급된 리포트 문서 (화면 · 인쇄 같은 모양)
+function reportDoc(r, st) {
+  const rate = attRate(st), todoRate = st && st.todos ? Math.round(st.todosDone / st.todos * 100) : null;
+  const ratings = RATING_ITEMS.filter(k => r.ratings && r.ratings[k]);
+  const scores = (r.scores || []).filter(x => x.subject);
+  const block = (t, v) => v ? `<section class="rp-sec"><h3>${t}</h3><p>${esc(v)}</p></section>` : '';
+  return `
+  <article class="report" id="reportDoc">
+    <header class="rp-head">
+      <div><span class="rp-acad">${esc(REAL ? REAL.academy.name : DATA.academy.name)}</span><h1>${esc(r.title)}</h1></div>
+      <div class="rp-who"><b>${esc(r.student_name || '')}</b><span>${esc(r.class_name || '')}</span><span>${r.period_from.replaceAll('-', '.')} – ${r.period_to.replaceAll('-', '.')}</span></div>
+    </header>
+    <div class="rp-stats">
+      <div><span>출석률</span><b>${rate === null ? '-' : `${rate}%`}</b><small>${st && st.total ? `수업 ${st.total}일 · 지각 ${st.late} · 결석 ${st.absent}${st.early ? ` · 조퇴 ${st.early}` : ''}` : '출결 기록 없음'}</small></div>
+      <div><span>할 일 수행</span><b>${todoRate === null ? '-' : `${todoRate}%`}</b><small>${st && st.todos ? `${st.todos}개 중 ${st.todosDone}개 완료` : '할 일 기록 없음'}</small></div>
+      ${ratings.length ? `<div><span>종합 평가</span><b>${(ratings.reduce((a, k) => a + r.ratings[k], 0) / ratings.length).toFixed(1)}</b><small>5점 만점</small></div>` : ''}
+    </div>
+    ${scores.length ? `<section class="rp-sec"><h3>과목 · 시험</h3><table class="rp-table"><thead><tr><th>과목</th><th>점수 · 등급</th><th>선생님 메모</th></tr></thead><tbody>${scores.map(x => `<tr><td>${esc(x.subject)}</td><td><b>${esc(x.score || '-')}</b></td><td>${esc(x.note || '')}</td></tr>`).join('')}</tbody></table></section>` : ''}
+    ${ratings.length ? `<section class="rp-sec"><h3>학습 태도</h3><div class="rp-rates">${ratings.map(k => `<div><span>${k}</span>${stars(r.ratings[k])}<small>${RATING_WORD[r.ratings[k]]}</small></div>`).join('')}</div></section>` : ''}
+    <div class="rp-two">${block('잘하고 있는 점', r.strengths)}${block('더 노력할 점', r.improve)}</div>
+    ${block('선생님 종합 의견', r.comment)}
+    ${block('다음 목표', r.goals)}
+    <footer class="rp-foot">${r.issued_at ? `${r.issued_at.slice(0, 10).replaceAll('-', '.')} 발급` : '작성 중 (아직 발급 전)'} · 담당 ${esc(r.writer_name || '')} 선생님 · 학원지원센터</footer>
+  </article>`;
+}
+
+function reportEditor(r) {
+  if (!(r.id in RP_STATS)) loadReportStats(r);
+  const st = RP_STATS[r.id];
+  const scores = [...(r.scores || [])]; while (scores.length < 4) scores.push({});
+  const area = (k, lab, ph, rows = 3) => `<label class="f">${lab}<textarea name="${k}" rows="${rows}" maxlength="${k === 'comment' ? 2000 : 1000}" placeholder="${ph}">${esc(r[k] || '')}</textarea></label>`;
+  return head(`${esc(r.student_name || '')} 성장 리포트`, r.status === 'issued' ? '발급한 리포트를 고치는 중이에요. 저장하면 학부모 · 학생 화면에도 바로 바뀌어요.' : '작성 중이에요. 학부모에게는 "발급하기"를 눌러야 보여요.') + `
+  <form class="card rp-form" id="rpForm" novalidate>
+    <div class="two"><label class="f">제목<input name="title" maxlength="100" value="${esc(r.title)}"></label>
+      <div class="two"><label class="f">기간 시작<input type="date" name="from" value="${r.period_from}"></label><label class="f">기간 끝<input type="date" name="to" value="${r.period_to}"></label></div></div>
+    <div class="rp-auto"><b>저절로 채워지는 기록</b> ${st === null || st === undefined ? '<span class="muted small">불러오는 중…</span>'
+      : `<span class="chip info">출석률 ${attRate(st) === null ? '-' : `${attRate(st)}%`} (수업 ${st.total}일 · 지각 ${st.late} · 결석 ${st.absent})</span><span class="chip info">할 일 ${st.todos}개 중 ${st.todosDone}개 완료</span>`}
+      <span class="muted small">기간을 바꾸고 저장하면 다시 계산해요</span></div>
+    <h3 class="rp-h">과목 · 시험</h3>
+    <div class="rp-scores" id="rpScores">${scores.map((x, i) => `
+      <div class="sc-row"><input name="sub${i}" maxlength="30" placeholder="과목 (예: 단어 시험)" value="${esc(x.subject || '')}"><input name="sco${i}" maxlength="10" placeholder="점수 · 등급" value="${esc(x.score || '')}"><input name="not${i}" maxlength="100" placeholder="메모 (예: 4주 연속 90점 이상)" value="${esc(x.note || '')}"></div>`).join('')}
+    </div>
+    <button type="button" class="btn sm" data-act="addScoreRow">${ic('plus')}과목 더 넣기</button>
+    <h3 class="rp-h">학습 태도 <span class="muted small">눌러서 1~5점</span></h3>
+    <div class="rp-rate-edit">${RATING_ITEMS.map(k => `<div><span>${k}</span><span class="stars edit" data-rate="${k}">${[1, 2, 3, 4, 5].map(i => `<button type="button" class="${i <= ((r.ratings || {})[k] || 0) ? 'on' : ''}" data-v="${i}" aria-label="${k} ${i}점">★</button>`).join('')}</span><input type="hidden" name="r_${k}" value="${(r.ratings || {})[k] || ''}"></div>`).join('')}</div>
+    <div class="two">${area('strengths', '잘하고 있는 점', '예: 발표를 자주 하고 숙제를 빠짐없이 해 와요.')}${area('improve', '더 노력할 점', '예: 라이팅에서 문장을 길게 이어 쓰는 연습')}</div>
+    ${area('comment', '선생님 종합 의견', '예: 한 달 동안 단어 시험 점수가 꾸준히 올랐어요. 집에서는 …', 5)}
+    ${area('goals', '다음 목표', '예: 11월 목표 — 라이팅 한 문단 혼자 쓰기', 2)}
+    <p class="msg" id="rpMsg" hidden></p>
+    <div class="acts">${r.status === 'draft' || ROLE === 'owner' ? `<button type="button" class="btn danger" data-act="delReport">삭제</button>` : ''}<span style="flex:1"></span>
+      ${r.status === 'issued' ? `<button type="button" class="btn" data-act="unissueReport">발급 취소</button><button class="btn primary" data-save="issued">저장</button>`
+        : `<button class="btn" data-save="draft">임시 저장</button><button class="btn primary" data-save="issued">발급하기</button>`}</div>
+  </form>
+  <h2 class="sec-title">미리보기</h2>` + reportDoc(r, st || r.stats);
+}
+
+async function saveReport(r, status) {
+  const f = $('#rpForm'), el = f.elements, msg = $('#rpMsg');
+  const fail = t => { msg.textContent = t; msg.hidden = false; };
+  const scores = [...f.querySelectorAll('.sc-row')].map((_, i) => ({ subject: el[`sub${i}`].value.trim(), score: el[`sco${i}`].value.trim(), note: el[`not${i}`].value.trim() })).filter(x => x.subject);
+  const ratings = Object.fromEntries(RATING_ITEMS.map(k => [k, +el[`r_${k}`].value]).filter(([, v]) => v >= 1 && v <= 5));
+  const title = el.title.value.trim(), from = el.from.value, to = el.to.value;
+  if (!title) return fail('제목을 적어 주세요.');
+  if (!from || !to || to < from) return fail('기간을 확인해 주세요.');
+  if (status === 'issued' && r.status === 'draft' && !el.comment.value.trim() && !scores.length) return fail('발급하기 전에 과목 점수나 선생님 의견을 하나는 적어 주세요.');
+  const changed = from !== r.period_from || to !== r.period_to;
+  if (changed || !RP_STATS[r.id]) { r.period_from = from; r.period_to = to; await loadReportStats(r); }
+  const row = { title, period_from: from, period_to: to, scores, ratings, strengths: el.strengths.value.trim() || null, improve: el.improve.value.trim() || null,
+    comment: el.comment.value.trim() || null, goals: el.goals.value.trim() || null, stats: RP_STATS[r.id] || r.stats || {}, status };
+  if (status === 'issued' && r.status === 'draft' && !confirm(`${r.student_name} 학생 리포트를 발급할까요? 연결된 학부모 · 학생 앱에 바로 보여요.`)) return;
+  const { error } = await SB.from('growth_reports').update(row).eq('id', r.id);
+  if (error) return fail('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  rpEditing = null; await loadReports(); render();
+  toast(status === 'issued' ? (r.status === 'draft' ? '발급했어요 · 학부모 · 학생 앱에 보여요' : '고쳤어요') : '임시 저장했어요');
+}
+
 /* ================= 결재: 강사 → 원장 (Supabase approvals) =================
    강사가 물품 · 재정 지출을 올리면 원장이 승인 · 반려. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요. */
 const APV_KINDS = ['물품 구입', '재정 지출', '기타'];
@@ -1984,6 +2159,8 @@ function familyTodo() {
   if (ROLE === 'parent') abroadData().promos.filter(p => p.active).slice(0, 1)
     .forEach(p => items.push([esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']));
   items.push(...scheduleTodo());
+  REAL.reports.filter(r => r.issued_at && dday(r.issued_at.slice(0, 10)) >= -7).slice(0, 2)
+    .forEach(r => items.push([`${esc(r.title)} 발급`, `${esc(r.student_name || '')} · ${esc(r.writer_name || '')} 선생님`, `#${reportBase()}/${r.id}`, '<span class="chip good">성장 리포트</span>']));
   if (!REAL.kids.length) items.unshift([ROLE === 'student' ? '학원에 앱 가입을 알려 주세요' : '아이 연결을 기다리고 있어요', '원장님이 원생 명단에서 연결하면 출결이 보여요', ROLE === 'student' ? '#attend' : '#kid', '<span class="chip warn">연결 전</span>']);
   if (!items.length) items.push(['새로 챙길 일이 없어요', '공지 · 수납 · 오늘 출결을 살펴봤어요', '#news', '<span class="chip good">여유</span>']);
   return items;
@@ -2310,6 +2487,7 @@ function attendStat() {
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
+const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
 const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
@@ -2338,6 +2516,7 @@ const AREAS = {
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
         todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
+        reports: REPORT_AREA,
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
@@ -2360,6 +2539,7 @@ const AREAS = {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
     schedule: SCHEDULE_AREA,
     todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
+    reports: REPORT_AREA,
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
     jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
@@ -2371,13 +2551,14 @@ const AREAS = {
       subs: {
         schedule: { name: '일정·숙제', icon: 'cal', desc: '오늘 일정과 숙제', stat: () => `오늘 ${DATA.child.today.length}개`, render: kidSchedulePage },
         record: { name: '기록·성적', icon: 'doc', desc: '출석률·시험·선생님 코멘트', stat: () => `출석 ${DATA.child.record.attend}%`, render: kidRecordPage },
+        reports: { ...REPORT_AREA, desc: '선생님이 발급한 성장 기록' },
         bills: { name: '수납', icon: 'card', desc: '학원별 수강료 결제', stat: () => { const n = DATA.child.bills.filter(b => !b.paid).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: kidBillsPage }
       } },
     schedule: SCHEDULE_AREA,
     news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
-  student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, schedule: SCHEDULE_AREA }
+  student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
 };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
@@ -2391,6 +2572,7 @@ const FAMILY_AREAS = {
       subs: {
         attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH) && (!REAL.kids.length || a.student_id === kidNow().id)).length}일 기록`, render: kidAttendPage },
         todos: { name: '오늘 할 일', icon: 'check', desc: '학원 · 부모님이 정한 할 일과 체크', stat: todoStat, render: todosPage },
+        reports: { ...REPORT_AREA, desc: '선생님이 발급한 성장 기록' },
         bills: { name: '수납', icon: 'card', desc: '학원 청구와 납부 확인', stat: () => { const n = REAL.kidBills.filter(b => !b.paid_at).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: realKidBillsPage }
       } },
     schedule: SCHEDULE_AREA,
@@ -2400,6 +2582,7 @@ const FAMILY_AREAS = {
   student: {
     todos: { name: '오늘 할 일', icon: 'check', desc: '학원 · 부모님이 정한 할 일 체크하기', stat: todoStat, render: todosPage },
     schedule: SCHEDULE_AREA,
+    reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' },
     attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea
   }
@@ -2598,7 +2781,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'schedule', 'todos', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'attend', 'news', 'center'], admin: ['home', 'center']
+    teacher: ['home', 'attend', 'schedule', 'todos', 'reports', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'reports', 'attend', 'news', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -2770,6 +2953,40 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 성장 리포트
+  on('[data-act="newReport"]', newReportDialog);
+  on('[data-act="printReport"]', () => window.print());
+  on('[data-rp-edit]', b => { rpEditing = b.dataset.rpEdit; render(); });
+  const rpForm = $('#rpForm');
+  if (rpForm) {
+    const r = REAL.reports.find(x => location.hash.endsWith(x.id));
+    rpForm.onsubmit = e => { e.preventDefault(); saveReport(r, e.submitter ? e.submitter.dataset.save : 'draft'); };
+    rpForm.querySelectorAll('[data-rate]').forEach(g => g.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+      const v = +btn.dataset.v, inp = rpForm.elements[`r_${g.dataset.rate}`], nv = +inp.value === v ? 0 : v;
+      inp.value = nv || ''; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.v <= nv));
+    }));
+    on('[data-act="addScoreRow"]', () => {
+      const box = $('#rpScores'), i = box.children.length;
+      if (i >= 20) return;
+      box.insertAdjacentHTML('beforeend', `<div class="sc-row"><input name="sub${i}" maxlength="30" placeholder="과목"><input name="sco${i}" maxlength="10" placeholder="점수 · 등급"><input name="not${i}" maxlength="100" placeholder="메모"></div>`);
+    });
+    on('[data-act="delReport"]', async () => {
+      if (!confirm('이 리포트를 삭제할까요?')) return;
+      const { error } = await SB.from('growth_reports').delete().eq('id', r.id);
+      if (error) { toast('삭제하지 못했어요'); return; }
+      await loadReports(); location.hash = `#${reportBase()}`; toast('삭제했어요');
+    });
+    on('[data-act="unissueReport"]', async () => {
+      if (!confirm('발급을 취소할까요? 학부모 · 학생 화면에서 사라져요.')) return;
+      const { error } = await SB.from('growth_reports').update({ status: 'draft' }).eq('id', r.id);
+      if (error) { toast('바꾸지 못했어요'); return; }
+      rpEditing = null; await loadReports(); render(); toast('발급을 취소했어요 · 작성 중으로 돌아갔어요');
+    });
+  }
+  on('[data-act="copyReport"]', () => {
+    const r = REAL.reports.find(x => location.hash.endsWith(x.id));
+    copyText(`[${REAL.academy.name}] ${r.student_name} 학생 "${r.title}"를 발급했어요. 학원지원센터 앱 "성장 리포트"에서 확인하고 PDF로 저장할 수 있어요.`, '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요');
+  });
   // 학생 할 일
   document.querySelectorAll('[data-todo]').forEach(c => c.onchange = () => checkTodo(c.dataset.todo, c.checked));
   on('[data-del-todo]', async (b, e) => {
@@ -2867,7 +3084,7 @@ async function moveLead(id, stage) {
 
 $('#menuBtn').onclick = () => $('#side').classList.toggle('open');
 $('#side').addEventListener('click', e => { if (e.target === $('#side')) $('#side').classList.remove('open'); });
-window.addEventListener('hashchange', () => { trackTrail(); if (MY) { editingReflect = false; render(); window.scrollTo(0, 0); } });
+window.addEventListener('hashchange', () => { trackTrail(); if (MY) { editingReflect = false; rpEditing = null; render(); window.scrollTo(0, 0); } });
 
 /* ---------- 뒤로 가기: 왼쪽 메뉴를 오가도 기록이 쌓이지 않게 ----------
    메뉴 · 위치 표시(홈 › 분야)는 지금 기록을 바꿔치기(replace)해서, 브라우저 뒤로 가기와 "‹ 이전"이 바로 전 화면 한 단계로만 가요. */
@@ -3007,6 +3224,7 @@ const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadIncomes = () => loadRows('incomes', 'day', false);
 const loadApprovals = () => loadRows('approvals', 'created_at', false);
+const loadReports = () => loadRows('growth_reports', 'created_at', false).then(() => { REAL.reports = REAL.growth_reports; });
 // 학생 할 일: 보고 있는 날 하나씩 (원장 · 강사는 학원 전체, 가족은 연결된 아이 것만 RLS가 걸러 줘요)
 async function loadTodos(day = TODAY) {
   const { data } = await SB.from('student_todos').select('*').eq('academy_id', REAL.academy.id).eq('day', day).order('created_at');
@@ -3242,14 +3460,14 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
-      approvals: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], reports: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
-    await Promise.all([loadAbroad(), loadSchedule(), loadTodos()]);
+    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();
