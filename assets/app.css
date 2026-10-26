@@ -318,3 +318,23 @@ a.player:hover .play { transform: scale(1.06); }
 .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .past { margin-top: 12px; }
 .past summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* 엑셀로 올리기 */
+dialog:has(.dlg.wide) { width: min(860px, calc(100vw - 32px)); }
+.imp-steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 12px; }
+.imp-steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; column-gap: 12px; row-gap: 4px; align-items: start; padding: 14px; border: 1px solid var(--line); border-radius: 14px; }
+.imp-steps li::before { content: counter(s); grid-row: span 3; width: 30px; height: 30px; border-radius: 50%; background: var(--blue-50); color: var(--blue-600); font-weight: 700; display: grid; place-items: center; }
+.imp-steps b { font-size: 14px; }
+.imp-steps span { font-size: 13px; color: var(--muted); }
+.imp-steps .btn { justify-self: start; margin-top: 6px; }
+.file-btn { position: relative; overflow: hidden; cursor: pointer; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.imp-sum { display: flex; gap: 6px; flex-wrap: wrap; }
+.imp-table { max-height: 46vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+.imp-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.imp-table th { position: sticky; top: 0; background: var(--sunk); text-align: left; font-weight: 700; color: var(--muted); padding: 8px 10px; white-space: nowrap; }
+.imp-table td { padding: 8px 10px; border-top: 1px solid var(--line); white-space: nowrap; }
+.imp-table td:last-child { white-space: normal; min-width: 160px; }
+.imp-table tr.err td { background: #fff4f4; }
+.imp-table tr.dup td { color: var(--muted); }
+.imp-table small { color: var(--muted); }

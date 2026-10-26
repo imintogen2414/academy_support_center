@@ -311,7 +311,7 @@ function realFinancePage() {
   const income = sum(inc, i => i.amount), expense = sum(exp, x => x.amount), left = income - expense;
   const cats = Object.entries(exp.reduce((a, x) => (a[x.category] = (a[x.category] || 0) + x.amount, a), {})).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...cats.map(c => c[1]));
-  return head('재정', `${monthLabel(MONTH)} · 수입은 수납·청구에서 납부 확인한 금액이 저절로 들어와요.`, `<button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`) + monthBar() + `
+  return head('재정', `${monthLabel(MONTH)} · 수입은 수납·청구에서 납부 확인한 금액이 저절로 들어와요.`, `<button class="btn" data-import="expenses">${ic('doc')}엑셀로 올리기</button><button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`) + monthBar() + `
   <div class="stats">
     <div class="stat"><span>수입 (납부 ${inc.length}건)</span><b class="num">${won(income)}</b></div>
     <div class="stat"><span>지출 ${exp.length}건</span><b class="num">${won(expense)}</b></div>
@@ -347,6 +347,165 @@ function expenseDialog(x) {
       ['memo', '메모', { max: 200, placeholder: '예: 10월 김민지 강사 급여' }]
     ]
   });
+}
+
+/* ---------- 엑셀로 한꺼번에 올리기 (원생 · 지출) ----------
+   양식 내려받기 → 채워서 올리기(.xlsx · .csv) → 미리보기에서 확인 → 저장. 읽기·양식 만들기는 assets/sheet.js */
+const IMPORTS = {
+  students: {
+    title: '원생 엑셀로 올리기', what: '원생', file: 'students_template.xlsx', table: 'students', after: () => loadStudents(),
+    cols: [
+      ['name', '이름', { required: true, max: 50, alias: ['학생', '학생이름', '원생', '원생이름', '성명'] }],
+      ['grade', '학년', { max: 20 }],
+      ['class_name', '반', { max: 50, alias: ['반이름', '수업', '클래스', '담당반'] }],
+      ['parent_name', '학부모 이름', { max: 50, alias: ['학부모', '보호자', '보호자이름', '부모님', '부모'] }],
+      ['parent_phone', '학부모 연락처', { max: 30, alias: ['연락처', '전화', '전화번호', '휴대폰', '핸드폰', '보호자연락처', '학부모전화'] }],
+      ['memo', '메모', { max: 500, alias: ['비고', '특이사항'] }]
+    ],
+    sample: [['예시) 이서연', '초5', '초등 B반', '김은정', '010-1234-5678', '형제 할인']],
+    widths: [16, 8, 14, 14, 18, 24],
+    dup: r => REAL.students.some(s => s.name === r.name && (s.class_name || '') === (r.class_name || '')),
+    dupText: '같은 반에 같은 이름이 이미 있어요'
+  },
+  expenses: {
+    title: '지출 엑셀로 올리기', what: '지출', file: 'expenses_template.xlsx', table: 'expenses', after: () => loadExpenses(),
+    cols: [
+      ['day', '날짜', { type: 'date', required: true, alias: ['일자', '지출일', '거래일', '사용일'] }],
+      ['category', '항목', { required: true, max: 20, alias: ['분류', '구분', '지출항목', '계정', '계정과목'] }],
+      ['amount', '금액', { type: 'money', required: true, alias: ['금액(원)', '지출액', '지출금액', '출금액', '출금'] }],
+      ['memo', '메모', { max: 200, alias: ['내용', '비고', '적요', '사용처'] }]
+    ],
+    sample: [['예시) 2026-10-10', '강사 급여', '2,000,000', '10월 김민지 강사 급여'], ['예시) 2026-10-25', '임대료', '1,500,000', '']],
+    widths: [16, 14, 14, 30],
+    dup: r => REAL.expenses.some(x => x.day === r.day && x.category === r.category && x.amount === r.amount && (x.memo || '') === (r.memo || '')),
+    dupText: '같은 날짜 · 항목 · 금액이 이미 있어요'
+  }
+};
+const normHead = s => String(s || '').replace(/[\s*·_\-]|\(필수\)|\(선택\)/g, '').toLowerCase();
+// 날짜: 2026-10-05 · 2026.10.5 · 2026/10/5 · 20261005 · 10/5(올해) · 엑셀 날짜 숫자
+function toYmd(v) {
+  const s = String(v).trim().replace(/\s/g, '').replace(/\.$/, '');
+  let m = s.match(/^(\d{4})[-./년](\d{1,2})[-./월](\d{1,2})일?$/) || s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!m && (m = s.match(/^(\d{1,2})[-./월](\d{1,2})일?$/))) m = [s, TODAY.slice(0, 4), m[1], m[2]];
+  if (!m && /^\d{5}(\.\d+)?$/.test(s)) return serialToYmd(+s);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return d.getMonth() === +m[2] - 1 && d.getDate() === +m[3] ? ymd(d) : null;
+}
+// 금액: 2,000,000 · 2000000원 · 200만 · 200만원
+function toWon(v) {
+  const s = String(v).replace(/[\s,원₩]/g, '');
+  const m = s.match(/^(\d+(?:\.\d+)?)(만)?$/);
+  if (!m) return null;
+  const n = Math.round(+m[1] * (m[2] ? 10000 : 1));
+  return n >= 0 && n <= 1e9 ? n : null;
+}
+function checkRows(cfg, rows) {
+  // 머리글 줄 찾기 (위쪽 5줄 안에서 칸 이름이 가장 많이 맞는 줄)
+  const names = cfg.cols.map(([, lab, o]) => [lab, ...(o.alias || [])].map(normHead));
+  let headAt = -1, best = 0;
+  rows.slice(0, 5).forEach((r, i) => { const n = r.filter(c => names.some(ns => ns.includes(normHead(c)))).length; if (n > best) { best = n; headAt = i; } });
+  if (headAt < 0) return { error: `첫 줄에 ${cfg.cols.filter(c => c[2].required).map(c => `"${c[1]}"`).join(', ')} 같은 칸 이름이 있어야 해요. 양식을 내려받아 써 주세요.` };
+  const head = rows[headAt].map(normHead);
+  const idx = names.map(ns => head.findIndex(h => h && ns.includes(h)));
+  const missing = cfg.cols.filter((c, i) => c[2].required && idx[i] < 0).map(c => c[1]);
+  if (missing.length) return { error: `"${missing.join('", "')}" 칸을 찾지 못했어요. 첫 줄 칸 이름을 양식과 같게 맞춰 주세요.` };
+  const seen = new Set();
+  const out = rows.slice(headAt + 1).map((r, n) => {
+    const line = headAt + n + 2, data = {}, errs = [];
+    if (!r.some(c => String(c || '').trim())) return null;            // 빈 줄
+    if (/^예시/.test(String(r[idx[0]] || '').trim())) return null;     // 양식의 예시 줄
+    cfg.cols.forEach(([k, lab, o], i) => {
+      const raw = idx[i] < 0 ? '' : String(r[idx[i]] ?? '').trim();
+      if (!raw) { if (o.required) errs.push(`${lab} 비어 있음`); data[k] = null; return; }
+      if (o.type === 'date') { const d = toYmd(raw); if (!d) errs.push(`${lab} "${raw}" 날짜로 못 읽음`); data[k] = d; return; }
+      if (o.type === 'money') { const w = toWon(raw); if (w === null) errs.push(`${lab} "${raw}" 숫자로 못 읽음`); data[k] = w; return; }
+      if (o.max && raw.length > o.max) errs.push(`${lab} ${o.max}자 넘음`);
+      data[k] = raw.slice(0, o.max || 500);
+    });
+    const key = JSON.stringify(data), inDb = !errs.length && cfg.dup(data), inFile = seen.has(key);
+    seen.add(key);
+    const state = errs.length ? 'err' : inDb || inFile ? 'dup' : 'ok';
+    return { line, data, state, why: errs.join(' · ') || (inDb ? cfg.dupText : inFile ? '파일 안에 같은 줄이 위에 또 있어요' : '') };
+  }).filter(Boolean);
+  return { rows: out };
+}
+function importDialog(kind) {
+  const cfg = IMPORTS[kind], d = dialogEl();
+  const start = msg => {
+    d.innerHTML = `
+    <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
+      <h2>${cfg.title}</h2>
+      <ol class="imp-steps">
+        <li><b>양식 내려받기</b><span>첫 줄 칸 이름은 그대로 두고, "예시)" 줄은 지우거나 그대로 두셔도 돼요(올라가지 않아요).</span>
+          <button type="button" class="btn sm" id="impTpl">${ic('doc')}${cfg.what} 양식 내려받기 (.xlsx)</button></li>
+        <li><b>엑셀에서 채우기</b><span>쓰던 엑셀이 있으면 칸 이름만 ${cfg.cols.map(c => `"${c[1]}"`).join(' · ')}로 바꿔도 돼요. ${cfg.cols.filter(c => c[2].required).map(c => c[1]).join(' · ')}은(는) 꼭 있어야 해요.</span></li>
+        <li><b>파일 올리기</b><span>.xlsx 또는 .csv · 저장하기 전에 미리보기로 확인해요.</span>
+          <label class="btn primary sm file-btn">${ic('plus')}파일 고르기<input type="file" id="impFile" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"></label></li>
+      </ol>
+      <p class="msg" id="dlgMsg" ${msg ? '' : 'hidden'}>${msg || ''}</p>
+      <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div>
+    </form>`;
+    $('#dlgCancel').onclick = () => d.close();
+    $('#impTpl').onclick = () => downloadXlsx(cfg.file, [cfg.cols.map(c => c[1]), ...cfg.sample], cfg.widths);
+    $('#impFile').onchange = async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 5 * 1024 * 1024) return start('파일이 너무 커요. 5MB 아래로 나눠서 올려 주세요.');
+      let rows;
+      try { rows = await readSheet(f); }
+      catch (err) { return start(err.message === 'old_xls' ? '예전 엑셀(.xls) 파일이에요. 엑셀에서 "다른 이름으로 저장 → Excel 통합 문서(.xlsx)"로 저장해서 올려 주세요.' : '파일을 읽지 못했어요. 엑셀에서 .xlsx로 저장한 파일인지 확인해 주세요.'); }
+      const res = checkRows(cfg, rows);
+      if (res.error) return start(res.error);
+      if (!res.rows.length) return start('올릴 줄이 없어요. 첫 줄 아래에 내용을 채워 주세요.');
+      preview(f.name, res.rows);
+    };
+  };
+  const preview = (fname, list) => {
+    const ok = list.filter(r => r.state === 'ok'), dup = list.filter(r => r.state === 'dup'), bad = list.filter(r => r.state === 'err');
+    const show = list.slice(0, 200);
+    const cell = (k, v, o) => v == null ? '<span class="muted">-</span>' : o.type === 'money' ? won(v) : esc(v);
+    d.innerHTML = `
+    <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
+      <h2>${cfg.title} · 미리보기</h2>
+      <p class="muted small" style="margin:0">${esc(fname)} · 모두 ${list.length}줄</p>
+      <div class="imp-sum">
+        <span class="chip good">올릴 것 ${ok.length}건</span>${dup.length ? `<span class="chip mute">이미 있어서 건너뜀 ${dup.length}건</span>` : ''}${bad.length ? `<span class="chip crit">고쳐야 할 줄 ${bad.length}건</span>` : ''}
+      </div>
+      <div class="imp-table"><table>
+        <thead><tr><th>줄</th>${cfg.cols.map(c => `<th>${c[1]}</th>`).join('')}<th>상태</th></tr></thead>
+        <tbody>${show.map(r => `<tr class="${r.state}"><td class="num">${r.line}</td>${cfg.cols.map(([k, , o]) => `<td>${cell(k, r.data[k], o)}</td>`).join('')}
+          <td>${r.state === 'ok' ? '<span class="chip good">올림</span>' : `<span class="chip ${r.state === 'dup' ? 'mute' : 'crit'}">${r.state === 'dup' ? '건너뜀' : '오류'}</span> <small>${esc(r.why)}</small>`}</td></tr>`).join('')}</tbody>
+      </table></div>
+      ${list.length > show.length ? `<p class="muted small" style="margin:0">앞의 ${show.length}줄만 보여 드려요. 저장은 전체에 적용돼요.</p>` : ''}
+      ${bad.length ? '<p class="muted small" style="margin:0">오류가 난 줄은 빼고 저장해요. 엑셀에서 고친 뒤 다시 올리면 이미 올라간 줄은 저절로 건너뛰어요.</p>' : ''}
+      <p class="msg" id="dlgMsg" hidden></p>
+      <div class="acts"><button type="button" class="btn" id="impAgain">다른 파일 고르기</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button>
+        <button class="btn primary" ${ok.length ? '' : 'disabled'}>${ok.length}건 저장하기</button></div>
+    </form>`;
+    $('#dlgCancel').onclick = () => d.close();
+    $('#impAgain').onclick = () => start();
+    $('#dlgForm').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button.primary'); btn.disabled = true;
+      let saved = 0;
+      for (let i = 0; i < ok.length; i += 200) {
+        btn.textContent = `저장하는 중… ${saved}/${ok.length}`;
+        const { error } = await SB.from(cfg.table).insert(ok.slice(i, i + 200).map(r => ({ ...r.data, academy_id: REAL.academy.id })));
+        if (error) {
+          await cfg.after(); render();
+          const m = $('#dlgMsg'); m.textContent = `${saved}건까지 저장하고 멈췄어요. 잠시 후 같은 파일을 다시 올리면 저장된 줄은 건너뛰어요.`; m.hidden = false;
+          btn.textContent = '다시 저장'; btn.disabled = false; return;
+        }
+        saved += Math.min(200, ok.length - i);
+      }
+      d.close(); await cfg.after();
+      if (kind === 'expenses') { const last = ok.map(r => r.data.day).sort().pop(); if (last) MONTH = last.slice(0, 7); }
+      render(); toast(`${cfg.what} ${saved}건을 저장했어요${dup.length ? ` · ${dup.length}건은 이미 있어서 건너뛰었어요` : ''}`);
+    };
+  };
+  start();
+  d.showModal();
 }
 
 /* ---------- 실제 데이터: 서류·행정 마감 (Supabase paperwork) ---------- */
@@ -735,7 +894,7 @@ function studentsPage() {
 /* ---------- 실제 데이터: 원생 명단 (Supabase students) ---------- */
 function realStudentsPage() {
   const list = REAL.students, canEdit = ROLE === 'owner';
-  const add = canEdit ? `<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>` : '';
+  const add = canEdit ? `<button class="btn" data-import="students">${ic('doc')}엑셀로 올리기</button><button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>` : '';
   const body = list.length ? `
   <section class="card"><div class="table">
     <div class="tr th sv"><span>학생</span><span>반</span><span>학부모</span><span>메모</span><span></span></div>
@@ -1930,7 +2089,7 @@ function renderChrome(area) {
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
   };
   const foot = $('#adminApply');
-  if (foot) { foot.hidden = !(PROFILE && USER && !CENTER); foot.innerHTML = adminApplyLink(); bindAdminApplyLink(); }
+  if (foot) { foot.hidden = !(PROFILE && USER && !CENTER); foot.innerHTML = adminApplyLink(true); bindAdminApplyLink(); }
   document.title = `${ROLE === 'admin' ? '센터 관리' : ROLE === 'owner' || ROLE === 'teacher' ? DATA.academy.name : ME.name} — 학원지원센터`;
 }
 
@@ -1983,6 +2142,7 @@ function bind() {
     copyText(list.map(invNotice).join('\n\n'), `미납 ${list.length}건 안내 문구를 복사했어요`);
   });
   on('[data-act="addExpense"]', () => expenseDialog(null));
+  on('[data-import]', b => REAL ? importDialog(b.dataset.import) : toast('예시 계정에서는 올릴 수 없어요'));
   on('[data-edit-exp]', (b, e) => { e.preventDefault(); expenseDialog(REAL.expenses.find(x => x.id === b.dataset.editExp)); });
   on('[data-act="addPaper"]', () => paperDialog(null));
   on('[data-act="presetPaper"]', addPaperPresets);
@@ -2197,7 +2357,7 @@ function useProfile() {
 }
 
 // 센터 관리자 신청: 로그인한 누구나 신청 → 지금 관리자가 센터 관리 → 관리자에서 수락
-const adminApplyLink = () => `<a class="admin-apply-link" href="app.html#apply-admin" data-apply-admin>${ic('shield')}센터 본부 직원이세요? <b>센터 관리자 신청</b></a>`;
+const adminApplyLink = (short = false) => `<a class="admin-apply-link" href="app.html#apply-admin" data-apply-admin>${ic('shield')}${short ? '' : '센터 본부 직원이세요? '}<b>센터 관리자 신청</b></a>`;
 const bindAdminApplyLink = () => document.querySelectorAll('[data-apply-admin]').forEach(a => a.onclick = e => { e.preventDefault(); location.hash = '#apply-admin'; location.reload(); });
 async function adminApplyScreen(user) {
   MY = null;
