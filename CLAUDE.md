@@ -17,6 +17,8 @@
 - 처음 쓰는 분: 홈 맨 위 "처음이세요? 이렇게 시작해요"(`startSteps` — 역할별 단계, 실제 데이터로 저절로 체크, 다 하거나 숨기면 사라짐). 위쪽 검색창은 메뉴 찾기(`searchMenus` + 비슷한 말 `SEARCH_WORDS`).
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
 - 디자인: 남색·파란 계열(진한 남색 배경, 세로 빛줄기, 반투명 카드, 밝은 파란 버튼). 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
+- 다크 모드: 기기 설정을 따르고, 해 · 달 버튼(`[data-theme-toggle]`, `assets/theme.js`)으로 고정하면 localStorage `asc-theme`. 어두운 색은 `base.css`의 같은 토큰을 덮어써요 — 새 화면은 `#fff` 대신 `var(--surface)` · `var(--ink)` 같은 토큰을 쓰기. 성장 리포트 · 파트너 카드처럼 종이 느낌인 곳만 흰색 고정.
+- 역할 색: `--r-owner`(파랑) · `--r-teacher`(초록) · `--r-parent`(주황) · `--r-student`(분홍) · `--r-admin`. 클래스 `.r-owner` 등이 `--rc`를 정해요.
 - 정적 HTML + 작은 빌드 단계 + Supabase. 화면을 React로 다시 짤 때가 오면 Next.js로 옮긴다.
 - 로그인 후 화면의 학원 수치는 아직 예시 데이터(`assets/data.js`)다. 실제 데이터는 단계별로 Supabase 테이블로 옮긴다.
 
@@ -28,7 +30,8 @@
 - 로그인: 아이디+비밀번호(내부 이메일 방식, Supabase "Confirm email" 꺼 둠), 구글(OAuth, pkce). "로그인 유지하기"를 끄면(`asc-keep-login`=0) 세션을 sessionStorage에 둬서 창을 닫으면 로그아웃(`supa.js`의 `authStore`). 구글로 처음 오면 `app.html`에서 역할을 한 번 고른다.
 - `app.html`: `?demo=1&role=…`(또는 예전 `?role=…`)이면 데모, 아니면 로그인 필수.
 - 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
-  - `support_requests`: 학원 → 센터 지원 신청. 누구나 넣기만 가능, 읽기는 대시보드에서만.
+  - `support_requests`: 학원 → 센터 지원 신청. 첫 화면은 `submit_support_request(...)` RPC로 넣어요(필수 항목 · 전화번호 형식 · 개인정보 동의 `privacy_agreed_at` · 연락 받을 시간 `contact_time`을 서버에서도 확인, 접수 번호 8자리를 돌려줌). 읽기는 관리자만.
+  - `inquiries`: 문의. 가입 전(`guest`, 이름 · 연락처 · 동의 필수)과 프로그램 사용자(`member`, 학원 · 역할이 저절로)를 `submit_inquiry(이름, 연락처, 분류, 내용, 동의)` 하나로 받아요. 본인 것과 관리자만 읽고, 답변은 관리자 `answer_inquiry(문의, 답변, 상태)`.
   - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
   - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`, 나머지는 `join_academy(코드)`.
@@ -98,6 +101,8 @@
   - 분야 상세페이지: 그림(`HERO_ART`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅은 로고가 오면 `PARTNERS.promo.logo`에 넣기(지금은 글자 로고).
   - 오른쪽(흰색) "프로그램 쓰기": 아이디 로그인·회원가입(`?signup=1`), 구글로 계속하기, "예시 계정 들어가보기"(데모), "초대 코드가 뭐예요?" 설명, "로그인 유지하기"
   - 휴대폰에서는 위쪽 탭(지원받기 / 프로그램 이용하기)으로 바로 오간다.
+  - 왼쪽 첫 화면 순서: 센터가 무엇인지(지원 서비스 + 운영 프로그램) → 이렇게 시작해요 → 지원 분야 → 비용 안내(상담 후 견적, `SITE_PRICE`) → 이용 사례(예시, `SITE_STORIES`) → 자주 묻는 질문(`SITE_FAQ`) → 운영 정보(예시, `SITE_ORG` — 실제 정보가 정해지면 여기만 바꾸기). 모두 `assets/areas.js`.
+  - 신청서(`#apply`) · 가입 전 문의(`#ask`): 필수 표시 *, 전화번호 자동 하이픈 · 형식 확인, 지역은 시·도 → 시·군·구 고르기(`assets/regions.js`의 `regionPicker`), 개인정보 수집 · 이용 동의(필수), 끝나면 `#done`에 접수 번호 · 연락 예정 시각(`etaText`: 평일 16:30 전이면 오늘 오후 6시 전, 아니면 다음 평일 오전).
   - 스타일은 `assets/site.css`
 - `login.html`, `service.html`: 예전 주소. 첫 화면으로 넘겨 주기만 한다.
 - 공유 미리보기: 각 페이지의 og 메타 태그 + `assets/og.png`(1200×630), 탭 아이콘 `assets/favicon.svg`
