@@ -39,8 +39,11 @@
   - 채용: `job_posts`(원장 쓰기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
   - 제휴: `partner_applications`(원장 신청·확인 전 취소, 관리자가 new→contacted→connected→closed 처리). 제휴처 목록 자체는 `data.js`의 `partners`.
   - 유학: `abroad_promos`(원장이 학부모에게 안내), `abroad_requests`(학부모·학생 신청 → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
+  - 학부모·학생 앱: `student_links`(원생 ↔ 학부모·학생 계정, 원장이 `link_family(원생, 사람, 켬/끔)`으로 연결, 대상은 `list_family_members(학원)`). 학부모·학생은 `my_children()`, 학부모만 `my_child_invoices()`(원장 메모 뺌), 출결은 연결된 아이 것만 바로 읽기.
+  - 학부모 공지: `notices`(원장 쓰기, `target_class`가 비면 전체·있으면 그 반 아이와 연결된 가족만), `notice_reads`(읽음은 `mark_notice_read(공지)`로만). 원장은 `notice_report(학원)` 읽음 수, `notice_readers(공지)` 읽은·안 읽은 사람.
+  - 홍보 의뢰: `promo_requests`(원장 의뢰·접수 단계에서 취소, 관리자가 new→contacted→working→review→done + `admin_memo`).
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
-- 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 상담·등록, 원생 명단, 초대 코드. 아직 예시: 학부모 공지, 홍보 지원, 학부모·학생 앱의 일정·숙제·기록·수납.
+- 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
 - 학원 코드가 없는 강사: 학원 연결 화면의 "채용 공고 먼저 보기" → `SEEKER` 모드(채용 공고만).
 - 센터 관리자: 학원에 속해 있으면 메뉴에 "센터 관리"가 더 생기고, 학원 없이 관리자만이면 `ROLE = 'admin'`으로 센터 화면만 봐요(역할 고르기도 건너뜀).
 - 재정의 수입 = 그 달에 "납부 확인"한 청구 합계. 지출은 `expenses`. 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
@@ -50,7 +53,11 @@
 1. ~~행정 지원을 실제 데이터로~~ (완료: 출결·수납·재정·서류)
 2. ~~센터 관리 + 강사 교육~~ (완료: 관리자 추가·빼기, 교육 영상 배부, 리플렉션, 지원 신청 처리)
 3. ~~강사 채용 → 제휴 신청 · 학부모 유학 상담 신청~~ (완료)
-4. (제안) 남은 예시 화면: 학부모 공지(원장 → 학부모 앱, 읽음 확인), 홍보 의뢰(인투마케팅 연결 기록), 학부모·학생 앱(우리 아이 출결·수납을 실제 데이터로).
+4. ~~학부모 공지 · 홍보 의뢰 · 학부모·학생 앱~~ (완료)
+5. 로그인 유지하기 체크, 로그인·가입 화면 초대 코드 설명, "데모 계정" → "예시 계정 들어가보기", "인투어브로드" → "인투유학"(주소 intoabroad.com 그대로), 뒤로 가기는 바로 이전 화면 한 단계 + 화면 위 "← 이전" 버튼
+6. 센터 관리자 신청 → 지금 관리자가 수락·거절
+7. 엑셀(.xlsx·.csv)로 원생 명단 · 지출 한꺼번에 올리기 (양식 내려받기 → 미리보기 → 저장)
+8. 첫 화면 분야 상세페이지 디자인: 분야마다 색·포인트, 아이콘·그림, 더 자세한 설명. 특히 인투유학(로고 `assets/brand/intoyuhak-logo.png`)·인투마케팅(로고는 사용자가 나중에 보내 줌)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.

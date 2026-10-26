@@ -437,6 +437,10 @@ function realOwnerTodo() {
   if (ab.length) items.push([`유학 상담 신청 ${ab.length}건 확인하기`, ab.slice(0, 3).map(r => `${esc(r.parent_name)} · ${esc(r.program)}`).join(' / '), '#mou/abroad', '<span class="chip crit">새 신청</span>']);
   const miss = sum(DATA.training, t => Object.values(t.status).filter(x => x !== 'done').length);
   if (miss) items.push([`강사 교육 미이수 ${miss}건`, '센터 교육 영상 · 강사님께 알려 주세요', '#teachers/training', '<span class="chip mute">확인</span>']);
+  const review = REAL.promoReqs.filter(r => r.status === 'review');
+  if (review.length) items.push([`홍보 시안 ${review.length}건 확인하기`, review.slice(0, 2).map(r => `${esc(r.service)} · ${esc(r.title)}`).join(' / '), '#promo/requests', '<span class="chip warn">확인 필요</span>']);
+  const waiting = REAL.family.filter(f => !f.students.length);
+  if (waiting.length && REAL.students.length) items.push([`앱 가입한 가족 ${waiting.length}명 아이와 연결하기`, waiting.slice(0, 3).map(f => esc(f.name)).join(' · '), '#members/students', '<span class="chip info">앱 연결</span>']);
   if (!items.length) items.push(['오늘 급하게 챙길 일은 없어요', '서류 마감 · 미납 · 출결 · 급한 문의를 살펴봤어요', '#admin', '<span class="chip good">여유</span>']);
   return items;
 }
@@ -637,12 +641,54 @@ function servicesPage() {
         <h2>${s.name}</h2>
         <p>${s.desc}</p>
         <ul>${s.items.map(x => `<li>${x}</li>`).join('')}</ul>
-        <a class="btn sm primary" href="${MK}" target="_blank" rel="noopener">의뢰하기 ${ic('ext')}</a>
+        ${REAL ? `<button class="btn sm primary" data-mk-req="${esc(s.name)}">의뢰하기</button>` : `<a class="btn sm primary" href="${MK}" target="_blank" rel="noopener">의뢰하기 ${ic('ext')}</a>`}
       </section>`).join('')}
   </div>`;
 }
 
+/* ---------- 실제 데이터: 홍보 의뢰 (Supabase promo_requests) ---------- */
+// 접수 → 인투마케팅 연결 → 작업 중 → 시안 확인 → 완료
+const MK_STATE = { new: ['info', '접수', 10], contacted: ['info', '인투마케팅 연결', 30], working: ['warn', '작업 중', 60], review: ['warn', '시안 확인 필요', 85], done: ['good', '완료', 100] };
+function realPromoRequestsPage() {
+  const list = REAL.promoReqs;
+  const add = `<a class="btn primary" href="#promo/services">${ic('plus')}새 의뢰</a>`;
+  if (!list.length) return head('의뢰 현황', '') + `
+  <section class="card empty">
+    <span class="tile-ic">${ic('megaphone')}</span>
+    <h2>아직 맡긴 홍보 작업이 없어요</h2>
+    <p class="muted">홍보 서비스에서 필요한 작업을 골라 의뢰하면, 센터가 인투마케팅 담당자와 연결하고 진행 상황을 여기에 적어 드려요.</p>
+    ${add}
+  </section>`;
+  return head('의뢰 현황', '센터가 인투마케팅에 연결하고 단계가 바뀔 때마다 여기에 보여요. 접수 단계에서는 취소할 수 있어요.', add) + `
+  <section class="card"><div class="list stack">
+    ${list.map(r => {
+      const [c, l, pct] = MK_STATE[r.status];
+      return `
+      <div class="li">
+        <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--blue-600)'}">${ic('megaphone')}</span>
+        <div><div class="t">${esc(r.title)}</div><div class="d">${esc(r.service)} · ${md(r.created_at.slice(0, 10))} 의뢰${r.want_by ? ` · ${md(r.want_by)}까지` : ''}</div>${bar(pct)}
+          ${r.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(r.admin_memo)}</div>` : ''}</div>
+        <div class="r"><span class="chip ${c}">${l}</span>${r.status === 'new' ? `<button class="btn sm" data-cancel-mk="${r.id}">취소</button>` : ''}</div>
+      </div>`;
+    }).join('')}
+  </div></section>
+  <a class="hint" href="${MK}" target="_blank" rel="noopener">${ic('megaphone')}<span>작업 사례와 가격은 인투마케팅 사이트에서 볼 수 있어요</span><b>인투마케팅 →</b></a>`;
+}
+function promoReqDialog(service) {
+  formDialog({
+    title: `${service} 의뢰`, table: 'promo_requests', extra: { service }, okText: '의뢰하기', doneText: '의뢰했어요 · 센터가 인투마케팅에 연결해 드려요',
+    after: async () => { await loadPromoReqs(); location.hash = '#promo/requests'; },
+    label: () => '',
+    fields: [
+      ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 겨울방학 특강 블로그 포스팅 4건' }],
+      ['detail', '자세한 내용', { type: 'area', max: 2000, placeholder: '대상 학년, 강조할 점, 참고할 자료나 원하는 분위기를 적어 주세요.' }],
+      ['want_by', '언제까지', { type: 'date', half: true }], ['contact', '연락받을 번호', { type: 'tel', max: 50, placeholder: '010-0000-0000', half: true }]
+    ]
+  });
+}
+
 function requestsPage() {
+  if (REAL) return realPromoRequestsPage();
   return head('의뢰 현황', '인투마케팅에 맡긴 작업이 어디까지 왔는지 보여 드려요.') + `
   <section class="card"><div class="list">
     ${DATA.promoRequests.map(r => `
@@ -1244,6 +1290,105 @@ function newsPage() {
   </div></section>`;
 }
 
+/* ---------- 실제 데이터: 학부모·학생 앱 (원장이 이어 준 아이의 출결 · 수납 · 학원 소식) ---------- */
+let KID = null; // 보고 있는 아이 id (아이가 여럿이면 고를 수 있어요)
+const kidNow = () => REAL.kids.find(k => k.id === KID) || REAL.kids[0];
+const kidName = k => ROLE === 'student' ? '나' : `${esc(k.name)}`;
+const kidPicker = () => REAL.kids.length > 1 ? `<div class="filters">${REAL.kids.map(k => `<button class="${k.id === kidNow().id ? 'on' : ''}" data-kid="${k.id}">${esc(k.name)}</button>`).join('')}</div>` : '';
+const noKid = () => `
+  <section class="card empty">
+    <span class="tile-ic">${ic('users')}</span>
+    <h2>아직 ${ROLE === 'student' ? '내 원생 정보와' : '아이와'} 연결되지 않았어요</h2>
+    <p class="muted">${esc(REAL.academy.name)}에 "앱에 가입했어요"라고 알려 주세요. 원장님이 원생 명단에서 연결하면 ${ROLE === 'student' ? '내' : '아이의'} 출결${ROLE === 'parent' ? ' · 수납' : ''}이 바로 보여요.</p>
+  </section>`;
+const unreadNotices = () => REAL.notices.filter(n => !REAL.reads.has(n.id));
+
+function kidAttendPage() {
+  if (!REAL.kids.length) return head(ROLE === 'student' ? '내 출결' : '출결', '') + noKid();
+  const k = kidNow();
+  const rows = REAL.kidAttend.filter(a => a.student_id === k.id && a.day.startsWith(MONTH));
+  const cnt = s => rows.filter(a => a.status === s).length;
+  const came = rows.length - cnt('absent');
+  return head(ROLE === 'student' ? '내 출결' : `${kidName(k)} 출결`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''} · 선생님이 수업 중에 입력하면 바로 보여요.`) + kidPicker() + monthBar() + `
+  <div class="stats">
+    <div class="stat good"><span>출석률</span><b class="num">${rows.length ? Math.round(came / rows.length * 100) : 0}%</b></div>
+    <div class="stat"><span>출석</span><b class="num">${cnt('present')}일</b></div>
+    <div class="stat"><span>지각 · 조퇴</span><b class="num">${cnt('late') + cnt('early')}일</b></div>
+    <div class="stat crit"><span>결석</span><b class="num">${cnt('absent')}일</b></div>
+  </div>
+  <section class="card">${rows.length ? `<div class="list">${rows.map(a => `
+    <div class="li">
+      <span class="av time-av num">${md(a.day)}</span>
+      <div class="t">${'일월화수목금토'[day0(a.day).getDay()]}요일${a.day === TODAY ? ' <span class="chip info">오늘</span>' : ''}</div>
+      <div class="r"><span class="chip ${ATT[a.status][1]}">${ATT[a.status][0]}</span></div>
+    </div>`).join('')}</div>` : `<p class="muted" style="margin:0">${monthLabel(MONTH)} 출결 기록이 아직 없어요.</p>`}</section>`;
+}
+
+function realKidBillsPage() {
+  if (!REAL.kids.length) return head('수납', '') + noKid();
+  const k = kidNow();
+  const list = REAL.kidBills.filter(i => i.student_id === k.id);
+  const unpaid = list.filter(i => !i.paid_at), paid = list.filter(i => i.paid_at);
+  const row = i => `
+    <div class="li">
+      <span class="av" style="background:${i.paid_at ? 'var(--good)' : 'var(--blue-500)'}">${ic('card')}</span>
+      <div><div class="t">${+i.month.slice(5)}월 ${esc(i.title)}</div><div class="d">${i.paid_at ? `${md(i.paid_at)} 납부 확인${i.method ? ` · ${esc(i.method)}` : ''}` : i.due ? `납부 기한 ${md(i.due)}` : '납부 기한 없음'}</div></div>
+      <div class="r"><b class="num">${won(i.amount)}</b>${i.paid_at ? '<span class="chip good">납부 완료</span>' : ddChip(i.due)}</div>
+    </div>`;
+  return head(`${kidName(k)} 수납`, `${esc(REAL.academy.name)}에서 보낸 청구예요. 학원 안내대로 내시면 학원이 확인한 뒤 "납부 완료"로 바뀌어요.`) + kidPicker() + `
+  <div class="stats">
+    <div class="stat ${unpaid.length ? 'crit' : 'good'}"><span>낼 금액</span><b class="num">${won(sum(unpaid, i => i.amount))}</b></div>
+    <div class="stat"><span>납부 완료</span><b class="num">${paid.length}건</b></div>
+  </div>` + (list.length ? `
+  ${unpaid.length ? `<section class="card" style="margin-bottom:16px"><div class="card-head"><h2>낼 것</h2><span class="sub">${unpaid.length}건</span></div><div class="list stack">${unpaid.map(row).join('')}</div></section>` : ''}
+  ${paid.length ? `<section class="card"><div class="card-head"><h2>낸 기록</h2></div><div class="list stack">${paid.map(row).join('')}</div></section>` : ''}` : `
+  <section class="card"><p class="muted" style="margin:0">아직 받은 청구가 없어요.</p></section>`);
+}
+
+function realNewsPage() {
+  const list = REAL.notices;
+  return head('학원 소식', `${esc(REAL.academy.name)}에서 보낸 공지예요. 열어 보면 학원에 "읽음"으로 표시돼요.`) + (list.length ? `
+  <section class="card"><div class="list">${list.map(n => {
+    const fresh = !REAL.reads.has(n.id);
+    return `
+    <a class="li link" href="#news/${n.id}">
+      <span class="av" style="background:${fresh ? 'var(--blue-500)' : 'var(--blue-100)'}">${ic('chat')}</span>
+      <div><div class="t">${esc(n.title)}</div><div class="d">${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}</div></div>
+      <div class="r">${fresh ? '<span class="chip crit">새 공지</span>' : '<span class="chip mute">읽음</span>'}</div>
+    </a>`;
+  }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('chat')}</span><h2>아직 받은 공지가 없어요</h2><p class="muted">학원에서 공지를 보내면 여기에 올라와요.</p></section>`);
+}
+function newsDetail(id) {
+  const n = REAL.notices.find(x => x.id === id);
+  if (!n) return notFound();
+  if (!REAL.reads.has(id)) {
+    REAL.reads.add(id); // 화면은 바로 읽음으로, 저장은 뒤에서
+    SB.rpc('mark_notice_read', { p_notice: id }).then(({ error }) => { if (error) REAL.reads.delete(id); });
+  }
+  return head(esc(n.title), `${esc(REAL.academy.name)} · ${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}`) + `
+  <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
+  <a class="hint" href="#news">${ic('chat')}<span>다른 공지도 확인해 보세요</span><b>학원 소식 →</b></a>`;
+}
+
+// 학부모·학생 홈 "오늘 챙길 일"
+function familyTodo() {
+  const items = [];
+  unreadNotices().slice(0, 3).forEach(n => items.push([esc(n.title), `${esc(REAL.academy.name)} 공지`, `#news/${n.id}`, '<span class="chip crit">새 공지</span>']));
+  if (ROLE === 'parent') REAL.kidBills.filter(i => !i.paid_at).slice(0, 3).forEach(i => {
+    const k = REAL.kids.find(x => x.id === i.student_id);
+    items.push([`${+i.month.slice(5)}월 ${esc(i.title)} ${won(i.amount)}`, `${k ? `${esc(k.name)} · ` : ''}${i.due ? `기한 ${md(i.due)}` : '기한 없음'}`, '#kid/bills', ddChip(i.due)]);
+  });
+  REAL.kids.forEach(k => {
+    const a = REAL.kidAttend.find(x => x.student_id === k.id && x.day === TODAY);
+    if (a) items.push([`오늘 ${ROLE === 'student' ? '' : `${esc(k.name)} `}${ATT[a.status][0]}`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''}`, ROLE === 'student' ? '#attend' : '#kid/attend', `<span class="chip ${ATT[a.status][1]}">${ATT[a.status][0]}</span>`]);
+  });
+  if (ROLE === 'parent') abroadData().promos.filter(p => p.active).slice(0, 1)
+    .forEach(p => items.push([esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']));
+  if (!REAL.kids.length) items.unshift([ROLE === 'student' ? '학원에 앱 가입을 알려 주세요' : '아이 연결을 기다리고 있어요', '원장님이 원생 명단에서 연결하면 출결이 보여요', ROLE === 'student' ? '#attend' : '#kid', '<span class="chip warn">연결 전</span>']);
+  if (!items.length) items.push(['새로 챙길 일이 없어요', '공지 · 수납 · 오늘 출결을 살펴봤어요', '#news', '<span class="chip good">여유</span>']);
+  return items;
+}
+
 function homeworkList() {
   return `<div class="checks">${DATA.child.homework.map((h, i) => `
     <label class="chk ${h.done ? 'done' : ''}"><input type="checkbox" data-hw="${i}" ${h.done ? 'checked' : ''}><span><b>${h.what}</b><small>${h.acad}</small></span></label>`).join('')}</div>`;
@@ -1464,6 +1609,45 @@ function centerAbroadDialog(r) {
   });
 }
 
+// 센터: 홍보 의뢰 → 인투마케팅 연결
+const MK_NEXT = { new: ['contacted', '연결함으로'], contacted: ['working', '작업 중으로'], working: ['review', '시안 확인으로'], review: ['done', '완료로'], done: null };
+let mkFilter = 'all';
+function centerPromoPage() {
+  const all = CENTER.promoReqs, list = all.filter(r => mkFilter === 'all' || r.status === mkFilter);
+  return head('홍보 의뢰', '원장님이 맡긴 홍보 작업이에요. 인투마케팅 담당자에게 넘기고 단계를 바꿔 주면 원장님 "의뢰 현황"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
+    filterBar(all, Object.fromEntries(Object.entries(MK_STATE).map(([k, [, l]]) => [k, l])), mkFilter, 'mk-filter') + (list.length ? `
+  <section class="card"><div class="list stack">${list.map(r => {
+    const next = MK_NEXT[r.status];
+    return `
+    <div class="li">
+      <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc((r.academy_name || '학')[0])}</span>
+      <div><div class="t"><span class="nm-link" data-edit-mk="${r.id}" role="button" tabindex="0">${esc(r.academy_name || '학원')}</span> <span class="muted small">${md(r.created_at.slice(0, 10))} 의뢰${r.want_by ? ` · ${md(r.want_by)}까지` : ''}</span></div>
+        <div class="d"><b>${esc(r.service)}</b> · ${esc(r.title)}${r.contact ? ` · <a href="tel:${esc(r.contact)}" style="color:var(--blue-600)">${esc(r.contact)}</a>` : ''}</div>
+        ${r.detail ? `<div class="d" style="white-space:pre-wrap">"${esc(r.detail)}"</div>` : ''}
+        ${r.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(r.admin_memo)}</div>` : ''}</div>
+      <div class="r"><span class="chip ${MK_STATE[r.status][0]}">${MK_STATE[r.status][1]}</span>${next ? `<button class="btn sm ${next[0] === 'done' ? 'primary' : ''}" data-mk-step="${r.id}:${next[0]}">${next[1]}</button>` : ''}</div>
+    </div>`;
+  }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('megaphone')}</span><h2>여기에 해당하는 의뢰가 없어요</h2><p class="muted">원장님이 홍보 서비스에서 의뢰하면 여기에 쌓여요.</p></section>`) +
+  `<a class="hint" href="${MK}" target="_blank" rel="noopener">${ic('megaphone')}<span>홍보 작업은 인투마케팅 담당자에게 연결해요</span><b>인투마케팅 →</b></a>`;
+}
+function centerPromoDialog(r) {
+  formDialog({
+    title: `${r.academy_name || '학원'} · ${r.service}`, table: 'promo_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    label: () => '의뢰를',
+    fields: [
+      ['status', '단계', { type: 'select', required: true, options: Object.entries(MK_STATE).map(([k, [, l]]) => [k, l]) }],
+      ['admin_memo', '원장님께 남길 안내', { max: 1000, placeholder: '예: 인투마케팅 이OO 디자이너가 10/28까지 시안 보내 드려요' }]
+    ]
+  });
+}
+async function stepPromoReq(id, status) {
+  const r = CENTER.promoReqs.find(x => x.id === id), before = r.status;
+  r.status = status; render();
+  const { error } = await SB.from('promo_requests').update({ status }).eq('id', id);
+  if (error) { r.status = before; render(); toast('저장하지 못했어요'); return; }
+  toast(`${r.academy_name} · ${r.service} → ${MK_STATE[status][1]}`);
+}
+
 const centerTodo = () => {
   const fresh = CENTER.requests.filter(r => r.status === 'new');
   const items = fresh.slice(0, 3).map(r => [`${esc(r.academy_name)} 지원 신청 연락하기`, `${esc(r.owner_name)} 원장님 · ${(r.needs || []).map(esc).join(' · ')}`, '#center/requests', '<span class="chip crit">새 신청</span>']);
@@ -1472,20 +1656,23 @@ const centerTodo = () => {
   if (pa) items.push([`새 제휴 신청 ${pa}건`, '제휴처와 연결해 주세요', '#center/partners', '<span class="chip crit">새 신청</span>']);
   const ab = CENTER.abroad.filter(r => r.status === 'forwarded').length;
   if (ab) items.push([`유학 상담 연결 요청 ${ab}건`, '인투어브로드 상담사 연결', '#center/abroad', '<span class="chip warn">연결 필요</span>']);
+  const mk = CENTER.promoReqs.filter(r => r.status === 'new');
+  if (mk.length) items.push([`새 홍보 의뢰 ${mk.length}건`, mk.slice(0, 3).map(r => `${esc(r.academy_name || '학원')} · ${esc(r.service)}`).join(' / '), '#center/promo', '<span class="chip crit">새 의뢰</span>']);
   const noUrl = CENTER.videos.filter(v => v.published && !v.video_url).length;
   if (noUrl) items.push([`영상 주소가 없는 교육 ${noUrl}개`, '강사에게 재생 버튼이 안 보여요', '#center/videos', '<span class="chip warn">확인</span>']);
   if (!items.length) items.push(['새로 처리할 일이 없어요', '지원 신청 · 교육 영상을 살펴봤어요', '#center', '<span class="chip good">여유</span>']);
   return items;
 };
 
-const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 관리자',
-  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
+const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 홍보 의뢰 · 관리자',
+  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
   subs: {
     videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 리플렉션 보기', stat: () => `영상 ${CENTER.videos.length}개 · 리플렉션 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}개`,
       render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
     requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
     partners: { name: '제휴 신청', icon: 'handshake', desc: '원장님이 신청한 제휴 연결', stat: () => `새 신청 ${CENTER.partnerApps.filter(a => a.status === 'new').length}건`, render: centerPartnersPage },
     abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
+    promo: { name: '홍보 의뢰', icon: 'megaphone', desc: '원장님 홍보 작업을 인투마케팅에 연결', stat: () => `새 의뢰 ${CENTER.promoReqs.filter(r => r.status === 'new').length}건`, render: centerPromoPage },
     admins: { name: '관리자', icon: 'shield', desc: '센터 관리자 추가 · 빼기', stat: () => `${CENTER.admins.length}명`, render: centerAdminsPage }
   } };
 
@@ -1526,7 +1713,8 @@ const AREAS = {
         leads: { name: '상담·등록', icon: 'leads', desc: '문의 → 상담 → 체험수업 → 등록', stat: () => `진행 중 ${DATA.leads.filter(l => l.stage !== 'enrolled').length}명`, render: leadsPage },
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
-        notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => `이번 달 ${DATA.notices.length}건`, render: noticesPage }
+        notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
+          detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
         ? `진행 중 제휴 ${REAL.partnerApps.filter(a => a.status !== 'closed').length}건 · 유학 상담 새 신청 ${REAL.abroad.requests.filter(r => r.status === 'new').length}건`
@@ -1536,10 +1724,10 @@ const AREAS = {
         abroad: { name: '유학 상담', icon: 'globe', desc: '학부모에게 유학 프로그램 안내 · 상담 신청 확인', stat: () => `새 신청 ${abroadData().requests.filter(r => r.status === 'new').length}건`, render: abroadOwnerPage },
         mine: { name: '내 제휴', icon: 'check', desc: REAL ? '신청한 제휴의 진행 상황' : '이용 중인 제휴와 아낀 비용', stat: () => REAL ? `${REAL.partnerApps.filter(a => a.status !== 'closed').length}건` : `${DATA.partners.filter(p => p.status !== 'none').length}곳`, render: myPartnersPage }
       } },
-    promo: { name: '홍보 지원', icon: 'megaphone', desc: '블로그·디자인·영상을 인투마케팅이 지원', stat: () => `진행 중 의뢰 ${DATA.promoRequests.length}건`,
+    promo: { name: '홍보 지원', icon: 'megaphone', desc: '블로그·디자인·영상을 인투마케팅이 지원', stat: () => `진행 중 의뢰 ${promoOpen()}건`,
       subs: {
         services: { name: '홍보 서비스', icon: 'megaphone', desc: '블로그 · 디자인 · 영상 · SNS 광고', stat: () => '인투마케팅 연결', render: servicesPage },
-        requests: { name: '의뢰 현황', icon: 'check', desc: '맡긴 작업의 진행 상황', stat: () => `${DATA.promoRequests.length}건`, render: requestsPage }
+        requests: { name: '의뢰 현황', icon: 'check', desc: '맡긴 작업의 진행 상황', stat: () => `진행 중 ${promoOpen()}건`, render: requestsPage }
       } }
   },
   teacher: {
@@ -1559,6 +1747,26 @@ const AREAS = {
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
   student: {}
+};
+const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
+// 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 학원 소식
+const kidStat = () => REAL.kids.length ? REAL.kids.map(k => esc(k.name)).join(' · ') : '아이 연결 전';
+const newsArea = { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
+  render: realNewsPage, detail: newsDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title };
+const FAMILY_AREAS = {
+  parent: {
+    kid: { name: '우리 아이', icon: 'grad', desc: '출결과 수납을 한 번에', stat: kidStat,
+      subs: {
+        attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH) && (!REAL.kids.length || a.student_id === kidNow().id)).length}일 기록`, render: kidAttendPage },
+        bills: { name: '수납', icon: 'card', desc: '학원 청구와 납부 확인', stat: () => { const n = REAL.kidBills.filter(b => !b.paid_at).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: realKidBillsPage }
+      } },
+    news: newsArea,
+    abroad: AREAS.parent.abroad
+  },
+  student: {
+    attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
+    news: newsArea
+  }
 };
 let MY = AREAS[ROLE];
 
@@ -1603,6 +1811,12 @@ function home() {
       todo(left.slice(0, 2).map(t => [t.title, `센터 교육 영상 · ${t.len}`, `#learn/${t.id}`, `<span class="chip warn">마감 ${t.due}</span>`])
         .concat([['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : '초등 B반 17:00 · 수업 중에 입력해 주세요', '#attend', '<span class="chip info">오늘</span>']])) +
       `<h2 class="sec-title">바로 가기</h2>` + tiles();
+  }
+  if (REAL && (ROLE === 'parent' || ROLE === 'student')) {
+    const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
+    return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
+      `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
+      todo(familyTodo()) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -1656,7 +1870,7 @@ function resolve(parts) {
   if (!a.subs) {
     // 하위 메뉴가 없는 영역: #영역 → #영역/항목
     if (sid && a.detail) {
-      crumbs.push([trainingTitle(sid), '']);
+      crumbs.push([(a.title || trainingTitle)(sid) || '', '']);
       return { html: a.detail(sid), crumbs, area: aid };
     }
     return { html: a.render(), crumbs, area: aid };
@@ -1676,6 +1890,9 @@ function renderChrome(area) {
   $('#acad').innerHTML = ROLE === 'admin'
     ? '<span class="dot">센</span><div><b>학원지원센터 본부</b><span>센터 관리자</span></div>'
     : SEEKER ? '<span class="dot">강</span><div><b>학원 연결 전</b><span>채용 공고를 볼 수 있어요</span></div>'
+    : REAL && (ROLE === 'parent' || ROLE === 'student')
+    ? (REAL.kids.length ? `<span class="dot">${esc(kidNow().name[0])}</span><div><b>${esc(kidNow().name)}${kidNow().grade ? ` (${esc(kidNow().grade)})` : ''}</b><span>${DATA.academy.name}${REAL.kids.length > 1 ? ` · 아이 ${REAL.kids.length}명` : ''}</span></div>`
+      : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>아이 연결 전</span></div>`)
     : ROLE === 'parent' || ROLE === 'student'
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
@@ -1703,14 +1920,13 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}">${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members/students', 'members/invite', 'members/leads', 'mou', 'center'],
-    teacher: ['home', 'attend', 'learn', 'jobs', 'center'], parent: ['abroad', 'center'], student: ['center'], admin: ['home', 'center']
+    owner: ['home', 'admin', 'teachers', 'members', 'mou', 'promo', 'center'],
+    teacher: ['home', 'attend', 'learn', 'jobs', 'center'], parent: ['home', 'kid', 'news', 'abroad', 'center'], student: ['home', 'attend', 'news', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
-    ? '이 화면은 아직 예시예요. 학부모 공지 · 홍보 지원 말고는 모두 실제 데이터예요.'
-    : ROLE === 'parent' ? '지금 보이는 내용은 아직 예시예요. "유학 프로그램"은 실제로 상담을 신청할 수 있어요.'
+    ? '이 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
   bind();
@@ -1842,7 +2058,27 @@ function bind() {
   on('[data-cat]', b => { partnerCat = b.dataset.cat; render(); });
   on('[data-apply]', b => { const p = DATA.partners.find(x => x.id === b.dataset.apply); if (REAL) return partnerApplyDialog(p); p.status = 'applied'; render(); toast(`${p.name} 제휴를 신청했어요 · 센터가 1일 안에 연결해 드려요`); });
   // 학생·학부모
+  on('[data-link-student]', b => linkDialog(REAL.students.find(s => s.id === b.dataset.linkStudent)));
+  on('[data-edit-notice]', b => noticeDialog(REAL.notices.find(n => n.id === b.dataset.editNotice)));
+  on('[data-copy-notice]', b => {
+    const n = REAL.notices.find(x => x.id === b.dataset.copyNotice);
+    copyText(`[${REAL.academy.name}] "${n.title}" 공지를 학원지원센터 앱 "학원 소식"에 올렸어요. 꼭 확인해 주세요!`, '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요');
+  });
+  // 홍보 의뢰 (실제 데이터)
+  on('[data-mk-req]', b => promoReqDialog(b.dataset.mkReq));
+  on('[data-cancel-mk]', async b => {
+    if (!confirm('홍보 의뢰를 취소할까요?')) return;
+    const { error } = await SB.from('promo_requests').delete().eq('id', b.dataset.cancelMk);
+    if (error) { toast('취소하지 못했어요'); return; }
+    await loadPromoReqs(); render(); toast('의뢰를 취소했어요');
+  });
+  on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
+  on('[data-mk-step]', b => { const [id, st] = b.dataset.mkStep.split(':'); stepPromoReq(id, st); });
+  on('[data-edit-mk]', b => centerPromoDialog(CENTER.promoReqs.find(r => r.id === b.dataset.editMk)));
+  // 학부모·학생 (실제 데이터)
+  on('[data-kid]', b => { KID = b.dataset.kid; render(); });
   on('[data-act="newNotice"]', () => {
+    if (REAL) return noticeDialog(null);
     const title = prompt('공지 제목을 입력하세요');
     if (!title) return;
     DATA.notices.unshift({ title, to: '전체 학부모', at: '10/25', read: 0, total: DATA.academy.students });
@@ -1991,14 +2227,15 @@ async function loadTraining() {
 // 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
 async function loadCenter() {
   const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
-  const [v, r, q, a, pa, ab] = await Promise.all([
+  const [v, r, q, a, pa, ab, mk] = await Promise.all([
     newest('training_videos'), SB.from('training_reflections').select('video_id'), newest('support_requests'),
-    SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done'])
+    SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
+    newest('promo_requests')
   ]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = (done[x.video_id] || 0) + 1; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
-    partnerApps: pa.data || [], abroad: ab.data || [] };
+    partnerApps: pa.data || [], abroad: ab.data || [], promoReqs: mk.data || [] };
 }
 // 원장: 우리 공고 + 지원자
 async function loadJobs() {
@@ -2029,6 +2266,36 @@ async function loadAbroad() {
       : SB.from('abroad_requests').select('*').eq('user_id', USER.id).order('created_at', { ascending: false })
   ]);
   REAL.abroad = { promos: p.data || [], requests: r.data || [] };
+}
+// 원장: 학부모·학생 계정과 연결된 원생 · 보낸 공지와 읽음 수 · 홍보 의뢰
+async function loadFamilyMembers() {
+  const { data } = await SB.rpc('list_family_members', { p_academy: REAL.academy.id });
+  REAL.family = data || [];
+}
+async function loadNotices() {
+  const [n, st] = await Promise.all([
+    SB.from('notices').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }),
+    SB.rpc('notice_report', { p_academy: REAL.academy.id })
+  ]);
+  REAL.notices = n.data || [];
+  REAL.noticeStats = Object.fromEntries((st.data || []).map(x => [x.notice_id, x]));
+}
+const loadPromoReqs = () => loadRows('promo_requests', 'created_at', false).then(() => { REAL.promoReqs = REAL.promo_requests; });
+// 학부모·학생: 연결된 아이 · 출결 · (학부모만) 청구 · 받은 공지와 내 읽음
+async function loadFamily() {
+  const [k, b, n, r] = await Promise.all([
+    SB.rpc('my_children'),
+    ROLE === 'parent' ? SB.rpc('my_child_invoices') : Promise.resolve({ data: [] }),
+    SB.from('notices').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }),
+    SB.from('notice_reads').select('notice_id').eq('user_id', USER.id)
+  ]);
+  REAL.kids = (k.data || []).filter(x => x.academy_id === REAL.academy.id);
+  const ids = REAL.kids.map(x => x.id);
+  const a = ids.length ? await SB.from('attendance').select('student_id, day, status').in('student_id', ids).order('day', { ascending: false }).limit(1000) : { data: [] };
+  REAL.kidAttend = a.data || [];
+  REAL.kidBills = (b.data || []).filter(i => ids.includes(i.student_id));
+  REAL.notices = n.data || [];
+  REAL.reads = new Set((r.data || []).map(x => x.notice_id));
 }
 async function loadInvite() {
   const [c, m] = await Promise.all([
@@ -2141,11 +2408,14 @@ async function boot() {
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], paperwork: [],
-      jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] } };
+      jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
+      family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining()]);
-    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork(), loadJobs(), loadPartnerApps()]);
+    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadPaperwork(), loadJobs(), loadPartnerApps(),
+      loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await loadJobBoard();
+    if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
     await loadAbroad();
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
