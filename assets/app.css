@@ -432,3 +432,20 @@ button.tt-blk:hover { background: var(--blue-100); }
   .cal-c { min-height: 54px; padding: 4px; }
   .cal-c .ev { font-size: 0; height: 6px; padding: 0; }
 }
+
+/* 학생 할 일 */
+.chk span { flex: 1; }
+.chk .x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 8px; }
+.chk .x:hover { background: var(--crit-soft); color: var(--crit); }
+.checks.big .chk { padding: 16px 18px; }
+.checks.big .chk input { width: 24px; height: 24px; }
+.checks.big .chk b { font-size: 15.5px; }
+.todo-add { display: grid; gap: 10px; margin-bottom: 16px; }
+.todo-add .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.todo-add select, .todo-add input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; background: var(--surface); }
+.todo-add input { flex: 1; min-width: 160px; }
+.todo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.todo-st { display: grid; gap: 6px; align-content: start; }
+.todo-st > b { font-size: 14px; }
+.todo-st .chk { padding: 8px 10px; }
+.card-head .pbar.sm { margin-top: 0; }

@@ -687,6 +687,7 @@ function realOwnerTodo() {
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
   items.push(...scheduleTodo().filter(i => !i[0].startsWith('오늘 수업')));
+  if (REAL.students.length && REAL.todoDay === TODAY && !REAL.todos.length) items.push(['오늘 학생 할 일 주기', '반 전체에 한 번에 줄 수 있어요 · 학생 · 학부모 앱에 바로 보여요', '#members/todos', '<span class="chip mute">할 일</span>']);
   const apv = REAL.approvals.filter(a => a.status === 'pending');
   if (apv.length) items.push([`강사 결재 ${apv.length}건 확인하기`, apv.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">결재 대기</span>']);
   const fresh = REAL.applicants.filter(a => a.status === 'applied');
@@ -834,6 +835,94 @@ function scheduleTodo(link = '#schedule') {
   const today = tt.filter(t => +t.weekday === w && fit(t.class_name)).sort((a, b) => a.start_time.localeCompare(b.start_time));
   if (today.length) items.push([`오늘 수업 ${today.length}개`, today.slice(0, 3).map(t => `${hm(t.start_time)} ${esc(t.class_name)}`).join(' · '), link, '<span class="chip info">시간표</span>']);
   return items;
+}
+
+/* ================= 학생 할 일 (Supabase student_todos) =================
+   원장 · 강사는 반 전체나 학생 한 명에게, 부모님은 우리 아이에게 할 일을 정해 줘요. 학생은 체크하고, 스스로 넣을 수도 있어요. */
+const TODO_PICKS = ['단어 외우기', '숙제하기', '오늘 배운 것 복습', '독서 30분', '문제집 2쪽', '준비물 챙기기', '오답 노트'];
+const BY_ROLE = { owner: '원장님', teacher: '선생님', parent: '부모님', student: '내가' };
+const todoBy = t => t.creator_role === 'student' ? (ROLE === 'student' ? '내가 정함' : `${esc(t.creator_name || '')} 학생이 정함`) : t.creator_role === 'parent' ? `부모님${t.creator_name ? ` · ${esc(t.creator_name)}` : ''}` : `${t.creator_name ? `${esc(t.creator_name)} ` : ''}${BY_ROLE[t.creator_role] || '학원'}`;
+const todosOf = sid => REAL.todos.filter(t => t.student_id === sid);
+const canDelTodo = t => ROLE === 'owner' || t.created_by === USER.id;
+const todoItem = t => `
+  <label class="chk ${t.done_at ? 'done' : ''}"><input type="checkbox" data-todo="${t.id}" ${t.done_at ? 'checked' : ''}>
+    <span><b>${esc(t.title)}</b><small>${todoBy(t)}${t.done_at ? ` · ${md(t.done_at.slice(0, 10))} 완료` : ''}</small></span>
+    ${canDelTodo(t) ? `<button type="button" class="x" data-del-todo="${t.id}" aria-label="지우기">×</button>` : ''}</label>`;
+const todoDayBar = () => {
+  const d = REAL.todoDay;
+  return `<div class="pager"><button class="btn sm" data-todo-day="-1" aria-label="전날">‹</button><input type="date" id="todoDay" value="${d}"><button class="btn sm" data-todo-day="1" aria-label="다음 날">›</button>${d !== TODAY ? '<button class="btn sm" data-todo-day="0">오늘</button>' : ''}</div>`;
+};
+const todoAddForm = (targets, hint) => `
+  <form class="card todo-add" id="todoAdd" novalidate>
+    <div class="row">${targets ? `<select name="who" aria-label="누구에게">${targets}</select>` : ''}
+      <input name="title" maxlength="100" placeholder="${hint}" aria-label="할 일"><button class="btn primary">${ic('plus')}추가</button></div>
+    <div class="pick-chips">${TODO_PICKS.map(p => `<button type="button" data-todo-pick="${p}">${p}</button>`).join('')}</div>
+  </form>`;
+const progress = list => { const n = list.filter(t => t.done_at).length; return list.length ? `<span class="sub">${list.length}개 중 ${n}개 완료</span>${bar(n / list.length * 100, 'sm')}` : ''; };
+
+function todosPage() {
+  if (!REAL) return head('오늘 할 일', '학원과 부모님이 정해 준 할 일이에요. 다 하면 체크!') + `<section class="card">${homeworkList()}</section>`;
+  const when = REAL.todoDay === TODAY ? '오늘' : md(REAL.todoDay);
+  if (isStaff()) {
+    if (!REAL.students.length) return head('학생 할 일', '') + noStudents();
+    const groups = byClass(REAL.students);
+    const targets = groups.map(([cls, ss]) => `<option value="c:${esc(cls)}">${esc(cls)} 전체 (${ss.length}명)</option>`).join('') +
+      groups.map(([cls, ss]) => `<optgroup label="${esc(cls)}">${ss.map(s => `<option value="s:${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`).join('');
+    const all = REAL.todos;
+    return head('학생 할 일', `${when} · 반 전체나 학생 한 명에게 할 일을 주면 학생 · 학부모 앱에 바로 보여요. 학생이 체크하면 여기서도 보여요.`) + todoDayBar() + `
+    <div class="stats"><div class="stat"><span>${when} 할 일</span><b class="num">${all.length}개</b></div><div class="stat good"><span>완료</span><b class="num">${all.filter(t => t.done_at).length}개</b></div>
+      <div class="stat"><span>할 일 받은 학생</span><b class="num">${new Set(all.map(t => t.student_id)).size}/${REAL.students.length}명</b></div></div>
+    ${todoAddForm(targets, '예: 단어 20개 외우기')}` + groups.map(([cls, ss]) => `
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>${esc(cls)}</h2>${progress(all.filter(t => ss.some(s => s.id === t.student_id)))}</div>
+      <div class="todo-grid">${ss.map(s => `
+        <div class="todo-st"><b>${esc(s.name)}</b>${todosOf(s.id).length ? `<div class="checks">${todosOf(s.id).map(todoItem).join('')}</div>` : '<p class="muted small" style="margin:0">할 일 없음</p>'}</div>`).join('')}</div>
+    </section>`).join('');
+  }
+  // 학부모 · 학생
+  if (!REAL.kids.length) return head('오늘 할 일', '') + noKid();
+  const k = kidNow(), list = todosOf(k.id), me = ROLE === 'student';
+  return head(me ? `${when} 할 일` : `${esc(k.name)}의 ${when} 할 일`, me ? '학원 선생님과 부모님이 정해 준 할 일이에요. 다 하면 체크! 내가 할 일을 더 넣을 수도 있어요.'
+    : '학원에서 정한 할 일과 부모님이 정한 할 일이 함께 보여요. 아이가 체크하면 바로 보여요.') + kidPicker() + todoDayBar() + `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>${list.length ? (list.every(t => t.done_at) ? '다 했어요! 🎉' : `${list.filter(t => !t.done_at).length}개 남았어요`) : '할 일이 없어요'}</h2>${progress(list)}</div>
+    ${list.length ? `<div class="checks big">${[...list].sort((a, b) => !!a.done_at - !!b.done_at).map(todoItem).join('')}</div>` : `<p class="muted small" style="margin:0">${me ? '오늘은 정해진 할 일이 없어요. 스스로 정해 볼까요?' : '아래에서 할 일을 정해 주세요.'}</p>`}
+  </section>` + todoAddForm('', me ? '예: 수학 문제집 2쪽' : '예: 줄넘기 100번 · 일기 쓰기');
+}
+
+async function addTodos(who, title) {
+  const day = REAL.todoDay, aid = REAL.academy.id;
+  let ids;
+  if (!isStaff()) ids = [kidNow().id];
+  else if (who.startsWith('c:')) ids = REAL.students.filter(s => (s.class_name || '반 미지정') === who.slice(2)).map(s => s.id);
+  else ids = [who.slice(2)];
+  const { error } = await SB.from('student_todos').insert(ids.map(student_id => ({ academy_id: aid, student_id, day, title })));
+  if (error) { toast('저장하지 못했어요. 다시 시도해 주세요.'); return false; }
+  await loadTodos(day); render(); toast(ids.length > 1 ? `${ids.length}명에게 할 일을 줬어요` : '할 일을 넣었어요');
+  return true;
+}
+async function checkTodo(id, done) {
+  const t = REAL.todos.find(x => x.id === id), before = t.done_at;
+  t.done_at = done ? new Date().toISOString() : null; render();
+  const { error } = await SB.rpc('check_todo', { p_id: id, p_done: done });
+  if (error) { t.done_at = before; render(); toast('저장하지 못했어요'); return; }
+  if (done && ROLE === 'student' && todosOf(t.student_id).every(x => x.done_at)) toast('오늘 할 일을 다 했어요! 잘했어요 🎉');
+}
+const todoStat = () => {
+  if (!REAL) return `숙제 ${DATA.child.homework.filter(h => !h.done).length}개 남음`;
+  const list = isStaff() ? REAL.todos : REAL.kids.length ? todosOf(kidNow().id) : [];
+  if (REAL.todoDay !== TODAY) return '할 일';
+  return list.length ? `오늘 ${list.length}개 중 ${list.filter(t => t.done_at).length}개 완료` : '오늘 할 일 없음';
+};
+// 홈 "오늘 할 일" 카드 (학생 · 학부모)
+function todayTodoCard() {
+  if (!REAL || !REAL.kids.length || REAL.todoDay !== TODAY) return '';
+  const list = todosOf(kidNow().id), link = ROLE === 'student' ? '#todos' : '#kid/todos';
+  return `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>${ROLE === 'student' ? '오늘 할 일' : `${esc(kidNow().name)} 오늘 할 일`}</h2>${list.length ? progress(list) : `<a class="sub" href="${link}">할 일 정하기 →</a>`}</div>
+    ${list.length ? `<div class="checks">${[...list].sort((a, b) => !!a.done_at - !!b.done_at).slice(0, 6).map(todoItem).join('')}</div>${list.length > 6 ? `<a class="sub" href="${link}">모두 보기 →</a>` : ''}` : '<p class="muted small" style="margin:0">오늘은 정해진 할 일이 없어요.</p>'}
+  </section>`;
 }
 
 /* ================= 결재: 강사 → 원장 (Supabase approvals) =================
@@ -2248,6 +2337,7 @@ const AREAS = {
         leads: { name: '상담·등록', icon: 'leads', desc: '문의 → 상담 → 체험수업 → 등록', stat: () => `진행 중 ${DATA.leads.filter(l => l.stage !== 'enrolled').length}명`, render: leadsPage },
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
+        todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
@@ -2269,6 +2359,7 @@ const AREAS = {
   teacher: {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
     schedule: SCHEDULE_AREA,
+    todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
     jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
@@ -2286,7 +2377,7 @@ const AREAS = {
     news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
-  student: { schedule: SCHEDULE_AREA }
+  student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, schedule: SCHEDULE_AREA }
 };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
@@ -2296,9 +2387,10 @@ const newsArea = { name: '학원 소식', icon: 'chat', desc: '학원 공지와 
   render: realNewsPage, detail: newsDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title };
 const FAMILY_AREAS = {
   parent: {
-    kid: { name: '우리 아이', icon: 'grad', desc: '출결과 수납을 한 번에', stat: kidStat,
+    kid: { name: '우리 아이', icon: 'grad', desc: '할 일 · 출결 · 수납을 한 번에', stat: kidStat,
       subs: {
         attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH) && (!REAL.kids.length || a.student_id === kidNow().id)).length}일 기록`, render: kidAttendPage },
+        todos: { name: '오늘 할 일', icon: 'check', desc: '학원 · 부모님이 정한 할 일과 체크', stat: todoStat, render: todosPage },
         bills: { name: '수납', icon: 'card', desc: '학원 청구와 납부 확인', stat: () => { const n = REAL.kidBills.filter(b => !b.paid_at).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: realKidBillsPage }
       } },
     schedule: SCHEDULE_AREA,
@@ -2306,6 +2398,7 @@ const FAMILY_AREAS = {
     abroad: AREAS.parent.abroad
   },
   student: {
+    todos: { name: '오늘 할 일', icon: 'check', desc: '학원 · 부모님이 정한 할 일 체크하기', stat: todoStat, render: todosPage },
     schedule: SCHEDULE_AREA,
     attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea
@@ -2362,7 +2455,7 @@ function home() {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
       `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
-      todo(familyTodo()) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
+      todayTodoCard() + todo(familyTodo()) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -2505,7 +2598,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'schedule', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'schedule', 'attend', 'news', 'center'], admin: ['home', 'center']
+    teacher: ['home', 'attend', 'schedule', 'todos', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'attend', 'news', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -2677,6 +2770,26 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 학생 할 일
+  document.querySelectorAll('[data-todo]').forEach(c => c.onchange = () => checkTodo(c.dataset.todo, c.checked));
+  on('[data-del-todo]', async (b, e) => {
+    e.preventDefault();
+    const { error } = await SB.from('student_todos').delete().eq('id', b.dataset.delTodo);
+    if (error) { toast('지우지 못했어요'); return; }
+    await loadTodos(REAL.todoDay); render(); toast('지웠어요');
+  });
+  const goTodo = async d => { if (!d) return; await loadTodos(d); render(); };
+  on('[data-todo-day]', b => { const n = +b.dataset.todoDay; goTodo(n ? addDays(REAL.todoDay, n) : TODAY); });
+  const todoDayIn = $('#todoDay');
+  if (todoDayIn) todoDayIn.onchange = () => goTodo(todoDayIn.value);
+  on('[data-todo-pick]', b => { const i = $('#todoAdd [name="title"]'); i.value = b.dataset.todoPick; i.focus(); });
+  const todoAdd = $('#todoAdd');
+  if (todoAdd) todoAdd.onsubmit = async e => {
+    e.preventDefault();
+    const el = todoAdd.elements, title = el.title.value.trim();
+    if (!title) { toast('할 일을 적어 주세요'); return; }
+    await addTodos(el.who ? el.who.value : '', title);
+  };
   // 일정 · 시간표
   on('[data-sch-view]', b => { SCH_VIEW = b.dataset.schView; render(); });
   on('[data-sch-class]', b => { SCH_CLASS = b.dataset.schClass; render(); });
@@ -2894,6 +3007,11 @@ const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadIncomes = () => loadRows('incomes', 'day', false);
 const loadApprovals = () => loadRows('approvals', 'created_at', false);
+// 학생 할 일: 보고 있는 날 하나씩 (원장 · 강사는 학원 전체, 가족은 연결된 아이 것만 RLS가 걸러 줘요)
+async function loadTodos(day = TODAY) {
+  const { data } = await SB.from('student_todos').select('*').eq('academy_id', REAL.academy.id).eq('day', day).order('created_at');
+  REAL.todoDay = day; REAL.todos = data || [];
+}
 // 일정 · 시간표: 원장 · 강사는 표를 바로, 가족은 세부 사항을 뺀 RPC로 (지난 6개월 ~ 앞으로 1년)
 async function loadSchedule() {
   if (isStaff()) {
@@ -3124,14 +3242,14 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
-      approvals: [], timetable: [], events: [], family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
-    await Promise.all([loadAbroad(), loadSchedule()]);
+    await Promise.all([loadAbroad(), loadSchedule(), loadTodos()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();
