@@ -17,9 +17,9 @@
 - 홈 순서: 오늘 챙길 일(급한 일) → 자주 쓰는 메뉴(`favCard`, "바꾸기"로 최대 8개 고르기, 이 기기 localStorage `asc-fav-역할-…`, 기본은 `FAV_DEFAULT`) → "처음이세요? 이렇게 시작해요"(`startSteps`, 휴대폰에선 접혀 있음 · 실제 데이터로 저절로 체크 · 다 하거나 숨기면 사라짐) → 전체 메뉴 타일.
 - 위쪽 검색창: 원장 · 강사는 학생 이름 · 반 · 학부모 · 연락처(`searchPeople`, 누르면 원생 명단이 그 이름으로 걸러짐 `STU_Q`)와 상담 학생, 그리고 메뉴(`searchMenus` + 비슷한 말 `SEARCH_WORDS`). 휴대폰에서도 보여요.
 - 메뉴 이름은 역할이 달라도 같은 기능이면 같은 이름: 출결 · 수납 · 오늘 할 일 · 공지 · 결재 · 유학 상담 · 일정·시간표 · 내 제휴 · 내 의뢰 · 강사 채용.
-- 분야별 이용(`academy_services`): 원생 · 출결 · 일정 · 메신저 같은 기본 프로그램은 누구나 쓰고, 센터가 직접 해 주는 지원만 학원마다 분야(행정 · 강사 · 학생·학부모 · 제휴 · 홍보)가 "이용 중"(active)일 때 열려요. 상담 중(consulting) · 이용 끝남(ended) · 줄 없음(신청 전)이면 `app.js`의 `SVC_GATE` 화면 대신 `svcLockPage`(신청 안내)가 보이고, 신청 · 의뢰 버튼은 `svcGuard`가 막아요. DB도 `private.has_service(학원, 분야)` · `private.my_service(분야)`로 제휴 신청 · 유학 안내/상담 · 홍보 의뢰 · 채용 공고 · 강사 교육 영상 · 리플렉션 · 센터에 맡기기를 막아요. 이 기능 전에 있던 학원은 다섯 분야 모두 이용 중으로 넣어 뒀고, 새로 만든 학원은 신청 전부터 시작해요.
+- 분야별 이용(`academy_services`): 원생 · 출결 · 일정 · 채팅 같은 기본 프로그램은 누구나 쓰고, 센터가 직접 해 주는 지원만 학원마다 분야(행정 · 강사 · 학생·학부모 · 제휴 · 홍보)가 "이용 중"(active)일 때 열려요. 상담 중(consulting) · 이용 끝남(ended) · 줄 없음(신청 전)이면 `app.js`의 `SVC_GATE` 화면 대신 `svcLockPage`(신청 안내)가 보이고, 신청 · 의뢰 버튼은 `svcGuard`가 막아요. DB도 `private.has_service(학원, 분야)` · `private.my_service(분야)`로 제휴 신청 · 유학 안내/상담 · 홍보 의뢰 · 채용 공고 · 강사 교육 영상 · 리플렉션 · 센터에 맡기기를 막아요. 이 기능 전에 있던 학원은 다섯 분야 모두 이용 중으로 넣어 뒀고, 새로 만든 학원은 신청 전부터 시작해요.
   - 원장: `#services`(이용 중인 센터 지원 · 분야 더 신청하기 `request_academy_services` → 센터 "지원 신청"에 학원과 이어진 채로 들어가고 그 분야는 상담 중), 첫 화면 접수 번호로 잇기 `claim_support_request(학원, 번호)`. 홈에 안 쓰는 분야가 있으면 한 줄 안내(`svcHint`), `#help` 위에도 요약.
-  - 관리자: 센터 관리 → 학원 · 이용 분야(`#center/academies`, `admin_academies()` · `set_academy_service(학원, 분야, 상태|null)`).
+  - 관리자: 센터 관리 → 학원 · 이용 분야(`#center/academies`, `admin_academies()` · `set_academy_service(학원, 분야, 상태|null)`). 학원마다 다섯 분야 칸을 눌러 고르면 바로 저장, 상담 중인 학원이 맨 위 + "모두 이용 중으로 열기".
   - 학부모 · 학생: 제휴가 꺼져 있으면 유학 메뉴가 안 보여요.
 - 신청한 분야만 열기: 첫 화면에서 지원 신청한 휴대폰과 원장 프로필 휴대폰이 같으면 `create_academy`가 그 신청을 학원과 잇고 신청한 분야만 "이용 중"으로 열어요(`private.open_services`). 접수 번호로 잇기(`claim_support_request`)도 바로 이용 중. 이용 중이 아닌 센터 지원은 메뉴 · 타일에서 숨겨요(`tailorMenus`, 제휴 · 홍보는 통째로 `SVC_WHOLE`). 주소로 들어오면 신청 안내.
 - 성인 학원(`academies.family` = false): 학원 만들 때 "어린이 · 청소년 / 성인" 고르기, 원장 설정 "학부모 기능"으로 바꾸기. 끄면 학부모 칸(`personFields`) · 학부모 말이 빠지고 "수강생 관리 · 수강생 명단 · 연락처(students.phone)"로 보여요. 학부모·학생용 코드는 "수강생용"으로. `famOn()`.
@@ -29,12 +29,20 @@
 - 학생 한 명 보기(원장 `#members/students/학생` · 강사 `#students/학생`, `studentDetail`): 학부모 연락(전화 · 문자 · 번호 복사) · 최근 3개월 출결 · 수납(원장만) · 상담 기록(`leads.student_id`) · 최근 2주 할 일 · 성장 리포트 · 기본 정보. 원생 명단의 이름이나 위쪽 검색의 학생을 누르면 열려요. 학부모 번호는 원장 · 강사 화면에서 가리지 않고 누르면 전화가 걸려요(`telLink`).
 - 학부모 수강료 내기: 원장이 설정 → 결제 정보에서 학원 입금 계좌(`academies.pay_bank` · `pay_account` · `pay_holder` · `pay_note`)를 넣으면, 학부모 수납 화면 "내기"(`payDialog`)에 계좌와 복사 버튼이 나와요. 보낸 뒤 "보냈어요" → `report_invoice_paid(청구, 메모, 취소?)`가 `invoices.reported_at`을 남기고, 원장 수납 · 홈 "오늘 챙길 일"에 "입금 확인"으로 떠요. 납부 확인(`paid_at`)은 그대로 원장이. 카드 결제(PG)는 아직 없어요.
 - 결재함(`#admin/approvals`) 아래에 강사가 올린 홍보 의뢰 · 제휴 신청(원장 결재 대기)도 모아 보여요(`otherApvCard`).
-- 센터 관리 → 회원(`#center/members`, `admin_members()`): 가입한 사람 이름 · 아이디/이메일 · 로그인 방법 · 역할 · 휴대폰 · 학원 · 가입일 · 마지막 로그인. 보기만 해요.
+- 센터 관리 → 회원(`#center/members`, `admin_members()`): 가입한 사람 이름 · 아이디/이메일 · 로그인 방법 · 역할 · 휴대폰 · 학원 · 가입일 · 마지막 로그인. 보기만 해요. 사람을 누르면 `#center/members/회원`(`memberDetail`, `admin_member_detail(회원)`): 학원 · 역할 · 이용 분야 · 자동 처리 · 연결된 아이 · 최근 연 메뉴(`user_seen`) · 쓴 기록 수 · 첫 화면 지원 신청.
+- 센터 관리자 홈(`centerHome`): 숫자 한 줄(새 신청 · 열어 줄 분야 · 답할 문의 · 맡긴 일 · 연결 중) → 지금 처리할 일(`centerTodo`) · 가입 현황 → 메뉴 묶음(`CENTER_GROUPS`).
 - 예시 원생은 `data.js` 끝에서 반별 출결 인원(`attendance.total`)만큼 채워요 — 원생 수 · 강사 담당 반 원생 · 출결 · 수납 숫자가 서로 맞아요. 예시 연락처는 `010-0000-`으로 시작하는 가짜 번호.
-- 시간표 추가: 요일을 여러 개 고르면 요일마다 한 줄씩(`formDialog`의 `type: 'multi'` + `expand`). 시작을 바꾸면 끝이 수업 길이만큼 따라오고, 자주 쓰는 시각 · 수업 길이는 눌러서(`timePickers`).
+- 시간 칸(`formDialog`의 `type: 'time'`): 지역 고르기처럼 오전/오후 · 시 · 분(5분 단위) 드롭다운(`clockPicker` · `bindClockPickers`, 값은 hidden 칸에 "16:00"). 시간표 추가는 요일을 여러 개 고르면 요일마다 한 줄씩(`type: 'multi'` + `expand`), 시작을 바꾸면 끝이 수업 길이만큼 따라와요(`timePickers` · `setClock`).
+- 가로 스크롤 없애기: 표(`.table .tr`)는 좁은 화면에서 두 칸 카드로, 칸반(`.board`)은 줄바꿈, 입력 창은 옆으로 안 밀려요(`dialog` overflow-x hidden). 넓은 서류 편집도 줄마다 카드(`sheetEditor`).
 - 오늘 할 일: 반 전체 · 학생 한 명 · "학생 여러 명 골라서"(`todoPicker`, 반 이름을 누르면 그 반 모두).
 - 상담·등록: 학년(선택) · 생년월일(`birth`, 선택) · 학생 본인 연락처(`phone`, 성인 · 고등학생) · 학부모는 선택. 등록하면 트리거가 원생으로 함께 옮겨요. 강사도 메뉴 `#leads`(삭제는 원장만).
-- 현장 결제(`onsitePayDialog`): 원장이 상담에서 "등록"으로 옮기면 그 자리에서 받은 수강료 · 교재비 · 기타를 "납부 완료" 청구로 바로 남기고 영수증(`printReceipt`, 인쇄 · PDF)을 뽑아요. 수납 화면 "현장에서 받기", 납부 완료 줄의 "영수증"도 같아요.
+- 현장 결제(`onsitePayDialog`): 원장이 상담에서 "등록"으로 옮기면 그 자리에서 받은 수강료 · 교재비 · 기타를 "납부 완료" 청구로 바로 남기고 영수증(`printReceipt`, 인쇄 · PDF)을 뽑아요. 수납 화면 "현장에서 받기", 납부 완료 줄의 "영수증"도 같아요. 학생 고르기의 "명단에 없는 사람 · 직접 적기"로 웹을 안 쓰는 사람도 이름만 적어 받아요(`invoices.student_id` 없이 `student_name`, "원생 명단에도 넣기" 선택).
+- 원생 들고 남(`students.status` active 다니는 중 · paused 쉬는 중 · left 그만둠, `joined_on` · `left_on`): 원생 명단 위 이번 달 · 최근 7일 새로 옴 · 그만둠 · 그만둘 예정(`rosterSummary`), 상태 거르기(`STU_ST`), "원생 정리"(`rosterDialog`)에서 여러 명 골라 반 옮기기 · 쉬기 · 그만두기(오늘 · 이번 달 말 · 날짜) · 다시 다니기. `REAL.allStudents`는 명단용 전부, `REAL.students`는 다니는 중만(출결 · 청구 · 할 일 · 숫자). 그만두는 날이 지나면 매일 아침 저절로 그만둠.
+- 학부모 기능 스위치(`famSwitch`): 설정 → 우리 학원, 학생·학부모 관리 첫 화면, 원생 명단 위. 예시 계정도 눌러 볼 수 있어요(sessionStorage `asc-demo-family`).
+- 프로그램마다 "이렇게 써요"(`assets/howto.js`의 `HOWTO`, 화면 제목 아래 `addHowto`): "다시 보지 않기"를 누를 때까지 계속 보여요(localStorage `asc-howto-역할-주소`). 숨긴 뒤엔 제목 옆 "사용법" 버튼 · 전체 메뉴 안내 아래 "메뉴마다 이렇게 써요" · 설정 "메뉴 사용법 안내"에서 다시 봐요. 새 화면을 만들면 `HOWTO`에 넣기.
+- 단계 설명(`STATE_GUIDE` · `STATE_PAGES`, `stateGuide`): 제휴 · 홍보 · 유학 · 지원 신청 · 문의 · 맡긴 일 · 이용 분야 · 결재 화면 위 "단계가 무슨 뜻이에요?"에 단계마다 센터 관리자 쪽 · 원장님 쪽 뜻을 함께(내 쪽이 진하게).
+- 원천세 계산(`#admin/payroll`, `payroll` 원장만): 강사마다 구분(프리랜서 3.3% · 일용직 (일당-15만원)×2.7% 소액부징수 · 근로소득 · 직접) · 지급액만 넣으면 소득세 · 지방소득세 · 실지급액(`calcTax`), "재정 지출에도 넣기"(`expense_id`), 지난달 불러오기, 신고 서류로 넣기(`wht:월`), 엑셀. 서류 바로 만들기는 바로 받지 않고 `sheetEditor`에서 칸을 고치고 줄을 더한 뒤 엑셀로 받아요(합계는 다시 계산).
+- 자동으로 처리(`#admin/auto`, `academies.auto` = { bill: {on, day}, unpaid: {on, days}, paper: {on} }, 기록 `auto_logs`): pg_cron `asc-automations`가 매일 한국 9시 10분 `private.run_automations()` — 매달 day일 정해 둔 수강료로 청구서, 기한 지난 미납에 학부모(성인 학원은 수강생)께 원장 이름 채팅 한 번(`invoices.reminded_at`, `private.auto_message`), 지난달 지급이 있으면 원천세 · 1월엔 사업장현황 서류. "지금 한 번 해 보기"는 `run_my_automations(학원)`. 서류 자동이 켜져 있으면 앱을 열 때 `paperSuggestions`도 저절로 넣어요(`autoPaperOnOpen`). 원장 홈에 "저절로 처리한 일".
 - 첫 화면 진행 상황 보기(`#check`): 접수 번호 + 남긴 연락처 → `check_my_request(번호, 연락처)`(가입 안 해도 돼요). 접수 완료 화면 · 오른쪽 아래 링크에서 바로.
 - 공유 미리보기 이미지 `assets/og.png`는 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
@@ -79,8 +87,9 @@
   - 일정 · 시간표: `timetable`(반 · 요일 · 시간 · 과목 + 세부 강의실 · 담당 강사 · 메모, 원장 쓰기), `academy_events`(시험 · 행사 · 휴원 …, 원장 · 강사 쓰기, 강사는 내 것만 고침, 세부는 `detail`). 두 표 모두 원장 · 강사만 바로 읽고, 학부모 · 학생은 세부를 뺀 `family_timetable(학원)` · `family_events(학원, 부터, 까지)`. 화면 `#schedule`(모든 역할, 주간 시간표는 주를 넘기거나 날짜로 고르고 그 주 일정도 함께 · 월간 달력).
   - 학생 할 일: `student_todos`(학생 · 날짜 · 할 일, 만든 사람 · 역할은 트리거가 채움). 원장 · 강사는 반 전체나 학생 한 명에게, 학부모 · 학생은 연결된 아이에게만 넣기. 체크는 `check_todo(할 일, 했음?)`. 만든 사람이 고치고, 만든 사람과 원장이 지워요. 화면: 원장 `#members/todos`, 강사 `#todos`, 학부모 `#kid/todos`, 학생 `#todos`(홈 맨 위에도 카드).
   - 성장 리포트: `growth_reports`(학생 · 기간 · 과목 점수 `scores` · 학습 태도 `ratings` · 잘하는 점 · 노력할 점 · 종합 의견 · 다음 목표, 출결 · 할 일 수행 `stats`는 저장할 때 화면이 계산). 원장 · 강사가 쓰고 `status`를 issued로 바꾸면 연결된 가족이 봐요(발급 시각은 트리거). 인쇄 · PDF는 브라우저 인쇄(`@media print`). 화면: 원장 `#members/reports`, 강사 `#reports`, 학부모 `#kid/reports`, 학생 `#reports`.
+  - 자료실 폴더: `library_folders`(원장 · 강사 누구나 만들기 · 이름 바꾸기 · 지우기, 학부모 · 학생은 보기만 — 자료가 있는 폴더만 보여요), `library_items.folder_id`, 옮기기는 `move_library_items(자료들, 폴더|null)`(볼 수 있는 자료면 누가 올렸든). 예시 계정 자료실도 역할마다 볼 수 있는 것만(`libData`).
   - 자료실: `library_items`(제목 · 분류 · 파일 또는 링크 · 공유 범위 `visibility` private 나만 / staff 원장·강사 / class 반 가족 / everyone 모두, 올린 사람은 트리거). 판정은 `private.can_see_library` — 원장은 전부(강사 비공개 포함). 파일은 Storage 비공개 버킷 `library`(50MB, 경로 `학원 id/무작위/file.확장자`), 읽기는 그 자료를 볼 수 있을 때만, 올리기는 원장·강사만. 열기 · 내려받기는 10분짜리 서명 주소. 화면 `#library`(모든 역할).
-  - 메신저(카톡처럼): 친구 · 채팅 두 화면. `friends`(내가 추가한 사람, RPC `find_people(검색어)` — 한 글자 이상 쳐야 나와요 · `add_friend` `remove_friend` `my_friends`). `conversations`(kind direct 1:1 `user_a < user_b` / group 방 이름 `title`, 마지막 메시지는 트리거), `conversation_members`(방 사람), `messages`(방 사람만 읽기 · 쓰기, 1:1은 보낼 때도 아직 대화할 수 있는 사이인지 `private.can_send`), `conversation_reads`. 누가 누구와: `private.message_academy(a, b)` — 원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생(같은 아이로 연결됐을 때만). 그룹은 `create_group(이름, 사람들)` `add_group_members` `rename_group` `leave_conversation` `conversation_people`. 목록은 `my_chats()`(안 읽은 수, 예전 `my_conversations` · `message_contacts`는 안 써요). 프로필 사진 · 상태 메시지는 `profiles.avatar_url` · `status_msg`, 사진은 공개 버킷 `avatars/내 id/…`(5MB). 화면 `#messages`(모든 역할 · 관리자 포함), 열어 둔 대화는 5초, 목록은 20초마다 새로 확인.
+  - 채팅(카톡처럼, 예전 이름 메신저): 친구 · 채팅 두 화면. 예시 계정 친구 · 대화도 역할마다 대화할 수 있는 사람만(`DEMO_PEOPLE` · `DEMO_CHAT`). `friends`(내가 추가한 사람, RPC `find_people(검색어)` — 한 글자 이상 쳐야 나와요 · `add_friend` `remove_friend` `my_friends`). `conversations`(kind direct 1:1 `user_a < user_b` / group 방 이름 `title`, 마지막 메시지는 트리거), `conversation_members`(방 사람), `messages`(방 사람만 읽기 · 쓰기, 1:1은 보낼 때도 아직 대화할 수 있는 사이인지 `private.can_send`), `conversation_reads`. 누가 누구와: `private.message_academy(a, b)` — 원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생(같은 아이로 연결됐을 때만). 그룹은 `create_group(이름, 사람들)` `add_group_members` `rename_group` `leave_conversation` `conversation_people`. 목록은 `my_chats()`(안 읽은 수, 예전 `my_conversations` · `message_contacts`는 안 써요). 프로필 사진 · 상태 메시지는 `profiles.avatar_url` · `status_msg`, 사진은 공개 버킷 `avatars/내 id/…`(5MB). 화면 `#messages`(모든 역할 · 관리자 포함), 열어 둔 대화는 5초, 목록은 20초마다 새로 확인.
   - 새 소식 빨간 점: `user_seen`(메뉴 경로마다 마지막으로 본 시각, 본인 것만). `app.js`의 `NEWS`(역할별 경로 → 남이 올린 것의 시각 목록)보다 새로운 게 있으면 메뉴 · 타일 · 종 모양에 점, 그 화면을 열면 `markSeen`이 지워요. 처음엔 최근 3일 것만. 예시 계정은 `DEMO_NEWS` + sessionStorage.
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
 - 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
@@ -113,8 +122,9 @@
 14. ~~성장 리포트 발급~~ (완료)
 15. ~~자료실~~ (완료)
 16. ~~서류·행정 자동 처리~~ (완료)
-17. ~~메신저~~ (완료 · 친구 · 그룹 · 프로필까지)
+17. ~~채팅(메신저)~~ (완료 · 친구 · 그룹 · 프로필까지)
 18. ~~새 소식 빨간 점 (확인하면 사라짐)~~ (완료)
+19. ~~4라운드: 시간 드롭다운 · 가로 스크롤 · 원생 들고 남 · 단계 설명 · 회원 상세 · 이용 분야 간결 · 채팅 · 자료실 폴더 · 관리자 홈 · 사용법 안내 · 현장 결제 직접 입력 · 원천세 계산 · 학부모 스위치 · 자동 처리~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
