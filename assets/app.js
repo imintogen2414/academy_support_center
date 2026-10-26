@@ -37,8 +37,12 @@ const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill
 
 const params = new URLSearchParams(location.search);
 // 데모: 첫 화면 데모 버튼(?demo=1&role=…)이나 예전 주소(?role=…)로 들어온 경우. 그 밖엔 실제 로그인이 필요해요.
-const DEMO = params.has('demo') || params.has('role');
-let ROLE = DATA.users[params.get('role')] ? params.get('role') : 'owner';
+// 주소: 로그인 후 /app, 예시 계정 /demo/owner (예전 app.html?demo=1&role=owner도 그대로 열려요)
+const DEMO_PATH = location.pathname.match(/^\/demo\/([a-z]+)/);
+const DEMO = !!DEMO_PATH || params.has('demo') || params.has('role');
+let ROLE = DATA.users[DEMO_PATH ? DEMO_PATH[1] : params.get('role')] ? (DEMO_PATH ? DEMO_PATH[1] : params.get('role')) : 'owner';
+// 예전 주소로 들어오면 주소창만 새 모양으로 바꿔요 (구글 로그인에서 돌아온 ?code= 는 그대로 두고 boot가 처리)
+if (location.pathname.endsWith('/app.html') && !params.has('code')) history.replaceState(null, '', (DEMO ? `/demo/${ROLE}` : '/app') + location.hash);
 let ME = DATA.users[ROLE];
 // 예시 계정: 강사가 이미 이수한 교육엔 리플렉션 예시를 넣어 둬요
 if (ROLE === 'teacher') DATA.training.forEach(t => { if (t.status[ME.name] === 'done') t.myRefl = { at: '10/20', text: '신고 의무와 절차를 다시 정리할 수 있었어요. 수업 전 아이들 상태를 살피는 습관을 들이려고 해요.' }; });
@@ -232,14 +236,14 @@ async function markAttendance(ids, status) {
 function realBillingPage() {
   const list = REAL.invoices.filter(i => i.month === MONTH);
   const paid = list.filter(i => i.paid_at), unpaid = list.filter(i => !i.paid_at);
-  const acts = `<button class="btn" data-act="addInvoice">${ic('plus')}한 건 추가</button><button class="btn primary" data-act="billMonth">${ic('card')}이 달 청구서 만들기</button>`;
+  const acts = `<button class="btn" data-act="onsitePay">${ic('card')}현장에서 받기</button><button class="btn" data-act="addInvoice">${ic('plus')}한 건 추가</button><button class="btn primary" data-act="billMonth">${ic('card')}이 달 청구서 만들기</button>`;
   const row = i => `
     <div class="li">
       <span class="av" style="background:${i.paid_at ? 'var(--good)' : 'var(--blue-500)'}">${esc(i.student_name[0])}</span>
       <div><div class="t"><span class="nm-link" data-edit-inv="${i.id}" role="button" tabindex="0">${esc(i.student_name)}</span> <span class="muted small">${esc(i.class_name || '')}</span></div>
         <div class="d">${esc(i.title)}${i.paid_at ? ` · ${md(i.paid_at)} 납부${i.method ? ` · ${esc(i.method)}` : ''}` : i.due ? ` · 기한 ${md(i.due)}` : ''}</div>
         ${!i.paid_at && i.reported_at ? `<div class="d" style="color:var(--warn)">학부모가 ${md(i.reported_at.slice(0, 10))}에 보냈다고 알렸어요${i.reported_note ? ` · ${esc(i.reported_note)}` : ''}</div>` : ''}</div>
-      <div class="r"><b class="num">${won(i.amount)}</b>${i.paid_at ? '<span class="chip good">납부 완료</span>'
+      <div class="r"><b class="num">${won(i.amount)}</b>${i.paid_at ? `<span class="btns"><span class="chip good">납부 완료</span><button class="btn sm" data-receipt="${i.id}">영수증</button></span>`
         : `<span class="btns">${i.reported_at ? '<span class="chip warn">입금 확인</span>' : i.due && i.due < TODAY ? ddChip(i.due) : ''}<button class="btn sm" data-copy-inv="${i.id}">안내 문구</button><button class="btn sm primary" data-pay-inv="${i.id}">납부 확인</button></span>`}</div>
     </div>`;
   const body = !list.length ? (REAL.students.length ? `
@@ -394,6 +398,60 @@ function billMonthDialog() {
   };
 }
 
+/* ---------- 현장 결제: 상담 · 등록 자리에서 받은 수강료 · 교재비를 "납부 완료" 청구로 바로 남기고 영수증을 뽑아요 (원장만) ----------
+   학부모가 없는 성인 학원처럼 그 자리에서 다 내는 경우에 써요. 매달 청구 · 납부 확인과 같은 수납 목록 · 재정에 함께 잡혀요. */
+function onsitePayDialog(sid) {
+  if (!REAL || ROLE !== 'owner') { toast(REAL ? '수납은 원장님이 해요' : '예시 계정에서는 받을 수 없어요'); return; }
+  const d = dialogEl(), s0 = sid && REAL.students.find(x => x.id === sid), plan = s0 && planOf(s0);
+  const line = (k, lab, v = '', ph = '') => `<div class="two"><label class="f">항목<input name="t_${k}" value="${esc(lab)}" maxlength="50" placeholder="예: 모의고사비"></label><label class="f">금액<span class="won-wrap"><input name="a_${k}" class="won-in" inputmode="numeric" autocomplete="off" value="${v ? comma(v) : ''}" placeholder="${ph}"><i>원</i></span></label></div>`;
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="dlgForm" novalidate>
+    <h2>현장에서 받은 돈 남기기</h2>
+    <p class="muted small" style="margin:0">상담 · 등록 자리에서 받은 돈을 "납부 완료"로 바로 남겨요. 금액을 넣은 줄만 저장돼요.</p>
+    ${s0 ? `<div class="pay-sum"><span>${esc(s0.name)}${s0.class_name ? ` · ${esc(s0.class_name)}` : ''}</span><b>${monthLabel(TODAY.slice(0, 7))}</b></div>`
+      : `<label class="f">누구에게서 받았나요 *<select name="sid"><option value="">학생 고르기</option>${REAL.students.map(x => `<option value="${x.id}">${esc(x.name)}${x.class_name ? ` · ${esc(x.class_name)}` : ''}</option>`).join('')}</select></label>`}
+    ${line(1, '수강료', plan ? plan.amount : '', '예: 300,000')}${line(2, '교재비', '', '예: 25,000')}${line(3, '', '', '')}
+    <div class="f">결제 방법<div class="pick-chips multi">${PAY_METHODS.map((m, i) => `<label><input type="radio" name="method" value="${m}" ${i === 0 ? 'checked' : ''}><span>${m}</span></label>`).join('')}</div></div>
+    <label class="chk-line"><input type="checkbox" name="print" checked><span>저장하고 영수증 뽑기</span></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">${s0 ? '나중에' : '취소'}</button><button class="btn primary">받은 돈 저장</button></div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#dlgForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+    const st = s0 || REAL.students.find(x => x.id === (el.sid && el.sid.value));
+    if (!st) return fail('학생을 골라 주세요.');
+    const items = [1, 2, 3].map(k => ({ title: el[`t_${k}`].value.trim(), amount: Math.round(numOf(el[`a_${k}`].value) || 0) })).filter(x => x.amount > 0);
+    if (!items.length) return fail('받은 금액을 하나 이상 넣어 주세요.');
+    if (items.some(x => !x.title)) return fail('금액을 넣은 줄의 항목 이름을 적어 주세요.');
+    const method = el.method.value, month = TODAY.slice(0, 7);
+    const { data, error } = await SB.from('invoices').insert(items.map(x => ({ academy_id: REAL.academy.id, student_id: st.id, month, title: x.title, amount: x.amount, due: TODAY, paid_at: TODAY, method, memo: '현장 결제' }))).select('id');
+    if (error) return fail('저장하지 못했어요. 다시 시도해 주세요.');
+    const print = el.print.checked;
+    d.close(); await loadInvoices(); render(); toast(`${st.name} · ${won(sum(items, x => x.amount))} 받은 걸 남겼어요`);
+    if (print) printReceipt(REAL.invoices.filter(i => (data || []).some(x => x.id === i.id)));
+  };
+}
+// 영수증: 같은 학생 · 같은 날 받은 청구를 한 장에 (브라우저 인쇄 · PDF로 저장)
+function printReceipt(list) {
+  if (!list.length) return;
+  const f = list[0], no = f.id.replace(/-/g, '').slice(0, 8).toUpperCase(), total = sum(list, i => i.amount);
+  const w = window.open('', '_blank', 'width=480,height=720');
+  if (!w) { toast('팝업이 막혀 있어요. 팝업을 허용해 주세요'); return; }
+  w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>영수증 ${esc(f.student_name || '')}</title>
+  <style>body{font-family:Pretendard,system-ui,sans-serif;color:#111;margin:0;padding:32px}h1{font-size:22px;margin:0 0 4px;text-align:center;letter-spacing:.3em}.c{text-align:center;color:#555;font-size:13px;margin:0 0 20px}
+  table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px solid #ddd;padding:9px 4px;text-align:left}td.n,th.n{text-align:right}tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
+  .info div{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}.sign{margin-top:28px;text-align:right;font-size:14px}.btn{margin-top:24px;width:100%;padding:12px;font-size:15px;border:0;border-radius:10px;background:#3a46e8;color:#fff}@media print{.btn{display:none}body{padding:0}}</style></head><body>
+  <h1>영 수 증</h1><p class="c">${esc(REAL.academy.name)} · 영수증 번호 ${no}</p>
+  <div class="info"><div><span>받은 분</span><b>${esc(f.student_name || '')}${f.class_name ? ` (${esc(f.class_name)})` : ''}</b></div><div><span>받은 날</span><b>${f.paid_at}</b></div><div><span>결제 방법</span><b>${esc(f.method || '-')}</b></div></div>
+  <table style="margin-top:16px"><thead><tr><th>항목</th><th class="n">금액</th></tr></thead><tbody>${list.map(i => `<tr><td>${+i.month.slice(5)}월 ${esc(i.title)}</td><td class="n">${won(i.amount)}</td></tr>`).join('')}</tbody>
+  <tfoot><tr><td>합계</td><td class="n">${won(total)}</td></tr></tfoot></table>
+  <p class="sign">위 금액을 정히 받았습니다.<br><br><b>${esc(REAL.academy.name)}</b></p>
+  <button class="btn" onclick="print()">인쇄 · PDF로 저장</button></body></html>`);
+  w.document.close();
+}
 async function payInvoice(id) {
   const i = REAL.invoices.find(x => x.id === id);
   const { error } = await SB.from('invoices').update({ paid_at: TODAY }).eq('id', id);
@@ -1071,15 +1129,40 @@ function ttDialog(t) {
     title: t ? '시간표 고치기' : '시간표 추가', table: 'timetable', row: t, after: loadSchedule,
     label: r => `${r.class_name} 수업을`,
     check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    expand: d => d.weekday.map(w => ({ ...d, weekday: +w })),
+    doneText: '시간표에 넣었어요',
     fields: [
       ['class_name', '반', { required: true, max: 50, chips: classes, placeholder: '예: 초등 B반' }],
-      ['weekday', '요일', { type: 'select', required: true, options: WEEK.map(d => [d, `${WD[d]}요일`]), value: 1, half: true }],
-      ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', half: true, chips: SUBJECTS }],
+      t ? ['weekday', '요일', { type: 'select', required: true, options: WEEK.map(d => [d, `${WD[d]}요일`]), half: true }]
+        : ['weekday', '요일 (여러 개 고르면 요일마다 같은 수업이 들어가요)', { type: 'multi', required: true, options: WEEK.map(d => [d, WD[d]]), value: [1] }],
+      ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', half: !!t, chips: SUBJECTS }],
       ['start_time', '시작', { type: 'time', required: true, value: '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: '17:30', half: true }],
       ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true, chips: ['1강의실', '2강의실', '3강의실', '자습실'] }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지', chips: staffNames() }],
       ['note', '메모 (원장·강사만)', { max: 300, placeholder: '예: 격주 단어 시험' }]
     ]
   });
+  timePickers($('#dlg'), 'start_time', 'end_time');
+}
+// 시간 칸 도우미: 시작을 바꾸면 끝이 수업 길이만큼 따라오고, 자주 쓰는 시각 · 수업 길이는 눌러서 골라요 (휴대폰 시간 고르기가 불편해서)
+const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return h * 60 + (m || 0); };
+const fromMin = n => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+const clockText = t => { const n = toMin(t), h = Math.floor(n / 60), m = n % 60; return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${m ? ` ${m}분` : ''}`; };
+function timePickers(d, sk, ek) {
+  const st = d.querySelector(`[name="${sk}"]`), en = d.querySelector(`[name="${ek}"]`);
+  if (!st || !en) return;
+  let len = Math.max(toMin(en.value) - toMin(st.value), 10) || 90;
+  const box = document.createElement('div'); box.className = 'time-help';
+  box.innerHTML = `<div class="pick-chips"><span class="muted small">시작</span>${[14, 15, 16, 17, 18, 19, 20].map(h => `<button type="button" data-st="${fromMin(h * 60)}">${clockText(fromMin(h * 60))}</button>`).join('')}</div>
+    <div class="pick-chips"><span class="muted small">수업 길이</span>${[50, 60, 80, 90, 120, 180].map(n => `<button type="button" data-len="${n}">${n < 60 || n % 60 ? `${n}분` : `${n / 60}시간`}</button>`).join('')}</div>
+    <p class="muted small" id="timeSum"></p>`;
+  en.closest('.two, .f').after(box);
+  const sum = () => { box.querySelector('#timeSum').textContent = st.value && en.value ? `${clockText(st.value)} ~ ${clockText(en.value)} (${toMin(en.value) - toMin(st.value)}분)` : ''; box.querySelectorAll('[data-len]').forEach(b => b.classList.toggle('on', +b.dataset.len === len)); box.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === st.value)); };
+  const follow = () => { if (st.value) en.value = fromMin(Math.min(toMin(st.value) + len, 23 * 60 + 59)); sum(); };
+  st.addEventListener('change', follow); st.addEventListener('input', follow);
+  en.addEventListener('change', () => { if (toMin(en.value) > toMin(st.value)) len = toMin(en.value) - toMin(st.value); sum(); });
+  box.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { st.value = b.dataset.st; follow(); });
+  box.querySelectorAll('[data-len]').forEach(b => b.onclick = () => { len = +b.dataset.len; follow(); });
+  sum();
 }
 function evDialog(e) {
   formDialog({
@@ -1122,12 +1205,20 @@ const todoDayBar = () => {
   const d = REAL.todoDay;
   return `<div class="pager"><button class="btn sm" data-todo-day="-1" aria-label="전날">‹</button><input type="date" id="todoDay" value="${d}"><button class="btn sm" data-todo-day="1" aria-label="다음 날">›</button>${d !== TODAY ? '<button class="btn sm" data-todo-day="0">오늘</button>' : ''}</div>`;
 };
-const todoAddForm = (targets, hint) => `
+// 원장 · 강사: 반 전체 · 학생 한 명 · 학생 여러 명(골라서 한 번에) 중에 보내요
+const todoAddForm = (targets, hint, picker = '') => `
   <form class="card todo-add" id="todoAdd" novalidate>
     <div class="row">${targets ? `<select name="who" aria-label="누구에게">${targets}</select>` : ''}
       <input name="title" maxlength="100" placeholder="${hint}" aria-label="할 일"><button class="btn primary">${ic('plus')}추가</button></div>
+    ${picker}
     <div class="pick-chips">${TODO_PICKS.map(p => `<button type="button" data-todo-pick="${p}">${p}</button>`).join('')}</div>
   </form>`;
+const todoPicker = groups => `
+  <div class="todo-pick" id="todoPick" hidden>
+    <p class="muted small" style="margin:0">할 일을 줄 학생을 눌러 골라 주세요 · 반 이름을 누르면 그 반을 모두 골라요 <b id="todoPickN"></b></p>
+    ${groups.map(([cls, ss]) => `<div class="tp-row"><button type="button" class="btn sm" data-pick-class="${esc(cls)}">${esc(cls)}</button>
+      <div class="pick-chips multi">${ss.map(s => `<label><input type="checkbox" name="pickStu" value="${s.id}" data-cls="${esc(cls)}"><span>${esc(s.name)}</span></label>`).join('')}</div></div>`).join('')}
+  </div>`;
 const progress = list => { const n = list.filter(t => t.done_at).length; return list.length ? `<span class="sub">${list.length}개 중 ${n}개 완료</span>${bar(n / list.length * 100, 'sm')}` : ''; };
 
 function todosPage() {
@@ -1136,13 +1227,13 @@ function todosPage() {
   if (isStaff()) {
     if (!REAL.students.length) return head('오늘 할 일', '') + noStudents();
     const groups = byClass(REAL.students);
-    const targets = groups.map(([cls, ss]) => `<option value="c:${esc(cls)}">${esc(cls)} 전체 (${ss.length}명)</option>`).join('') +
+    const targets = groups.map(([cls, ss]) => `<option value="c:${esc(cls)}">${esc(cls)} 전체 (${ss.length}명)</option>`).join('') + '<option value="pick">학생 여러 명 골라서…</option>' +
       groups.map(([cls, ss]) => `<optgroup label="${esc(cls)}">${ss.map(s => `<option value="s:${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`).join('');
     const all = REAL.todos;
-    return head('오늘 할 일', `${when} · 반 전체나 학생 한 명에게 할 일을 주면 학생 · 학부모 앱에 바로 보여요. 학생이 체크하면 여기서도 보여요.`) + todoDayBar() + `
+    return head('오늘 할 일', `${when} · 반 전체 · 학생 한 명 · 여러 명을 골라 한 번에 줄 수 있어요. 학생 · 학부모 앱에 바로 보이고, 학생이 체크하면 여기서도 보여요.`) + todoDayBar() + `
     <div class="stats"><div class="stat"><span>${when} 할 일</span><b class="num">${all.length}개</b></div><div class="stat good"><span>완료</span><b class="num">${all.filter(t => t.done_at).length}개</b></div>
       <div class="stat"><span>할 일 받은 학생</span><b class="num">${new Set(all.map(t => t.student_id)).size}/${REAL.students.length}명</b></div></div>
-    ${todoAddForm(targets, '예: 단어 20개 외우기')}` + groups.map(([cls, ss]) => `
+    ${todoAddForm(targets, '예: 단어 20개 외우기', todoPicker(groups))}` + groups.map(([cls, ss]) => `
     <section class="card" style="margin-bottom:16px">
       <div class="card-head"><h2>${esc(cls)}</h2>${progress(all.filter(t => ss.some(s => s.id === t.student_id)))}</div>
       <div class="todo-grid">${ss.map(s => `
@@ -1164,8 +1255,10 @@ async function addTodos(who, title) {
   const day = REAL.todoDay, aid = REAL.academy.id;
   let ids;
   if (!isStaff()) ids = [kidNow().id];
+  else if (who === 'pick') ids = [...document.querySelectorAll('[name="pickStu"]:checked')].map(x => x.value);
   else if (who.startsWith('c:')) ids = REAL.students.filter(s => (s.class_name || '반 미지정') === who.slice(2)).map(s => s.id);
   else ids = [who.slice(2)];
+  if (!ids.length) { toast('할 일을 줄 학생을 골라 주세요'); return false; }
   const { error } = await SB.from('student_todos').insert(ids.map(student_id => ({ academy_id: aid, student_id, day, title })));
   if (error) { toast('저장하지 못했어요. 다시 시도해 주세요.'); return false; }
   await loadTodos(day); render(); toast(ids.length > 1 ? `${ids.length}명에게 할 일을 줬어요` : '할 일을 넣었어요');
@@ -2488,7 +2581,7 @@ function studentDetail(id) {
       bills: owner ? REAL.invoices.filter(i => i.student_id === id).sort((a, b) => b.month.localeCompare(a.month)).map(i => ({ month: i.month, title: i.title, amount: i.amount, paid: i.paid_at, due: i.due, reported: i.reported_at })) : null,
       leads: DATA.leads.filter(l => l.raw && l.raw.student_id === id).map(l => l.raw),
       reports: REAL.reports.filter(r => r.student_id === id),
-      info: [['반', esc(x.class_name || '-')], ['학년', esc(x.grade || '-')], ['수강료', plan ? esc(planLabel(plan)) : '정하지 않음'],
+      info: [['반', esc(x.class_name || '-')], ['학년', esc(x.grade || '-')], ...(x.birth ? [['생년월일', x.birth.replace(/-/g, '.')]] : []), ...(x.phone ? [['본인 연락처', telLink(x.phone)]] : []), ['수강료', plan ? esc(planLabel(plan)) : '정하지 않음'],
         ['추가한 사람', x.added_by_name ? `${esc(x.added_by_name)} (${ROLE_NAMES[x.added_by_role] || ''})` : '-'], ['명단에 넣은 날', md(x.created_at.slice(0, 10))]],
       app: owner ? appLinked(id) : '' };
   } else {
@@ -2596,13 +2689,15 @@ function invitePage() {
    options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. blank: 고르지 않았을 때 보이는 글자. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
    academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김. check(data): 저장 전 확인, 문제가 있으면 안내 글 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
-function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check }) {
+function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check, expand }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
   const cur = (k, o) => row ? row[k] : o.value;
   const input = ([k, lab, o = {}]) => {
     const v = cur(k, o);
     if (o.type === 'check') return `<label class="chk-line"><input type="checkbox" name="${k}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
+    // multi: 여러 개 고르기 (값 목록으로 저장 · expand와 함께 쓰면 고른 것마다 한 줄씩)
+    if (o.type === 'multi') return `<div class="f">${lab}${o.required ? ' *' : ''}<div class="pick-chips multi">${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<label><input type="checkbox" name="${k}" value="${esc(ov)}" ${[].concat(v ?? []).map(String).includes(String(ov)) ? 'checked' : ''}><span>${esc(ol)}</span></label>`).join('')}</div></div>`;
     const ctl = o.type === 'select'
       ? `<select name="${k}"><option value="">${o.blank || '선택 안 함'}</option>${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<option value="${esc(ov)}" ${v === ov ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
       : o.type === 'area'
@@ -2640,6 +2735,11 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     const el = e.target.elements, data = {};
     for (const [k, lab, o = {}] of fields) {
       if (o.type === 'check') { data[k] = el.namedItem(k).checked; continue; }
+      if (o.type === 'multi') {
+        data[k] = [...d.querySelectorAll(`[name="${k}"]:checked`)].map(x => x.value);
+        if (o.required && !data[k].length) return fail(`${lab}을(를) 하나 이상 골라 주세요.`);
+        continue;
+      }
       const v = el.namedItem(k).value.trim();
       if (o.required && !v) return fail(`${lab}을(를) ${o.type === 'select' ? '골라' : '적어'} 주세요.`);
       if (o.type === 'number' && v !== '' && !(Number(v) >= 0)) return fail(`${lab}은(는) 0 이상의 숫자로 적어 주세요.`);
@@ -2649,7 +2749,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     }
     const bad = check && check(data);
     if (bad) return fail(bad);
-    const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert({ ...data, ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) });
+    const base = { ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) };
+    const q = row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert(expand ? expand(data).map(x => ({ ...x, ...base })) : { ...data, ...base });
     const { error } = await q;
     if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
     d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`);
@@ -2668,10 +2769,10 @@ function studentDialog(s) {
     title: s ? '원생 정보 고치기' : '원생 추가', table: 'students', row: s, after: loadStudents, noDelete: ROLE !== 'owner',
     label: r => `${r.name} 학생을`, doneText: ROLE === 'teacher' ? '원생을 추가했어요 · 원장님 명단에도 바로 보여요' : undefined,
     fields: [
-      ['name', '이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초5', half: true, chips: GRADES }],
+      ['name', '이름', { required: true, max: 50, half: true }],
       ['class_name', '반', { max: 50, placeholder: '예: 초등 B반', half: true, chips: allClassNames().slice(0, 6) }],
-      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요', half: true }],
-      ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
+      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요' }],
+      ...personFields(),
       ['memo', '메모', { max: 500 }]
     ]
   });
@@ -2679,18 +2780,24 @@ function studentDialog(s) {
 
 // 상담 카드 추가·수정
 // 눌러서 고르는 예시들 (직접 적어도 돼요)
-const GRADES = ['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', '성인'];
+const GRADES = ['미취학', '초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', 'N수생', '대학생', '성인 · 직장인'];
 const SUBJECTS = ['영어', '수학', '국어', '과학', '사회', '논술', '코딩', '예체능'];
 const staffNames = () => REAL ? REAL.members.filter(m => m.role === 'teacher' || m.role === 'owner').map(m => m.name).filter(Boolean).slice(0, 8) : DATA.staff.map(x => x.name);
 const LEAD_SOURCES = ['네이버 플레이스', '인스타그램', '블로그', '재원생 추천', '전단지', '지자체·기관', '직접 방문', '전화', '기타'];
+// 학년 · 생년월일은 둘 다 골라서 (안 넣어도 돼요). 성인 수강생은 학부모 칸을 비우고 본인 연락처만 넣어요
+const personFields = () => [
+  ['grade', '학년 (선택)', { type: 'select', options: GRADES, blank: '선택 안 함', half: true }], ['birth', '생년월일 (선택)', { type: 'date', half: true }],
+  ['phone', '학생 본인 연락처 (선택)', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }], ['parent_name', '학부모 이름 (선택)', { max: 50, half: true }],
+  ['parent_phone', '학부모 연락처 (선택)', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }]
+];
 function leadDialog(l) {
   formDialog({
-    title: l ? '상담 정보 고치기' : '새 문의 추가', table: 'leads', row: l && l.raw, after: loadLeads,
+    title: l ? '상담 정보 고치기' : '새 문의 추가', table: 'leads', row: l && l.raw, after: loadLeads, noDelete: ROLE !== 'owner',
     label: r => `${r.student_name} 학생 문의를`,
     fields: [
-      ['student_name', '학생 이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초3', half: true, chips: GRADES }],
-      ['want', '희망 반', { max: 50, placeholder: '예: 초등 A반', half: true, chips: REAL ? allClassNames().slice(0, 8) : [] }], ['source', '문의 경로', { type: 'select', options: LEAD_SOURCES, half: true }],
-      ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
+      ['student_name', '학생 이름', { required: true, max: 50, half: true }], ['source', '문의 경로', { type: 'select', options: LEAD_SOURCES, half: true }],
+      ['want', '희망 반', { max: 50, placeholder: '예: 초등 A반 · 토익 700반', chips: REAL ? allClassNames().slice(0, 8) : [] }],
+      ...personFields(),
       ['next_action', '다음 할 일', { max: 100, placeholder: '예: 상담 10/28 16:00', chips: ['전화 상담하기', '방문 상담 예약', '레벨테스트 예약', '체험수업 예약', '체험 후 연락', '등록 안내 보내기'] }],
       ['memo', '메모', { max: 500 }],
       ['urgent', '오늘 꼭 연락해야 해요', { type: 'check' }]
@@ -4018,6 +4125,7 @@ const AREAS = {
   teacher: {
     attend: { name: '출결', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
     students: { name: '원생 명단', icon: 'users', desc: '담당 반 학생 · 추가 · 고치기', stat: () => `담당 반 원생 ${REAL ? REAL.students.length : DATA.students.filter(x => DEMO_MY_CLASSES.includes(x.cls)).length}명`, render: studentsPage, detail: studentDetail, title: stuTitle },
+    leads: { name: '상담·등록', icon: 'leads', desc: '문의 → 상담 → 체험수업 → 등록 · 원장님과 함께 봐요', stat: () => `진행 중 ${DATA.leads.filter(l => l.stage !== 'enrolled').length}명`, render: leadsPage },
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
@@ -4201,7 +4309,7 @@ function markSeen(path) {
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
   owner: [['학원 운영', '출결 · 돈 · 서류 · 학생 · 일정', ['admin', 'members', 'schedule']], ['강사 · 소통', '강사 교육 · 채용 · 메신저 · 자료', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
-  teacher: [['수업', '출결 · 원생 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'todos', 'reports', 'schedule']], ['소통 · 자료', '메신저 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
+  teacher: [['수업', '출결 · 원생 · 상담 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'leads', 'todos', 'reports', 'schedule']], ['소통 · 자료', '메신저 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 메신저 · 자료실', ['news', 'messages', 'library', 'center']]],
   admin: [['센터', '센터 관리 · 메신저', ['center', 'messages']]]
@@ -4328,8 +4436,8 @@ function searchPeople(q) {
   classes.slice(0, 3).forEach(c => out.push([`#${path}`, c, `반 · 학생 ${studs.filter(x => x[1] === c).length}명`, 'users', c]));
   studs.filter(x => [x[0], x[3], x[4]].some(v => String(v || '').includes(q))).slice(0, 5)
     .forEach(([n, c, g, pn, , id]) => out.push([`#${path}/${id}`, n, [g, c, pn ? `학부모 ${pn}` : ''].filter(Boolean).join(' · '), 'grad']));
-  if (ROLE === 'owner') DATA.leads.filter(l => String(l.name).includes(q)).slice(0, 3)
-    .forEach(l => out.push(['#members/leads', l.name, `상담 · ${l.grade || ''} ${l.want || ''}`.trim(), 'leads', '']));
+  if (isStaff()) DATA.leads.filter(l => String(l.name).includes(q)).slice(0, 3)
+    .forEach(l => out.push([ROLE === 'owner' ? '#members/leads' : '#leads', l.name, `상담 · ${l.grade || ''} ${l.want || ''}`.trim(), 'leads', '']));
   return out;
 }
 (function bindSearch() {
@@ -4617,10 +4725,10 @@ function renderChrome(area) {
   if (si) si.placeholder = stuPath() ? (innerWidth < 560 ? '학생 · 반 · 메뉴 찾기' : '학생 · 반 · 메뉴 찾기 (예: 이서연, 초등 B반, 청구)') : '메뉴 찾기 (예: 시간표, 메신저)';
   const hc = $('#helpCard'); if (hc) { hc.hidden = !(ROLE === 'owner' || ROLE === 'teacher') || SEEKER; hc.classList.toggle('on', area === 'help'); }
   bindNav();
-  $('#me').innerHTML = `<a class="me-link" href="#settings" title="설정 · 내 정보">${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div></a><a href="index.html" id="logout">로그아웃</a>`;
+  $('#me').innerHTML = `<a class="me-link" href="#settings" title="설정 · 내 정보">${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div></a><a href="/" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
     if (!PROFILE || !SB) return;
-    e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
+    e.preventDefault(); await SB.auth.signOut(); location.href = '/';
   };
   renderBell();
   const foot = $('#adminApply');
@@ -4640,7 +4748,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services'],
-    teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
+    teacher: ['home', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -4675,6 +4783,8 @@ function bind() {
   on('[data-act="addInvoice"]', () => REAL.students.length ? invoiceDialog(null) : billMonthDialog());
   on('[data-edit-inv]', b => invoiceDialog(REAL.invoices.find(i => i.id === b.dataset.editInv)));
   on('[data-pay-inv]', b => payInvoice(b.dataset.payInv));
+  on('[data-act="onsitePay"]', () => onsitePayDialog());
+  on('[data-receipt]', b => { const i = REAL.invoices.find(x => x.id === b.dataset.receipt); printReceipt(REAL.invoices.filter(x => x.student_id === i.student_id && x.paid_at === i.paid_at && (x.method || '') === (i.method || ''))); });
   on('[data-copy-inv]', b => copyText(invNotice(REAL.invoices.find(i => i.id === b.dataset.copyInv)), '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요'));
   on('[data-act="copyAllInv"]', () => {
     const list = REAL.invoices.filter(i => i.month === MONTH && !i.paid_at);
@@ -4856,7 +4966,7 @@ function bind() {
   on('[data-theme-set]', b => { window.setThemeMode && setThemeMode(b.dataset.themeSet); render(); });
   document.querySelectorAll('[data-act="keepLogin"]').forEach(c => c.onchange = () => { setKeepLogin(c.checked); toast(c.checked ? '로그인을 유지해요' : '다음 로그인부터 창을 닫으면 로그아웃돼요'); });
   on('[data-act="navOpenAll"]', () => { NAV_OPEN = null; try { localStorage.removeItem('asc-nav'); } catch (e) { /* 이번 화면에서만 */ } render(); toast('왼쪽 메뉴 묶음을 모두 펼쳤어요'); });
-  on('[data-act="logoutNow"]', async () => { if (SB && USER) await SB.auth.signOut(); location.href = 'index.html'; });
+  on('[data-act="logoutNow"]', async () => { if (SB && USER) await SB.auth.signOut(); location.href = '/'; });
   on('[data-msg-tab]', b => { MSG_TAB = b.dataset.msgTab; render(); });
   on('[data-friend]', (b, e) => { e.preventDefault(); const f = friendsData().find(x => x.user_id === b.dataset.friend); if (f) friendDialog(f); });
   on('[data-act="groupInfo"]', () => groupInfoDialog(convsData().find(x => x.id === location.hash.split('/')[1])));
@@ -4930,6 +5040,16 @@ function bind() {
     if (!title) { toast('할 일을 적어 주세요'); return; }
     await addTodos(el.who ? el.who.value : '', title);
   };
+  const tpick = $('#todoPick');
+  if (tpick) {
+    const cnt = () => { const n = tpick.querySelectorAll('[name="pickStu"]:checked').length; $('#todoPickN').textContent = n ? `· ${n}명 골랐어요` : ''; };
+    todoAdd.elements.who.onchange = () => { tpick.hidden = todoAdd.elements.who.value !== 'pick'; };
+    tpick.querySelectorAll('[name="pickStu"]').forEach(x => x.onchange = cnt);
+    tpick.querySelectorAll('[data-pick-class]').forEach(b => b.onclick = () => {
+      const boxes = [...tpick.querySelectorAll('[name="pickStu"]')].filter(x => x.dataset.cls === b.dataset.pickClass), all = boxes.every(x => x.checked);
+      boxes.forEach(x => { x.checked = !all; }); cnt();
+    });
+  }
   // 일정 · 시간표
   on('[data-sch-view]', b => { SCH_VIEW = b.dataset.schView; render(); });
   on('[data-sch-week]', b => { const n = +b.dataset.schWeek; SCH_WEEK = n ? addDays(SCH_WEEK || mondayOf(TODAY), n * 7) : null; render(); });
@@ -5008,10 +5128,12 @@ async function moveLead(id, stage) {
   l.next = stage === 'enrolled' ? '첫 수업 일정 잡기' : stage === 'trial' ? '체험수업 일정 잡기' : '상담 일정 잡기';
   render();
   if (REAL) {
-    const { error } = await SB.from('leads').update({ stage, urgent: false, next_action: l.next }).eq('id', l.id);
+    const { data: up, error } = await SB.from('leads').update({ stage, urgent: false, next_action: l.next }).eq('id', l.id).select('student_id').maybeSingle();
     if (error) { Object.assign(l, before); render(); toast('옮기지 못했어요. 다시 시도해 주세요.'); return; }
-    if (stage === 'enrolled' && ROLE === 'owner') await loadStudents(); // 등록하면 원생 명단에 자동 추가돼요
+    if (stage === 'enrolled') await Promise.all([loadStudents(), loadLeads()]); // 등록하면 원생 명단에 자동 추가돼요
     render();
+    // 그 자리에서 수강료 · 교재비를 받았으면 바로 남기고 영수증까지 (원장만, 안 받았으면 "나중에")
+    if (stage === 'enrolled' && ROLE === 'owner' && up && up.student_id) onsitePayDialog(up.student_id);
   }
   toast(stage === 'enrolled' ? `${l.name} 학생이 원생으로 등록됐어요` : `${l.name} → ${DATA.stages.find(s => s.id === stage).name} 단계로 옮겼어요`);
 }
@@ -5055,14 +5177,14 @@ function useProfile() {
 }
 
 // 센터 관리자 신청: 로그인한 누구나 신청 → 지금 관리자가 센터 관리 → 관리자에서 수락
-const adminApplyLink = (short = false) => `<a class="admin-apply-link" href="app.html#apply-admin" data-apply-admin>${ic('shield')}${short ? '' : '센터 본부 직원이세요? '}<b>센터 관리자 신청</b></a>`;
+const adminApplyLink = (short = false) => `<a class="admin-apply-link" href="/app#apply-admin" data-apply-admin>${ic('shield')}${short ? '' : '센터 본부 직원이세요? '}<b>센터 관리자 신청</b></a>`;
 const bindAdminApplyLink = () => document.querySelectorAll('[data-apply-admin]').forEach(a => a.onclick = e => { e.preventDefault(); location.hash = '#apply-admin'; location.reload(); });
 async function adminApplyScreen(user) {
   MY = null;
   const { data } = await SB.rpc('my_admin_application');
   const last = (data || [])[0], m = user.user_metadata || {};
   const name = PROFILE.name || m.full_name || m.name || '';
-  const back = `<a class="btn" href="app.html" id="aaBack">돌아가기</a>`;
+  const back = `<a class="btn" href="/app" id="aaBack">돌아가기</a>`;
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><div class="card">
@@ -5082,10 +5204,10 @@ async function adminApplyScreen(user) {
       <div class="row-btns"><button class="btn primary">신청하기</button>${back}</div>
     </form>`}
   </div></div>`;
-  $('#aaBack').onclick = e => { e.preventDefault(); history.replaceState(null, '', 'app.html'); location.reload(); };
+  $('#aaBack').onclick = e => { e.preventDefault(); history.replaceState(null, '', '/app'); location.reload(); };
   if ($('#aaCheck')) $('#aaCheck').onclick = async () => {
     const { data: ok } = await SB.rpc('am_center_admin');
-    if (ok) { history.replaceState(null, '', 'app.html#center/admins'); location.reload(); }
+    if (ok) { history.replaceState(null, '', '/app#center/admins'); location.reload(); }
     else toast('아직 확인 중이에요. 조금 뒤에 다시 눌러 주세요.');
   };
   if ($('#aaForm')) $('#aaForm').onsubmit = async e => {
@@ -5340,7 +5462,7 @@ function onboarding(user) {
       <p class="msg" id="joinMsg" hidden></p>
       <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
     </form>
-    ${PROFILE.role === 'teacher' ? `<a class="btn" href="app.html#jobs" id="seeJobs">아직 코드가 없어요 · 채용 공고 먼저 보기</a>` : ''}
+    ${PROFILE.role === 'teacher' ? `<a class="btn" href="/app#jobs" id="seeJobs">아직 코드가 없어요 · 채용 공고 먼저 보기</a>` : ''}
     ${adminApplyLink()}
     <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
   </div></div>`;
@@ -5364,7 +5486,7 @@ function onboarding(user) {
     location.reload();
   };
   $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
-  $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html'; };
+  $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = '/'; };
   bindAdminApplyLink();
   // 같은 페이지 주소라 해시만 바뀌니, 새로 열어서 채용 공고 화면으로 시작해요
   if ($('#seeJobs')) $('#seeJobs').onclick = e => { e.preventDefault(); location.hash = '#jobs'; location.reload(); };
@@ -5372,10 +5494,10 @@ function onboarding(user) {
 
 async function boot() {
   if (!DEMO) {
-    if (!SB) { location.replace('index.html'); return; }
+    if (!SB) { location.replace('/'); return; }
     const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
-    if (params.has('code')) history.replaceState(null, '', 'app.html' + location.hash);
-    if (!data.session) { location.replace('index.html'); return; }
+    if (params.has('code')) history.replaceState(null, '', '/app' + location.hash);
+    if (!data.session) { location.replace('/'); return; }
     const user = USER = data.session.user;
     const [{ data: p }, { data: admin }] = await Promise.all([
       SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg, phone').eq('id', user.id).maybeSingle(),
@@ -5384,7 +5506,7 @@ async function boot() {
     PROFILE = p || {};
     if (admin) await loadCenter();
     await Promise.all([loadConvs(), loadFriends()]);
-    if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', 'app.html#center/admins'); else { adminApplyScreen(user); return; } }
+    if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', '/app#center/admins'); else { adminApplyScreen(user); return; } }
     if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
     // 구글 이름이 다른 회원과 같아서 이름이 비어 있으면, 먼저 이름을 정해요
     if (!PROFILE.name && !PROFILE.username) { rolePicker(user, true); return; }

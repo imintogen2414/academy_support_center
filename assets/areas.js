@@ -33,7 +33,7 @@ const SITE_AREAS = [
       ['재정은 세무사에게 넘길 수 있나요?', '기간을 골라 매출 · 지출 · 거래 내역을 엑셀로 내려받을 수 있어요. 원천세 계산표 · 사업장현황 수입 요약도 만들어 드려요.'],
       ['강사도 출결을 입력할 수 있나요?', '네. 강사님은 담당 반 학생의 출결을 수업 중에 휴대폰으로 바로 넣고, 원장님은 전체를 함께 봐요.']
     ],
-    demo: '/app.html?demo=1&role=owner#admin' },
+    demo: '/demo/owner#admin' },
 
   { id: 'teachers', name: '강사 관리', icon: 'grad',
     short: '센터 본부의 강사 교육 영상과 리플렉션, 강사 채용까지 함께해요.',
@@ -54,7 +54,7 @@ const SITE_AREAS = [
       ['채용 공고에 비용이 드나요?', '공고 올리기와 지원자 관리는 프로그램 안에서 할 수 있어요. 채용 대행이 필요하면 상담 후 견적을 드려요.'],
       ['필수 교육도 들을 수 있나요?', '아동학대 예방 같은 학원 종사자 필수 교육 영상도 함께 배부해요.']
     ],
-    demo: '/app.html?demo=1&role=owner#teachers' },
+    demo: '/demo/owner#teachers' },
 
   { id: 'members', name: '학생·학부모 관리', icon: 'users',
     short: '상담·등록부터 원생 명단, 학부모 공지, 학부모·학생 앱까지.',
@@ -75,7 +75,7 @@ const SITE_AREAS = [
       ['공지를 반별로 보낼 수 있나요?', '네. 전체 또는 반을 골라 보내고, 누가 읽었는지 · 안 읽었는지 확인할 수 있어요.'],
       ['성장 리포트도 보낼 수 있나요?', '과목 점수 · 학습 태도 · 선생님 의견을 담아 발급하면 학부모 앱에서 보고 PDF로 저장할 수 있어요.']
     ],
-    demo: '/app.html?demo=1&role=owner#members' },
+    demo: '/demo/owner#members' },
 
   { id: 'mou', name: '제휴(MOU)', icon: 'handshake',
     short: '유학 전문 인투유학과 맺은 제휴로 캠프·조기유학·어학연수를 연결해요.',
@@ -97,7 +97,7 @@ const SITE_AREAS = [
       ['강사도 학부모에게 안내할 수 있나요?', '네. 강사님도 제휴와 유학 안내를 보고 학부모 대신 상담을 신청할 수 있어요. 센터로 넘어가기 전에 원장님이 확인해요.']
     ],
     link: ['인투유학 바로가기', 'https://intoabroad.com'],
-    demo: '/app.html?demo=1&role=owner#mou' },
+    demo: '/demo/owner#mou' },
 
   { id: 'promo', name: '홍보 지원', icon: 'megaphone',
     short: '블로그·디자인·영상 홍보를 공식 파트너 인투마케팅이 지원해요.',
@@ -119,7 +119,7 @@ const SITE_AREAS = [
       ['강사도 의뢰할 수 있나요?', '강사님도 특강 · 설명회 홍보를 올릴 수 있어요. 원장님이 결재해야 센터로 넘어가요.']
     ],
     link: ['인투마케팅 바로가기', MARKETING_URL],
-    demo: '/app.html?demo=1&role=owner#promo' }
+    demo: '/demo/owner#promo' }
 ];
 
 /* ---------- 상세페이지 꾸미기: 분야마다 색 · 핵심 포인트 · 지원 내용 아이콘 · 그림 · 파트너 소개 ---------- */
