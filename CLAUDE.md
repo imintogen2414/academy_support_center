@@ -22,6 +22,8 @@
   - 관리자: 센터 관리 → 학원 · 이용 분야(`#center/academies`, `admin_academies()` · `set_academy_service(학원, 분야, 상태|null)`).
   - 학부모 · 학생: 제휴가 꺼져 있으면 유학 메뉴가 안 보여요.
 - 센터에 맡기기(`center_tasks`, 행정 · 강사 관리 · 학생·학부모 관리 아래 `…/center`): 원장이 서류 대신 작성 · 명단 옮기기 · 채용 대행 · 설명회 준비 같은 일(`TASK_KINDS`)을 맡기면, 관리자가 센터 관리 → 맡긴 일(`#center/tasks`)에서 접수 → 진행 중 → 완료 + 센터 메모(원장 화면에 보여요). 원장은 접수 단계에서만 고치기 · 취소, 상태 · 메모는 트리거가 관리자만 바꾸게 해요.
+- 설정(`#settings`, 모든 역할 · 오른쪽 위 내 이름이나 왼쪽 메뉴 "설정"): 내 정보(이름 · 아이디 · 휴대폰 · 로그인 방법, 고치기는 `profileDialog`, 아이디 로그인은 비밀번호 바꾸기), 우리 학원, 이용 중인 센터 지원, 결제 정보(원장: 센터 이용료 · 결제 수단 자리, 학부모: 낼 수강료), 화면 밝기(`setThemeMode` 기기 설정 · 밝게 · 어둡게) · 로그인 유지 · 자주 쓰는 메뉴 · 처음 안내 · 메뉴 묶음 펼치기, 로그아웃 · 관리자 신청 · 탈퇴 안내. 휴대폰이 없으면 홈에 한 줄 안내(`phoneHint`).
+- 공유 미리보기 이미지 `assets/og.png`는 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
 - 예시 계정의 날짜는 실제 오늘(`DATA.today = todayText()`), 오늘 출결 · 아이 오늘 일정은 오늘 요일에 수업이 있는 것만(일요일엔 없음). 예시 수납은 미납 목록(`DATA.unpaid`)으로 미납 수 · 금액을 계산해서 홈 · 목록 · 메뉴 숫자가 같아요.
 - 입력 칸은 되도록 눌러서 고르게: `chips`(학년 `GRADES`, 과목 `SUBJECTS`, 반, 강사 `staffNames()`, 서류 이름 · 내는 곳, 다음 할 일 …), 지역은 `regionPicker`, 전화번호 칸(type tel)은 치는 동안 하이픈이 저절로.
@@ -42,7 +44,7 @@
 - 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
   - `support_requests`: 학원 → 센터 지원 신청. 첫 화면은 `submit_support_request(...)` RPC로 넣어요(필수 항목 · 전화번호 형식 · 개인정보 동의 `privacy_agreed_at` · 연락 받을 시간 `contact_time`을 서버에서도 확인, 접수 번호 8자리를 돌려줌). 읽기는 관리자만.
   - `inquiries`: 문의. 가입 전(`guest`, 이름 · 연락처 · 동의 필수)과 프로그램 사용자(`member`, 학원 · 역할이 저절로)를 `submit_inquiry(이름, 연락처, 분류, 내용, 동의)` 하나로 받아요. 본인 것과 관리자만 읽고, 답변은 관리자 `answer_inquiry(문의, 답변, 상태)`.
-  - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
+  - `profiles`: 아이디·이름·역할·학원·휴대폰(`phone`, 숫자만). 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기. 이름(띄어쓰기 · 대소문자 빼고 비교 `private.norm_name`) · 아이디 · 휴대폰은 다른 회원과 겹치지 않아요(유일 인덱스 `profiles_name_uniq` · `profiles_phone_uniq` · `profiles_username_uniq`). 가입 · 고치기 전에 `check_profile_taken(아이디, 이름, 전화)`로 겹치는 것을 알려 주고("이미 있는 이름이에요!"), 서버도 막아요. 구글로 처음 올 때 이름이 겹치면 이름을 비워 두고 앱이 이름을 다시 정하게 해요(`rolePicker(user, true)`). 학생은 휴대폰을 비워 둘 수 있어요.
   - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 강사는 담당 반 학생 + 내가 추가한 학생만 — `private.can_see_student` · `private.my_classes`(원장이 정한 `academy_members.classes` + 시간표에서 담당 강사가 나인 반). 출결 · 할 일 · 성장 리포트도 같은 기준. 원장은 강사 관리 → 우리 학원 강사 "강사 담당 반"에서 `list_teacher_classes` · `set_teacher_classes`, 강사 화면 안내는 `my_teacher_classes`, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`(지역은 시·도 → 시·군·구 고르기, 꼭 골라야 해요), 나머지는 `join_academy(코드)`.
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).

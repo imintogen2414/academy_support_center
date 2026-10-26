@@ -10,14 +10,14 @@
 <meta property="og:title" content="학원지원센터 — 원장님은 가르치는 일에만, 나머지는 저희가 지원합니다">
 <meta property="og:description" content="행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.">
 <meta property="og:url" content="https://academysupportcenter.vercel.app/">
-<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png">
+<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="학원지원센터 — 원장님은 가르치는 일에만, 나머지는 저희가 지원합니다">
 <meta name="twitter:description" content="행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.">
-<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png">
+<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=2">
 <meta name="theme-color" content="#070a3d">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
@@ -88,7 +88,8 @@
           <label><input type="radio" name="role" value="student"><span>학생</span></label>
         </div>
       </div>
-      <div class="field"><label for="nm">이름</label><input id="nm" name="fullname" placeholder="예: 홍길동" autocomplete="name"></div>
+      <div class="field"><label for="nm">이름 <small>다른 회원과 겹치지 않게</small></label><input id="nm" name="fullname" placeholder="예: 홍길동" autocomplete="name"></div>
+      <div class="field" id="phField"><label for="sph">휴대폰 번호 <small id="phNote">아이디 · 비밀번호를 잊었을 때 확인해요</small></label><input id="sph" name="phone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" autocomplete="tel"></div>
       <div class="field"><label for="sid">아이디 <small>영어 소문자·숫자·_ 4~20자</small></label><input id="sid" name="uid" placeholder="예: haneul_owner" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="spw">비밀번호 <small>8자 이상</small></label><input id="spw" name="pw" type="password" placeholder="8자 이상으로 정해 주세요" autocomplete="new-password"></div>
       <div class="field" id="acField"><label for="ac">학원 이름</label><input id="ac" name="academy" placeholder="예: 하늘영어학원"></div>
@@ -494,20 +495,36 @@ loginForm.onsubmit = e => {
   });
 };
 
+// 이름 · 아이디 · 전화번호가 다른 회원과 겹치면 가입하지 않고 알려 줘요 (서버도 한 번 더 막아요)
+const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호' };
+const hasJong = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 > 0; };
+const takenMsg = list => { const w = list.map(k => TAKEN_TEXT[k]).join(' · '), j = hasJong(w); return `이미 있는 ${w}${j ? '이에요' : '예요'}! 다른 ${w}${j ? '을' : '를'} 써 주세요.`; };
+function markTaken(list) {
+  const map = { username: 'uid', name: 'fullname', phone: 'phone' };
+  Object.values(map).forEach(n => signupForm.elements[n].classList.remove('bad'));
+  list.forEach(k => signupForm.elements[map[k]].classList.add('bad'));
+  if (list.length) signupForm.elements[map[list[0]]].focus();
+}
 signupForm.onsubmit = e => {
   e.preventDefault();
-  const f = signupForm, el = f.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value, name = el.fullname.value.trim();
+  const f = signupForm, el = f.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value, name = el.fullname.value.trim(), phone = el.phone.value.trim();
+  const needPhone = el.role.value !== 'student';
+  markTaken([]);
   if (!name) return showMsg(signupMsg, '이름을 적어 주세요.');
+  if (needPhone && !phone) return showMsg(signupMsg, '휴대폰 번호를 적어 주세요.');
+  if (phone && !phoneOk(phone)) return showMsg(signupMsg, '휴대폰 번호 형식이 맞지 않아요. 예: 010-1234-5678');
   if (!ID_RULE.test(id)) return showMsg(signupMsg, '아이디는 영어 소문자·숫자·_ 로 4~20자예요.');
   if (pw.length < 8) return showMsg(signupMsg, '비밀번호는 8자 이상으로 정해 주세요.');
   if (!SB) return showMsg(signupMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
   setKeepLogin(true);
   busy(f.querySelector('button'), '가입하는 중…', async () => {
+    const { data: taken } = await SB.rpc('check_profile_taken', { p_username: id, p_name: name, p_phone: phone || null });
+    if (taken && taken.length) { markTaken(taken); return showMsg(signupMsg, takenMsg(taken)); }
     const { data, error } = await SB.auth.signUp({
       email: idToEmail(id), password: pw,
-      options: { data: { username: id, name: name.slice(0, 50), role: el.role.value, academy_name: el.academy.value.trim().slice(0, 100) } }
+      options: { data: { username: id, name: name.slice(0, 50), phone: phone || null, role: el.role.value, academy_name: el.academy.value.trim().slice(0, 100) } }
     });
-    if (error) return showMsg(signupMsg, authErrorText(error));
+    if (error) return showMsg(signupMsg, /Database error/i.test(error.message || '') ? '이미 있는 이름 · 아이디 · 전화번호예요! 다시 확인해 주세요.' : authErrorText(error));
     if (!data.session) return showMsg(signupMsg, '가입은 됐는데 바로 로그인할 수 없어요. 센터에 문의해 주세요.');
     location.href = 'app.html';
   });
@@ -519,6 +536,8 @@ signupForm.querySelectorAll('[name=role]').forEach(r => r.onchange = () => {
   document.getElementById('acField').hidden = !owner;
   document.getElementById('codeHint').hidden = owner;
   document.getElementById('ownerHint').hidden = !owner;
+  // 학생은 휴대폰이 없을 수 있어서 전화번호를 꼭 받지 않아요 (부모님 번호는 부모님 계정이 써요)
+  document.getElementById('phNote').textContent = signupForm.elements.role.value === 'student' ? '없으면 비워 두세요 · 부모님 번호는 넣지 말아 주세요' : '아이디 · 비밀번호를 잊었을 때 확인해요';
 });
 
 document.getElementById('googleBtn').onclick = async () => {

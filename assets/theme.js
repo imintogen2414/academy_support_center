@@ -23,6 +23,12 @@
     try { localStorage.setItem('asc-theme', next); } catch (e) { /* 저장 못 해도 지금 화면은 바뀌어요 */ }
     paint();
   };
+  // 설정 화면: 기기 설정(system) · 밝게(light) · 어둡게(dark)
+  window.setThemeMode = mode => {
+    if (mode === 'dark' || mode === 'light') root.dataset.theme = mode; else delete root.dataset.theme;
+    try { if (mode === 'dark' || mode === 'light') localStorage.setItem('asc-theme', mode); else localStorage.removeItem('asc-theme'); } catch (e) { /* 지금 화면만 바뀌어요 */ }
+    paint();
+  };
   document.addEventListener('click', e => { if (e.target.closest('[data-theme-toggle]')) window.toggleTheme(); });
   mq.addEventListener && mq.addEventListener('change', paint);
   window.paintTheme = paint;

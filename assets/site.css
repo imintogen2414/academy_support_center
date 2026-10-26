@@ -167,6 +167,7 @@ main { display: grid; place-items: center; padding: 40px 24px; }
 .field label { font-size: 13px; font-weight: 600; }
 .field input { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
 .field input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
+.field input.bad { border-color: #ff7a66; box-shadow: 0 0 0 4px rgba(255,122,102,.15); }
 .btn.wide { width: 100%; padding: 13px; font-size: 15px; }
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; margin: 22px 0 14px; }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
