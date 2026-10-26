@@ -278,3 +278,5 @@ main { display: grid; place-items: center; padding: 40px 24px; }
 .ask-link > span:nth-child(2) { display: grid; flex: 1; font-size: 13.5px; }
 .ask-link small { color: var(--muted); font-size: 12px; }
 .box .theme-row { display: flex; justify-content: flex-end; margin-bottom: -28px; }
+.check-res { margin-top: 16px; }
+.receipt .pre { white-space: pre-wrap; font-weight: 500; }

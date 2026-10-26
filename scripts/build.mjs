@@ -31,7 +31,7 @@ for (const a of SITE_AREAS) {
     .replace(`<link rel="canonical" href="${SITE}/">`, `<link rel="canonical" href="${url}">`);
   writeFileSync(`${out}/area/${a.id}.html`, page);
 }
-writeFileSync(`${out}/robots.txt`, `User-agent: *\nAllow: /\nDisallow: /app.html\n\nSitemap: ${SITE}/sitemap.xml\n`);
+writeFileSync(`${out}/robots.txt`, `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /app.html\nDisallow: /demo/\n\nSitemap: ${SITE}/sitemap.xml\n`);
 const today = new Date().toISOString().slice(0, 10);
 writeFileSync(`${out}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

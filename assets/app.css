@@ -816,3 +816,17 @@ a.tel:hover { color: var(--blue-600); }
 
 /* 센터 관리: 회원 */
 .mem-list .li .d { word-break: break-all; }
+
+/* 여러 개 고르기 칩 (요일 · 학생) */
+.pick-chips.multi label { position: relative; }
+.pick-chips.multi input { position: absolute; opacity: 0; pointer-events: none; }
+.pick-chips.multi span { display: inline-block; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 13px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.pick-chips.multi input:checked + span { background: var(--blue-600); border-color: var(--blue-600); color: #fff; }
+.pick-chips.multi input:focus-visible + span { outline: 2px solid var(--blue-400); outline-offset: 2px; }
+.time-help { display: grid; gap: 8px; margin-top: -4px; }
+.time-help .pick-chips { align-items: center; }
+.time-help .muted.small { min-width: 56px; }
+.time-help p { margin: 0; font-weight: 600; }
+.todo-pick { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; margin: 10px 0; }
+.todo-pick .tp-row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.todo-pick .tp-row > .btn { flex: none; }

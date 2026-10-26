@@ -28,6 +28,11 @@
 - 결재함(`#admin/approvals`) 아래에 강사가 올린 홍보 의뢰 · 제휴 신청(원장 결재 대기)도 모아 보여요(`otherApvCard`).
 - 센터 관리 → 회원(`#center/members`, `admin_members()`): 가입한 사람 이름 · 아이디/이메일 · 로그인 방법 · 역할 · 휴대폰 · 학원 · 가입일 · 마지막 로그인. 보기만 해요.
 - 예시 원생은 `data.js` 끝에서 반별 출결 인원(`attendance.total`)만큼 채워요 — 원생 수 · 강사 담당 반 원생 · 출결 · 수납 숫자가 서로 맞아요. 예시 연락처는 `010-0000-`으로 시작하는 가짜 번호.
+- 시간표 추가: 요일을 여러 개 고르면 요일마다 한 줄씩(`formDialog`의 `type: 'multi'` + `expand`). 시작을 바꾸면 끝이 수업 길이만큼 따라오고, 자주 쓰는 시각 · 수업 길이는 눌러서(`timePickers`).
+- 오늘 할 일: 반 전체 · 학생 한 명 · "학생 여러 명 골라서"(`todoPicker`, 반 이름을 누르면 그 반 모두).
+- 상담·등록: 학년(선택) · 생년월일(`birth`, 선택) · 학생 본인 연락처(`phone`, 성인 · 고등학생) · 학부모는 선택. 등록하면 트리거가 원생으로 함께 옮겨요. 강사도 메뉴 `#leads`(삭제는 원장만).
+- 현장 결제(`onsitePayDialog`): 원장이 상담에서 "등록"으로 옮기면 그 자리에서 받은 수강료 · 교재비 · 기타를 "납부 완료" 청구로 바로 남기고 영수증(`printReceipt`, 인쇄 · PDF)을 뽑아요. 수납 화면 "현장에서 받기", 납부 완료 줄의 "영수증"도 같아요.
+- 첫 화면 진행 상황 보기(`#check`): 접수 번호 + 남긴 연락처 → `check_my_request(번호, 연락처)`(가입 안 해도 돼요). 접수 완료 화면 · 오른쪽 아래 링크에서 바로.
 - 공유 미리보기 이미지 `assets/og.png`는 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
 - 예시 계정의 날짜는 실제 오늘(`DATA.today = todayText()`), 오늘 출결 · 아이 오늘 일정은 오늘 요일에 수업이 있는 것만(일요일엔 없음). 예시 수납은 미납 목록(`DATA.unpaid`)으로 미납 수 · 금액을 계산해서 홈 · 목록 · 메뉴 숫자가 같아요.
@@ -45,7 +50,7 @@
 - 로컬 확인: 환경변수 넣고 `npm run build` 후 `dist/`를 웹서버로 연다. `dist/`, `node_modules/`는 커밋하지 않는다.
 - `assets/supa.js`: Supabase 연결(`SB`), 아이디 → 내부 이메일(`아이디@id.academysupportcenter.app`) 변환, 오류 문구.
 - 로그인: 아이디+비밀번호(내부 이메일 방식, Supabase "Confirm email" 꺼 둠), 구글(OAuth, pkce). "로그인 유지하기"를 끄면(`asc-keep-login`=0) 세션을 sessionStorage에 둬서 창을 닫으면 로그아웃(`supa.js`의 `authStore`). 구글로 처음 오면 `app.html`에서 역할을 한 번 고른다.
-- `app.html`: `?demo=1&role=…`(또는 예전 `?role=…`)이면 데모, 아니면 로그인 필수.
+- 주소: 로그인 후 화면은 `/app`, 예시 계정은 `/demo/owner` · `/demo/teacher` · `/demo/parent` · `/demo/student`(`vercel.json` rewrites → `app.html`). 예전 `app.html?demo=1&role=…`로 와도 열리고 주소창은 새 모양으로 바뀌어요. 구글 로그인 돌아오는 주소만 Supabase에 등록된 `/app.html` 그대로. 그래서 `app.html`의 파일 주소도 `/assets/…`처럼 `/`로 시작해요.
 - 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
   - `support_requests`: 학원 → 센터 지원 신청. 첫 화면은 `submit_support_request(...)` RPC로 넣어요(필수 항목 · 전화번호 형식 · 개인정보 동의 `privacy_agreed_at` · 연락 받을 시간 `contact_time`을 서버에서도 확인, 접수 번호 8자리를 돌려줌). 읽기는 관리자만.
   - `inquiries`: 문의. 가입 전(`guest`, 이름 · 연락처 · 동의 필수)과 프로그램 사용자(`member`, 학원 · 역할이 저절로)를 `submit_inquiry(이름, 연락처, 분류, 내용, 동의)` 하나로 받아요. 본인 것과 관리자만 읽고, 답변은 관리자 `answer_inquiry(문의, 답변, 상태)`.
