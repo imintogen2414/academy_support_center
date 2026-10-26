@@ -15,27 +15,26 @@ cpSync('assets', `${out}/assets`, { recursive: true });
 mkdirSync(`${out}/assets/vendor`, { recursive: true });
 cpSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js', `${out}/assets/vendor/supabase.js`);
 
-// 4) 검색 노출: 분야마다 제목 · 설명이 들어간 페이지(/area/admin → area/admin.html, vercel.json이 이어 줘요) + robots.txt · sitemap.xml
+// 4) 검색 노출: 분야마다 제목 · 설명이 들어간 페이지(/area/admin → area/admin.html, /jobs → jobs.html, vercel.json이 이어 줘요) + robots.txt · sitemap.xml
 const SITE = 'https://academysupportcenter.vercel.app';
 const { SITE_AREAS } = runInNewContext(readFileSync('assets/areas.js', 'utf8') + ';({ SITE_AREAS })', {});
 const strip = s => String(s).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '').replace(/"/g, '&quot;');
 const home = readFileSync('index.html', 'utf8');
 const homeTitle = home.match(/<title>(.*?)<\/title>/)[1], homeDesc = home.match(/<meta name="description" content="(.*?)">/)[1];
 mkdirSync(`${out}/area`);
-for (const a of SITE_AREAS) {
-  const title = `${a.name} | 학원지원센터`, desc = `${strip(a.title)} — ${strip(a.lede)}`, url = `${SITE}/area/${a.id}`;
-  const page = home.split(`<title>${homeTitle}</title>`).join(`<title>${title}</title>`)
+const pageOf = (title, desc, url) => home.split(`<title>${homeTitle}</title>`).join(`<title>${title}</title>`)
     .split(`content="${homeTitle}"`).join(`content="${title}"`)
     .split(`content="${homeDesc}"`).join(`content="${desc}"`)
     .replace(`<meta property="og:url" content="${SITE}/">`, `<meta property="og:url" content="${url}">`)
     .replace(`<link rel="canonical" href="${SITE}/">`, `<link rel="canonical" href="${url}">`);
-  writeFileSync(`${out}/area/${a.id}.html`, page);
-}
+for (const a of SITE_AREAS) writeFileSync(`${out}/area/${a.id}.html`, pageOf(`${a.name} | 학원지원센터`, `${strip(a.title)} — ${strip(a.lede)}`, `${SITE}/area/${a.id}`));
+// 강사로 일하고 싶은 분: /jobs (가입한 학원의 채용 공고 · 학원 소개)
+writeFileSync(`${out}/jobs.html`, pageOf('강사 채용 | 학원지원센터', '학원지원센터에 가입한 학원들의 강사 채용 공고와 학원 소개. 지역 · 분야 · 근무 형태 · 경력으로 찾고, 이력서를 한 번 써 두면 바로 지원해요.', `${SITE}/jobs`));
 writeFileSync(`${out}/robots.txt`, `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /app.html\nDisallow: /demo/\n\nSitemap: ${SITE}/sitemap.xml\n`);
 const today = new Date().toISOString().slice(0, 10);
 writeFileSync(`${out}/sitemap.xml`, `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${['/', ...SITE_AREAS.map(a => `/area/${a.id}`)].map(p => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join('\n')}
+${['/', '/jobs', ...SITE_AREAS.map(a => `/area/${a.id}`)].map(p => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join('\n')}
 </urlset>
 `);
 

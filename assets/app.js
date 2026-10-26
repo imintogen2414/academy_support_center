@@ -43,10 +43,12 @@ const params = new URLSearchParams(location.search);
 // 주소: 로그인 후 /app, 예시 계정 /demo/owner (예전 app.html?demo=1&role=owner도 그대로 열려요)
 const DEMO_PATH = location.pathname.match(/^\/demo\/([a-z]+)/);
 const DEMO = !!DEMO_PATH || params.has('demo') || params.has('role');
-let ROLE = DATA.users[DEMO_PATH ? DEMO_PATH[1] : params.get('role')] ? (DEMO_PATH ? DEMO_PATH[1] : params.get('role')) : 'owner';
+// /demo/seeker: 학원에 아직 연결 안 된 강사(구직 중) — 채용 공고 · 이력서 · 지원 현황만
+const DEMO_SEEKER = !!DEMO_PATH && DEMO_PATH[1] === 'seeker';
+let ROLE = DEMO_SEEKER ? 'teacher' : DATA.users[DEMO_PATH ? DEMO_PATH[1] : params.get('role')] ? (DEMO_PATH ? DEMO_PATH[1] : params.get('role')) : 'owner';
 // 예전 주소로 들어오면 주소창만 새 모양으로 바꿔요 (구글 로그인에서 돌아온 ?code= 는 그대로 두고 boot가 처리)
 if (location.pathname.endsWith('/app.html') && !params.has('code')) history.replaceState(null, '', (DEMO ? `/demo/${ROLE}` : '/app') + location.hash);
-let ME = DATA.users[ROLE];
+let ME = DEMO_SEEKER ? { ...DATA.users.teacher, name: '박지수', av: '박' } : DATA.users[ROLE];
 // 예시 계정: 강사가 이미 이수한 교육엔 리플렉션 예시를 넣어 둬요
 if (ROLE === 'teacher') DATA.training.forEach(t => { if (t.status[ME.name] === 'done') t.myRefl = { at: '10/20', text: '신고 의무와 절차를 다시 정리할 수 있었어요. 수업 전 아이들 상태를 살피는 습관을 들이려고 해요.' }; });
 let PROFILE = null; // 실제로 로그인한 회원의 프로필 (데모면 null)
@@ -161,6 +163,13 @@ function billingPage() {
         </div>`).join('')}
     </div>
   </section>
+  <section class="card" style="margin-top:16px">
+    <div class="card-head"><h2>자주 쓰는 할인</h2><span class="sub">청구할 때 눌러서 고르면 원가와 실제 받은 금액이 함께 남아요</span></div>
+    <div class="pick-chips">${DATA.discounts.map(x => `<button type="button" data-demo-disc>${esc(x[0])} <span class="muted small">${x[1]}명</span></button>`).join('')}</div>
+    <div class="list" style="margin-top:12px">${DATA.discountSamples.map(([n, c, l, a, note]) => `
+      <div class="li"><span class="av" style="background:var(--blue-500)">${n[0]}</span><div><div class="t">${n} <span class="muted small">${c}</span></div><div class="d">10월 수강료</div></div>
+        <div class="r"><b class="num">${won(a)}</b><span class="time disc"><s>${won(l)}</s> ${note}</span></div></div>`).join('')}</div>
+  </section>
   <a class="hint" href="#mou/partners">${ic('handshake')}<span>카드 결제(PG) 제휴를 신청하면 카드 수수료가 내려가요</span><b>제휴 보기 →</b></a>`;
 }
 
@@ -247,7 +256,7 @@ function realBillingPage() {
       <div><div class="t"><span class="nm-link" data-edit-inv="${i.id}" role="button" tabindex="0">${esc(i.student_name)}</span> <span class="muted small">${esc(i.class_name || '')}</span></div>
         <div class="d">${esc(i.title)}${i.paid_at ? ` · ${md(i.paid_at)} 납부${i.method ? ` · ${esc(i.method)}` : ''}` : i.due ? ` · 기한 ${md(i.due)}` : ''}</div>
         ${!i.paid_at && i.reported_at ? `<div class="d" style="color:var(--warn)">학부모가 ${md(i.reported_at.slice(0, 10))}에 보냈다고 알렸어요${i.reported_note ? ` · ${esc(i.reported_note)}` : ''}</div>` : ''}</div>
-      <div class="r"><b class="num">${won(i.amount)}</b>${i.paid_at ? `<span class="btns"><span class="chip good">납부 완료</span><button class="btn sm" data-receipt="${i.id}">영수증</button></span>`
+      <div class="r"><b class="num">${won(i.amount)}</b>${discLine(i)}${i.paid_at ? `<span class="btns"><span class="chip good">납부 완료</span><button class="btn sm" data-receipt="${i.id}">영수증</button></span>`
         : `<span class="btns">${i.reported_at ? '<span class="chip warn">입금 확인</span>' : i.due && i.due < TODAY ? ddChip(i.due) : ''}<button class="btn sm" data-copy-inv="${i.id}">안내 문구</button><button class="btn sm primary" data-pay-inv="${i.id}">납부 확인</button></span>`}</div>
     </div>`;
   const body = !list.length ? (REAL.students.length ? `
@@ -270,6 +279,7 @@ function realBillingPage() {
     <div class="stat"><span>청구 합계</span><b class="num">${won(sum(list, i => i.amount))}</b></div>
     <div class="stat good"><span>받은 금액</span><b class="num">${won(sum(paid, i => i.amount))}</b></div>
     <div class="stat crit"><span>미납 ${unpaid.length}건</span><b class="num">${won(sum(unpaid, i => i.amount))}</b></div>
+    ${list.some(i => i.list_amount > i.amount) ? `<div class="stat"><span>할인 ${list.filter(i => i.list_amount > i.amount).length}건</span><b class="num">${won(sum(list, i => Math.max((i.list_amount || i.amount) - i.amount, 0)))}</b></div>` : ''}
   </div>` + body;
 }
 
@@ -285,14 +295,91 @@ function invoiceDialog(i) {
     fields: [
       ['student_id', '학생', { type: 'select', required: true, createOnly: true, options: REAL.students.map(s => [s.id, `${s.name}${s.class_name ? ` · ${s.class_name}` : ''}`]) }],
       ['month', '청구 월', { type: 'month', required: true, createOnly: true, value: MONTH, half: true }], ['title', '항목', { required: true, max: 50, value: '수강료', half: true }],
-      ['amount', '금액', { type: 'won', required: true, placeholder: '예: 300,000', half: true }], ['due', '납부 기한', { type: 'date', half: true }],
+      ['list_amount', '원가 (할인 전)', { type: 'won', placeholder: '예: 300,000', half: true, value: null }], ['amount', '실제 받을 금액', { type: 'won', required: true, placeholder: '예: 270,000', half: true }],
+      ['discount_note', '할인 내역', { max: 100, placeholder: '할인이 없으면 비워 두세요', chips: [...(REAL.discounts || []).map(discLabel), '직접 적기'] }],
+      ['due', '납부 기한', { type: 'date', half: true }],
       ['paid_at', '납부한 날', { type: 'date', half: true }], ['method', '결제 방법', { type: 'select', options: PAY_METHODS, half: true }],
       ['memo', '메모', { max: 300 }]
-    ]
+    ],
+    check: d => {
+      if (d.list_amount != null && d.list_amount < d.amount) return '실제 받을 금액이 원가보다 커요. 금액을 확인해 주세요.';
+      if (d.list_amount == null || d.list_amount === d.amount) { d.list_amount = null; if (!d.discount_note) d.discount_note = null; }
+      if (d.list_amount != null && d.list_amount > d.amount && !d.discount_note) d.discount_note = '할인';
+      return '';
+    }
   });
-  // 학생을 고르면 정해 둔 수강료를 금액에 채워 줘요
-  const pick = $('#dlgForm [name="student_id"]'), amt = $('#dlgForm [name="amount"]');
-  if (pick) pick.onchange = () => { const p = planOf(REAL.students.find(x => x.id === pick.value)); if (p && !amt.value) amt.value = comma(p.amount); };
+  bindDiscount($('#dlgForm'), i ? i.list_amount ?? i.amount : null);
+  // 학생을 고르면 정해 둔 수강료 · 늘 받는 할인을 채워 줘요
+  const pick = $('#dlgForm [name="student_id"]'), lst = $('#dlgForm [name="list_amount"]');
+  if (pick) pick.onchange = () => {
+    const st = REAL.students.find(x => x.id === pick.value), p = planOf(st), dc = discOf(st);
+    if (p && !lst.value) lst.value = comma(p.amount);
+    if (dc) { const n = $('#dlgForm [name="discount_note"]'); n.value = discLabel(dc); }
+    $('#dlgForm').dispatchEvent(new Event('disc'));
+  };
+}
+
+/* ---------- 수강료 할인: 원가 · 실제 받을 금액 · 할인 내역 (자주 쓰는 할인은 discount_presets) ---------- */
+const discOf = s => s && s.discount_id ? (REAL.discounts || []).find(x => x.id === s.discount_id) : null;
+const discLabel = x => `${x.name} ${x.kind === 'pct' ? `${x.value}%` : won(x.value)}`;
+const applyDisc = (amount, x) => !x ? amount : x.kind === 'pct' ? Math.max(amount - Math.round(amount * x.value / 1000) * 10, 0) : Math.max(amount - x.value, 0);
+// 원가 · 실제 받은 금액이 다르면 "원가 300,000원 · 형제 할인 10%"
+const discLine = i => i.list_amount > i.amount ? `<span class="time disc"><s>${won(i.list_amount)}</s> ${esc(i.discount_note || '할인')}</span>` : '';
+// 할인을 고르면 실제 받을 금액을 계산해서 넣어 줘요 (직접 고쳐도 돼요)
+function bindDiscount(form, base) {
+  const lst = form.querySelector('[name="list_amount"]'), amt = form.querySelector('[name="amount"]'), note = form.querySelector('[name="discount_note"]');
+  if (base != null && !lst.value) lst.value = comma(base);
+  const calc = () => {
+    const l = numOf(lst.value), x = (REAL.discounts || []).find(d => discLabel(d) === note.value.trim());
+    if (l > 0) amt.value = comma(applyDisc(l, x));
+  };
+  lst.addEventListener('input', calc);
+  form.addEventListener('disc', calc);
+  form.querySelectorAll('[data-pick="discount_note"]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.v === '직접 적기') { note.value = ''; note.focus(); return; }
+    calc();
+  }));
+}
+function discountDialog(x) {
+  formDialog({
+    title: x ? '할인 고치기' : '자주 쓰는 할인 추가', table: 'discount_presets', row: x, after: loadPlans,
+    label: r => `${r.name} 할인을`,
+    fields: [
+      ['name', '이름', { required: true, max: 30, placeholder: '예: 형제 할인', chips: ['형제 할인', '장기 등록', '재원생 추천', '다자녀', '첫 달 할인', '조기 등록'] }],
+      ['kind', '할인 방식', { type: 'select', required: true, options: [['pct', '퍼센트 (%)'], ['won', '금액 (원)']], value: 'pct', half: true }],
+      ['value', '얼마나', { type: 'number', required: true, placeholder: '예: 10 (10%) · 20000 (2만 원)', half: true }]
+    ],
+    check: d => d.kind === 'pct' && (d.value < 1 || d.value > 100) ? '퍼센트는 1~100 사이로 넣어 주세요.' : !(d.value > 0) ? '할인 크기를 넣어 주세요.' : ''
+  });
+}
+// 늘 받는 할인을 학생에게 한 번에 붙이기
+function applyDiscountDialog() {
+  const d = dialogEl(), groups = byClass(REAL.students);
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="planForm" novalidate>
+    <h2>늘 받는 할인 붙이기</h2>
+    <p class="muted small" style="margin:0">붙여 두면 "이 달 청구서 만들기"와 매달 자동 청구에서 원가와 할인한 금액이 함께 들어가요.</p>
+    <label class="f">할인<select name="disc">${REAL.discounts.map(x => `<option value="${x.id}">${esc(discLabel(x))}</option>`).join('')}<option value="">할인 떼기</option></select></label>
+    <div class="apply-groups">${groups.map(([cls, ss], n) => `
+      <fieldset><legend><label><input type="checkbox" data-all="${n}"> ${esc(cls)} 모두 <span class="muted small">${ss.length}명</span></label></legend>
+        <div class="checks">${ss.map(x => `<label class="chk"><input type="checkbox" name="st" value="${x.id}" data-g="${n}" ${x.discount_id ? 'checked' : ''}><span><b>${esc(x.name)}</b><small>${discOf(x) ? esc(discLabel(discOf(x))) : '할인 없음'}</small></span></label>`).join('')}</div></fieldset>`).join('')}</div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">붙이기</button></div>
+  </form>`;
+  d.showModal();
+  const sel = d.querySelector('[name=disc]');
+  const pre = () => d.querySelectorAll('[name=st]').forEach(c => { c.checked = REAL.students.find(x => x.id === c.value).discount_id === sel.value && !!sel.value; });
+  sel.onchange = pre; pre();
+  d.querySelectorAll('[data-all]').forEach(a => a.onchange = () => d.querySelectorAll(`[data-g="${a.dataset.all}"]`).forEach(c => { c.checked = a.checked; }));
+  $('#dlgCancel').onclick = () => d.close();
+  $('#planForm').onsubmit = async e => {
+    e.preventDefault();
+    const ids = [...d.querySelectorAll('[name=st]:checked')].map(c => c.value), m = $('#dlgMsg');
+    if (!ids.length) { m.textContent = '학생을 한 명 이상 골라 주세요.'; m.hidden = false; return; }
+    const { error } = await SB.from('students').update({ discount_id: sel.value || null }).in('id', ids);
+    if (error) { m.textContent = '저장하지 못했어요. 다시 시도해 주세요.'; m.hidden = false; return; }
+    d.close(); await loadStudents(); render(); toast(`${ids.length}명에게 ${sel.value ? '할인을 붙였어요' : '할인을 뗐어요'}`);
+  };
 }
 
 /* ---------- 수강료 미리 정해 두기 (tuition_plans) ---------- */
@@ -309,6 +396,11 @@ function plansCard() {
     }).join('')}</div>
     <p class="muted small" style="margin:10px 0 0">수강료를 붙인 학생 ${with_}명은 "이 달 청구서 만들기"에서 금액이 저절로 들어가요. 학생마다 하나하나 칠 필요 없어요.</p>`
     : `<p class="muted small" style="margin:0">"초등 주 3회 300,000원"처럼 수강료를 미리 만들어 두고 학생(반 전체도 한 번에)에게 붙이면, 매달 청구서를 만들 때 금액이 저절로 들어가요.</p>`}
+    <div class="disc-row">
+      <div class="card-head" style="margin:0"><h3>자주 쓰는 할인 ${(REAL.discounts || []).length}개</h3><span class="btns">${(REAL.discounts || []).length ? '<button class="btn sm" data-act="applyDisc">늘 받는 학생 정하기</button>' : ''}<button class="btn sm" data-act="addDisc">${ic('plus')}할인 추가</button></span></div>
+      ${(REAL.discounts || []).length ? `<div class="pick-chips">${REAL.discounts.map(x => `<button type="button" data-edit-disc="${x.id}">${esc(discLabel(x))} <span class="muted small">${REAL.students.filter(s => s.discount_id === x.id).length}명</span></button>`).join('')}</div>`
+        : '<p class="muted small" style="margin:0">"형제 할인 10%" · "장기 등록 20,000원"처럼 한 번 만들어 두면 청구할 때 눌러서 고르고, 원가와 실제 받은 금액이 함께 남아요.</p>'}
+    </div>
   </section>`;
 }
 function planDialog(p) {
@@ -370,6 +462,7 @@ function billMonthDialog() {
     <p class="muted small" style="margin:0">수강료를 붙인 학생은 그 금액으로 저절로 만들어져요. 나머지는 반마다 금액을 넣으면 그 반 학생 모두에게 만들어져요. 같은 달에 같은 항목이 이미 있는 학생은 건너뛰어요.</p>
     <div class="two"><label class="f">항목<input name="title" value="수강료" maxlength="50"></label><label class="f">납부 기한<input name="due" type="date" value="${due}"></label></div>
     ${byPlan.length ? `<div class="plan-sum"><b>정해 둔 수강료로 ${planned.length}명</b>${byPlan.map(([p, ss]) => `<span>${esc(p.name)} ${won(p.amount)} × ${ss.length}명</span>`).join('')}</div>` : ''}
+    ${REAL.students.some(discOf) ? `<div class="plan-sum"><b>늘 받는 할인 ${REAL.students.filter(discOf).length}명</b><span>원가와 할인한 금액이 함께 들어가요</span></div>` : ''}
     ${groups.map(([cls, ss], n) => `<label class="f">${esc(cls)} <span class="muted small">${ss.length}명 · 비워 두면 건너뛰어요</span><span class="won-wrap"><input name="c${n}" class="won-in" inputmode="numeric" autocomplete="off" placeholder="금액" value="${comma(last[cls])}"><i>원</i></span></label>`).join('')}
     ${!REAL.plans.length ? '<p class="muted small" style="margin:0">매달 같은 금액이면 "수강료 추가"로 미리 정해 두면 다음부터 넣을 필요가 없어요.</p>' : ''}
     <p class="msg" id="dlgMsg" hidden></p>
@@ -384,7 +477,7 @@ function billMonthDialog() {
     const rows = []; let skipped = 0;
     const add = (st, amount) => {
       if (REAL.invoices.some(x => x.student_id === st.id && x.month === MONTH && x.title === title)) skipped++;
-      else rows.push({ academy_id: REAL.academy.id, student_id: st.id, month: MONTH, title, amount, due });
+      else { const x = discOf(st), real = applyDisc(amount, x); rows.push({ academy_id: REAL.academy.id, student_id: st.id, month: MONTH, title, amount: real, due, ...(x && real < amount ? { list_amount: amount, discount_note: discLabel(x) } : {}) }); }
     };
     planned.forEach(st => add(st, planOf(st).amount));
     for (const [n, [, ss]] of groups.entries()) {
@@ -416,7 +509,9 @@ function onsitePayDialog(sid) {
       : `<label class="f">누구에게서 받았나요 *<select name="sid"><option value="">학생 고르기</option>${REAL.students.map(x => `<option value="${x.id}">${esc(x.name)}${x.class_name ? ` · ${esc(x.class_name)}` : ''}</option>`).join('')}<option value="__new">✏️ 명단에 없는 사람 · 직접 적기</option></select></label>
       <div class="two" id="walkIn" hidden><label class="f">이름 *<input name="wname" maxlength="50" placeholder="예: 김하늘"></label><label class="f">반 · 과정 (선택)<input name="wcls" maxlength="50" placeholder="예: 토익 700반" list="walkCls"><datalist id="walkCls">${allClassNames().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label></div>
       <label class="chk-line" id="walkAdd" hidden><input type="checkbox" name="wadd"><span>원생 명단에도 넣기 (안 넣으면 수납 · 재정에만 남아요)</span></label>`}
-    ${line(1, '수강료', plan ? plan.amount : '', '예: 300,000')}${line(2, '교재비', '', '예: 25,000')}${line(3, '', '', '')}
+    ${line(1, '수강료', plan ? plan.amount : '', '예: 300,000')}
+    ${(REAL.discounts || []).length ? `<label class="f">수강료 할인 <span class="muted small">고르면 위 금액에서 빼서 받아요 · 원가도 함께 남아요</span><select name="disc"><option value="">할인 없음</option>${REAL.discounts.map(x => `<option value="${x.id}" ${s0 && s0.discount_id === x.id ? 'selected' : ''}>${esc(discLabel(x))}</option>`).join('')}</select></label>` : ''}
+    ${line(2, '교재비', '', '예: 25,000')}${line(3, '', '', '')}
     <div class="f">결제 방법<div class="pick-chips multi">${PAY_METHODS.map((m, i) => `<label><input type="radio" name="method" value="${m}" ${i === 0 ? 'checked' : ''}><span>${m}</span></label>`).join('')}</div></div>
     <label class="chk-line"><input type="checkbox" name="print" checked><span>저장하고 영수증 뽑기</span></label>
     <p class="msg" id="dlgMsg" hidden></p>
@@ -438,7 +533,9 @@ function onsitePayDialog(sid) {
       st = { id: null, name, class_name: cls || null };
     }
     if (!st) return fail('학생을 고르거나 "명단에 없는 사람"을 골라 이름을 적어 주세요.');
-    const items = [1, 2, 3].map(k => ({ title: el[`t_${k}`].value.trim(), amount: Math.round(numOf(el[`a_${k}`].value) || 0) })).filter(x => x.amount > 0);
+    const dc = el.disc && REAL.discounts.find(x => x.id === el.disc.value);
+    const items = [1, 2, 3].map(k => { const a = Math.round(numOf(el[`a_${k}`].value) || 0), real = k === 1 ? applyDisc(a, dc) : a;
+      return { title: el[`t_${k}`].value.trim(), amount: real, ...(real < a ? { list_amount: a, discount_note: discLabel(dc) } : {}) }; }).filter(x => x.amount > 0 || x.list_amount > 0);
     if (!items.length) return fail('받은 금액을 하나 이상 넣어 주세요.');
     if (items.some(x => !x.title)) return fail('금액을 넣은 줄의 항목 이름을 적어 주세요.');
     const method = el.method.value, month = TODAY.slice(0, 7);
@@ -447,7 +544,7 @@ function onsitePayDialog(sid) {
       if (e1) return fail('원생 명단에 넣지 못했어요. 다시 시도해 주세요.');
       st.id = ns.id; await loadStudents();
     }
-    const { data, error } = await SB.from('invoices').insert(items.map(x => ({ academy_id: REAL.academy.id, student_id: st.id, ...(st.id ? {} : { student_name: st.name, class_name: st.class_name }), month, title: x.title, amount: x.amount, due: TODAY, paid_at: TODAY, method, memo: walk && !st.id ? '현장 결제 · 명단 밖' : '현장 결제' }))).select('id');
+    const { data, error } = await SB.from('invoices').insert(items.map(x => ({ academy_id: REAL.academy.id, student_id: st.id, ...(st.id ? {} : { student_name: st.name, class_name: st.class_name }), month, title: x.title, amount: x.amount, ...(x.list_amount ? { list_amount: x.list_amount, discount_note: x.discount_note } : {}), due: TODAY, paid_at: TODAY, method, memo: walk && !st.id ? '현장 결제 · 명단 밖' : '현장 결제' }))).select('id');
     if (error) return fail('저장하지 못했어요. 다시 시도해 주세요.');
     const print = el.print.checked;
     d.close(); await loadInvoices(); render(); toast(`${st.name} · ${won(sum(items, x => x.amount))} 받은 걸 남겼어요`);
@@ -466,7 +563,7 @@ function printReceipt(list) {
   .info div{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}.sign{margin-top:28px;text-align:right;font-size:14px}.btn{margin-top:24px;width:100%;padding:12px;font-size:15px;border:0;border-radius:10px;background:#3a46e8;color:#fff}@media print{.btn{display:none}body{padding:0}}</style></head><body>
   <h1>영 수 증</h1><p class="c">${esc(REAL.academy.name)} · 영수증 번호 ${no}</p>
   <div class="info"><div><span>받은 분</span><b>${esc(f.student_name || '')}${f.class_name ? ` (${esc(f.class_name)})` : ''}</b></div><div><span>받은 날</span><b>${f.paid_at}</b></div><div><span>결제 방법</span><b>${esc(f.method || '-')}</b></div></div>
-  <table style="margin-top:16px"><thead><tr><th>항목</th><th class="n">금액</th></tr></thead><tbody>${list.map(i => `<tr><td>${+i.month.slice(5)}월 ${esc(i.title)}</td><td class="n">${won(i.amount)}</td></tr>`).join('')}</tbody>
+  <table style="margin-top:16px"><thead><tr><th>항목</th><th class="n">금액</th></tr></thead><tbody>${list.map(i => `<tr><td>${+i.month.slice(5)}월 ${esc(i.title)}${i.list_amount > i.amount ? `<br><small style="color:#666">원가 ${won(i.list_amount)} · ${esc(i.discount_note || '할인')} -${won(i.list_amount - i.amount)}</small>` : ''}</td><td class="n">${won(i.amount)}</td></tr>`).join('')}</tbody>
   <tfoot><tr><td>합계</td><td class="n">${won(total)}</td></tr></tfoot></table>
   <p class="sign">위 금액을 정히 받았습니다.<br><br><b>${esc(REAL.academy.name)}</b></p>
   <button class="btn" onclick="print()">인쇄 · PDF로 저장</button></body></html>`);
@@ -2187,7 +2284,7 @@ function payAcctDialog() {
   if (!REAL) { toast('예시 계정에서는 바꿀 수 없어요'); return; }
   formDialog({
     title: '수강료 입금 계좌', table: 'academies', row: REAL.academy, noDelete: true, okText: '저장',
-    after: async () => { const { data } = await SB.from('academies').select('id, name, region, pay_bank, pay_account, pay_holder, pay_note').eq('id', REAL.academy.id).maybeSingle(); if (data) REAL.academy = data; },
+    after: async () => { const { data } = await SB.from('academies').select('id, name, region, pay_bank, pay_account, pay_holder, pay_note').eq('id', REAL.academy.id).maybeSingle(); if (data) Object.assign(REAL.academy, data); },
     label: () => '',
     check: d => (d.pay_account && !d.pay_bank) ? '은행을 골라 주세요.' : '',
     fields: [
@@ -2665,7 +2762,8 @@ let editingReflect = false;
 function hirePage() {
   if (REAL) return realHirePage();
   const mine = DATA.jobs.filter(j => j.mine);
-  return head('강사 채용', '공고는 학원지원센터 강사 채용 게시판에 올라가고, 센터에 가입한 강사들이 바로 지원해요.', `<button class="btn primary" data-act="newJob">${ic('plus')}새 공고 올리기</button>`) +
+  return head('강사 채용', '공고는 학원지원센터 강사 채용 게시판과 첫 화면 "강사 채용"에 올라가고, 강사들이 이력서와 함께 지원해요.', `<a class="btn" href="/jobs" target="_blank" rel="noopener">${ic('ext')}게시판에서 보기</a><button class="btn primary" data-act="newJob">${ic('plus')}새 공고 올리기</button>`) +
+  acadIntroCard({ ...JOB_SAMPLE_ACADEMIES[0], name: DATA.academy.name }, true) +
   mine.map(j => `
   <section class="card" style="margin-bottom:16px">
     <div class="card-head"><div><h2>${esc(j.title)}</h2><div class="sub">${j.type} · ${j.pay} · ${j.hours} · 마감 ${j.due}</div></div><span class="chip info">지원자 ${(j.applicants || []).length}명</span></div>
@@ -3189,7 +3287,8 @@ function studentDialog(s) {
     fields: [
       ['name', '이름', { required: true, max: 50, half: true }],
       ['class_name', '반', { max: 50, placeholder: '예: 초등 B반', half: true, chips: allClassNames().slice(0, 6) }],
-      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요' }],
+      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요', half: ROLE === 'owner' }],
+      ...(ROLE === 'owner' ? [['discount_id', '늘 받는 할인', { type: 'select', options: (REAL.discounts || []).map(x => [x.id, discLabel(x)]), blank: (REAL.discounts || []).length ? '할인 없음' : '수납에서 할인을 먼저 만들어 두세요', half: true }]] : []),
       ...personFields(),
       ['status', '다니는지', { type: 'select', required: true, options: Object.entries(STU_STATUS).map(([k, [, l]]) => [k, l]), value: 'active', half: true }], ['joined_on', '들어온 날', { type: 'date', value: TODAY, half: true }],
       ['left_on', '그만두는 날 (정해졌으면)', { type: 'date', half: true }],
@@ -3307,33 +3406,120 @@ function noticesPage() {
 }
 
 /* ================= 강사 화면 ================= */
+// 강사 채용 게시판 (사람인처럼: 검색 · 지역 · 분야 · 근무 형태 · 경력 · 마감순, 공고 상세, 가입한 학원, 내 이력서, 지원 현황)
+// 실제 로그인은 public_job_board() + 내 지원 · 이력서, 예시 계정(/demo/seeker)은 jobs.js의 예시 공고
+const DEMO_JOBS = { mine: [{ job_id: 's3', status: 'interview', created_at: new Date(Date.now() - 2 * 864e5).toISOString() }], profile: null };
+const jobData = () => JOBS ? JOBS : { posts: JOB_SAMPLES, acads: JOB_SAMPLE_ACADEMIES, mine: DEMO_JOBS.mine, profile: DEMO_JOBS.profile };
+const myApp = id => jobData().mine.find(a => a.job_id === id);
+const jobSide = j => { const a = myApp(j.id); return a ? `<span class="chip ${MY_APP_STATE[a.status][0]}">${MY_APP_STATE[a.status][1]}</span>` : `<button class="btn sm primary" data-applyjob="${j.id}">지원하기</button>`; };
 function jobsPage() {
-  if (JOBS) return realJobsPage();
-  return head('채용 공고', '학원지원센터에 가입한 학원들의 강사 채용 공고예요. 프로필과 교육 이수 기록이 함께 전달돼요.') + `
-  <section class="card"><div class="list">
-    ${DATA.jobs.map(j => `
-      <div class="li">
-        <span class="av" style="background:var(--navy-700)">${j.academy[0]}</span>
-        <div><div class="t">${esc(j.title)}</div><div class="d">${j.academy} · ${j.area} · ${j.pay} · ${j.hours}</div></div>
-        <div class="r">${j.applied ? '<span class="chip good">지원 완료</span>' : `<button class="btn sm primary" data-applyjob="${j.id}">지원하기</button>`}<span class="time">마감 ${j.due}</span></div>
-      </div>`).join('')}
-  </div></section>`;
+  const d = jobData(), mine = d.mine.length, p = d.profile;
+  const acts = `<a class="btn" href="#jobs/profile">${ic('doc')}내 이력서${p ? '' : ' 쓰기'}</a><a class="btn" href="#jobs/mine">지원 현황 ${mine}</a>`;
+  return head('채용 공고', `학원지원센터에 가입한 학원들의 강사 채용이에요. 지원하면 이력서와 센터 교육 이수 기록이 원장님께 함께 가요.${JOBS ? '' : ' (예시 공고)'}`, acts) +
+    (SEEKER ? `<a class="hint" href="#" data-act="joinAcademy" style="margin:0 0 12px">${ic('users')}<span>학원에서 강사용 초대 코드를 받았나요?</span><b>학원 연결하기 →</b></a>` : '') +
+    (!p ? `<a class="hint" href="#jobs/profile" style="margin:0 0 16px">${ic('doc')}<span>이력서를 한 번 써 두면 지원할 때마다 원장님께 함께 가요 · "제안 받기"를 켜면 센터가 맞는 학원을 연결해 드려요</span><b>이력서 쓰기 →</b></a>` : '') +
+    `<section class="card">${jbTabs(d.posts.length, d.acads.length)}${JB.tab === 'acads' ? jbAcademies(d.acads) : jbBoard(d.posts, { href: j => `#jobs/${j.id}`, side: jobSide })}</section>`;
+}
+function jobDetailPage(id) {
+  if (id === 'profile') return jobProfilePage();
+  if (id === 'mine') return myAppsPage();
+  const d = jobData(), j = d.posts.find(x => x.id === id);
+  if (!j) return head('공고를 찾을 수 없어요', '마감됐거나 내려간 공고예요.') + '<a class="btn" href="#jobs">‹ 공고 목록</a>';
+  const a = myApp(j.id);
+  const cta = a ? `<span class="chip ${MY_APP_STATE[a.status][0]}">${MY_APP_STATE[a.status][1]}</span>${a.status === 'applied' ? `<button class="btn sm" data-cancel-app="${j.id}">지원 취소</button>` : ''}` : `<button class="btn primary" data-applyjob="${j.id}">${ic('check')}이 공고에 지원하기</button>`;
+  return `<section class="card">${jbDetail(j, { cta, acad: d.acads.find(x => x.id === j.academy_id) || { name: j.academy_name }, others: d.posts.filter(x => x.academy_id === j.academy_id && x.id !== j.id), href: x => `#jobs/${x.id}` })}</section>
+  <a class="btn" href="#jobs" style="margin-top:14px">‹ 공고 목록</a>`;
+}
+// 지원 현황
+function myAppsPage() {
+  const d = jobData();
+  const rows = d.mine.map(a => ({ a, j: d.posts.find(x => x.id === a.job_id) })).sort((x, y) => String(y.a.created_at).localeCompare(String(x.a.created_at)));
+  const steps = ['applied', 'interview', 'hired'];
+  return head('지원 현황', '지원한 공고의 진행 단계예요. 원장님이 면접을 제안하면 여기 바뀌고, 남긴 연락처로 연락이 와요.') + (rows.length ? `
+  <section class="card"><div class="list stack">${rows.map(({ a, j }) => `
+    <div class="li">
+      <span class="av" style="background:var(--navy-700)">${esc(((j && j.academy_name) || '학')[0])}</span>
+      <div><div class="t">${j ? `<a class="nm-link" href="#jobs/${j.id}">${esc(j.title)}</a>` : '마감된 공고'}</div><div class="d">${j ? `${esc(j.academy_name)} · ` : ''}${md(String(a.created_at).slice(0, 10))} 지원</div>
+        <div class="app-steps">${a.status === 'declined' ? '<span class="on">다른 분과 진행해요</span>' : steps.map(k => `<span class="${steps.indexOf(k) <= steps.indexOf(a.status) ? 'on' : ''}">${MY_APP_STATE[k][1].replace('을 받았어요', '')}</span>`).join('')}</div></div>
+      <div class="r"><span class="chip ${MY_APP_STATE[a.status][0]}">${MY_APP_STATE[a.status][1]}</span>${a.status === 'applied' && j ? `<button class="btn sm" data-cancel-app="${j.id}">지원 취소</button>` : ''}</div>
+    </div>`).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('brief')}</span><h2>아직 지원한 공고가 없어요</h2><a class="btn primary" href="#jobs">공고 보러 가기</a></section>`);
+}
+// 내 이력서 (teacher_profiles · 지원할 때 원장님께 함께 가요)
+const PROFILE_FIELDS = [
+  ['headline', '한 줄 소개', { max: 100, placeholder: '예: 초등 영어 5년 · 파닉스 · 리딩 전문' }],
+  ['career_years', '경력 (년)', { type: 'number', placeholder: '신입이면 0', half: true }], ['education', '학력 · 전공', { max: 100, placeholder: '예: 영어교육과 졸업', half: true }],
+  ['subjects', '가르칠 수 있는 과목', { max: 100, placeholder: '예: 초등 영어, 중등 영어', chips: SUBJECTS }],
+  ['regions', '일하고 싶은 지역', { max: 100, placeholder: '예: 수원 영통구, 용인 수지구' }],
+  ['available', '가능한 시간', { max: 100, placeholder: '예: 평일 오후 · 주말', chips: ['평일 오후', '평일 저녁', '주말', '시간 협의', '전일 근무'] }],
+  ['certs', '자격증 · 수상', { max: 300, placeholder: '예: TESOL, 정교사 2급' }],
+  ['intro', '자기소개', { type: 'area', max: 2000, placeholder: '수업 스타일 · 경력 · 학생 관리 방법을 적어 주세요.' }],
+  ['open_to_offers', '센터 강사풀에 올리기 (학원이 "강사 구하기"를 신청하면 센터가 연락드려요)', { type: 'check' }]
+];
+function jobProfilePage() {
+  const p = jobData().profile;
+  const row = (k, v) => v || v === 0 ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : '';
+  return head('내 이력서', '지원할 때마다 원장님께 함께 가요. 연락처는 지원서에 적은 번호만 보여요.', `<button class="btn primary" data-act="editCv">${ic('pen')}${p ? '이력서 고치기' : '이력서 쓰기'}</button>`) + (p ? `
+  <section class="card">
+    <div class="me-card"><span class="av" style="background:var(--r-teacher)">${esc(ME.name[0])}</span><div><b>${esc(ME.name)}</b><span class="muted small">${esc(p.headline || '')}</span></div>${p.open_to_offers ? '<span class="chip good">강사풀 · 제안 받는 중</span>' : '<span class="chip mute">제안 받지 않음</span>'}</div>
+    <dl class="info-dl">${row('경력', p.career_years != null ? (p.career_years ? `${p.career_years}년` : '신입') : '')}${row('학력 · 전공', p.education)}${row('과목', p.subjects)}${row('희망 지역', p.regions)}${row('가능한 시간', p.available)}${row('자격증 · 수상', p.certs)}</dl>
+    ${p.intro ? `<p style="white-space:pre-line;margin:12px 0 0">${esc(p.intro)}</p>` : ''}
+  </section>` : `<section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>이력서를 써 두세요</h2><p class="muted">한 번 써 두면 지원할 때마다 다시 쓰지 않아도 돼요.</p><button class="btn primary" data-act="editCv">이력서 쓰기</button></section>`);
+}
+function profileFormDialog() {
+  const p = jobData().profile, d = dialogEl();
+  // formDialog는 id로 고치는데 이력서는 user_id가 열쇠라서, 같은 칸 모양으로 그리고 upsert로 저장해요
+  formDialog({ title: p ? '이력서 고치기' : '이력서 쓰기', table: 'teacher_profiles', row: null, academy: false, fields: PROFILE_FIELDS.map(([k, l, o]) => [k, l, { ...o, value: p ? p[k] : o.value }]), after: async () => {}, okText: '저장', label: () => '' });
+  $('#dlgForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, data = {};
+    for (const [k, , o] of PROFILE_FIELDS) data[k] = o.type === 'check' ? el.namedItem(k).checked : (el.namedItem(k).value.trim() || null);
+    data.career_years = data.career_years == null ? null : Math.max(0, Math.min(40, Math.round(+data.career_years) || 0));
+    if (!JOBS) { DEMO_JOBS.profile = data; d.close(); render(); toast('이력서를 저장했어요 (예시 계정)'); return; }
+    const { error } = await SB.from('teacher_profiles').upsert({ ...data, updated_at: new Date().toISOString() });
+    if (error) { const m = $('#dlgMsg'); m.textContent = '저장하지 못했어요. 다시 시도해 주세요.'; m.hidden = false; return; }
+    d.close(); await loadJobBoard(); render(); toast('이력서를 저장했어요 · 지원할 때 원장님께 함께 가요');
+  };
 }
 
 /* ================= 채용 · 제휴 · 유학 (실제 데이터) ================= */
-const JOB_TYPES = ['파트타임', '전임', '주말', '방학 특강'];
 // 원장이 보는 지원 상태 · 강사가 보는 지원 상태
 const APP_STATE = { applied: ['info', '새 지원'], interview: ['warn', '면접 제안'], hired: ['good', '채용 확정'], declined: ['mute', '진행 안 함'] };
 const MY_APP_STATE = { applied: ['info', '지원 완료'], interview: ['warn', '면접 제안을 받았어요'], hired: ['good', '채용 확정'], declined: ['mute', '다른 분과 진행해요'] };
 const jobLine = j => [j.job_type, j.subject, j.pay, j.hours].filter(Boolean).map(esc).join(' · ');
 // 학원 분야 예시 (공고 쓸 때 눌러서 고르고, 강사는 분야로 골라 봐요)
-const ACADEMY_FIELDS = ['영어', '수학', '국어 · 논술', '과학', '사회 · 역사', '초등 종합', '입시 · 내신', '독서 · 글쓰기', '코딩 · SW', '제2외국어', '유아 · 놀이', '미술', '음악', '체육 · 태권도', '예체능 입시', '자격증 · 성인'];
 const fieldChip = j => j.academy_field ? `<span class="chip info">${esc(j.academy_field)}</span> ` : '';
 let jobField = '전체';
 
+// 채용 게시판에 보이는 우리 학원 소개 (academies.intro · field · homepage · listed)
+function acadIntroCard(a, demo) {
+  return `
+  <section class="card acad-intro" style="margin-bottom:16px">
+    <div class="card-head"><div><h2>채용 게시판의 우리 학원 소개</h2><span class="sub">강사님이 공고를 누르면 아래 소개가 함께 보여요${a.listed ? ' · 공고가 없어도 "가입한 학원"에 보여요' : ''}</span></div><button class="btn sm" data-act="${demo ? 'demoIntro' : 'editIntro'}">${ic('pen')}소개 ${a.intro ? '고치기' : '쓰기'}</button></div>
+    <div class="jb-acad-head"><span class="jb-logo">${esc(a.name[0])}</span><div><b>${esc(a.name)}</b><small>${[a.region, a.field].filter(Boolean).map(esc).join(' · ')}</small></div></div>
+    <p class="${a.intro ? '' : 'muted'}" style="margin:10px 0 0;white-space:pre-line">${a.intro ? esc(a.intro) : '아직 소개가 없어요. "원생 120명 · 초등 영어 전문 · 수업 준비 시간 보장"처럼 강사님이 궁금해할 내용을 적어 주세요.'}</p>
+  </section>`;
+}
+function introDialog() {
+  formDialog({
+    title: '채용 게시판 학원 소개', table: 'academies', row: REAL.academy, noDelete: true, academy: false, okText: '저장',
+    after: async () => { const { data } = await SB.from('academies').select('intro, field, homepage, listed').eq('id', REAL.academy.id).maybeSingle(); if (data) Object.assign(REAL.academy, data); },
+    label: () => '',
+    fields: [
+      ['field', '학원 분야', { max: 30, chips: ACADEMY_FIELDS, placeholder: '예: 영어' }],
+      ['intro', '학원 소개', { type: 'area', rows: 5, max: 1000, placeholder: '예: 초등 · 중등 영어 전문, 원생 120명. 자체 커리큘럼과 교재를 드리고, 수업 준비 시간을 따로 드려요.' }],
+      ['homepage', '홈페이지 · 블로그 (선택)', { max: 200, url: true, placeholder: 'https://' }],
+      ['listed', '공고가 없을 때도 첫 화면 "가입한 학원"에 보이기', { type: 'check' }]
+    ]
+  });
+}
+// 지원자 이력서 (펼쳐 보기)
+const applicantCv = p => !p ? '<div class="d muted">이력서를 아직 안 쓴 강사님이에요</div>' : `
+  <details class="cv"><summary>이력서 보기${p.headline ? ` · ${esc(p.headline)}` : ''}</summary>
+    <dl class="info-dl">${[['경력', p.career_years != null ? (p.career_years ? `${p.career_years}년` : '신입') : ''], ['학력 · 전공', p.education], ['과목', p.subjects], ['희망 지역', p.regions], ['가능한 시간', p.available], ['자격증 · 수상', p.certs]].filter(x => x[1]).map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+    ${p.intro ? `<p style="white-space:pre-line;margin:8px 0 0">${esc(p.intro)}</p>` : ''}</details>`;
 function realHirePage() {
   const add = `<button class="btn primary" data-act="newJob">${ic('plus')}새 공고 올리기</button>`;
-  if (!REAL.jobs.length) return head('강사 채용', '공고는 센터 강사 채용 게시판에 올라가고, 센터에 가입한 강사들이 바로 지원해요.') + `
+  if (!REAL.jobs.length) return head('강사 채용', '공고는 센터 강사 채용 게시판과 첫 화면 "강사 채용"에 올라가고, 강사들이 이력서와 함께 지원해요.') + acadIntroCard(REAL.academy) + `
   <section class="card empty">
     <span class="tile-ic">${ic('brief')}</span>
     <h2>첫 채용 공고를 올려 보세요</h2>
@@ -3350,11 +3536,11 @@ function realHirePage() {
         <span class="av" style="background:var(--blue-500)">${esc(a.name[0])}</span>
         <div><div class="t">${esc(a.name)} <span class="chip ${a.trainings_done ? 'good' : 'mute'}">센터 교육 ${a.trainings_done}개 이수</span></div>
           <div class="d">${esc(a.career || '경력 미입력')} · ${md(a.applied_at.slice(0, 10))} 지원${a.phone ? ` · <a href="tel:${esc(a.phone)}" style="color:var(--blue-600)">${esc(a.phone)}</a>` : ''}</div>
-          ${a.message ? `<div class="d">"${esc(a.message)}"</div>` : ''}</div>
+          ${a.message ? `<div class="d">"${esc(a.message)}"</div>` : ''}${applicantCv(a.profile)}</div>
         <div class="r"><span class="chip ${c}">${l}</span>${acts ? `<span class="btns">${acts}</span>` : ''}</div>
       </div>`;
   };
-  return head('강사 채용', '공고는 센터 강사 채용 게시판에 올라가요. 공고 제목을 누르면 고치거나 마감할 수 있어요.', add) + REAL.jobs.map(j => {
+  return head('강사 채용', '공고는 센터 강사 채용 게시판과 첫 화면 "강사 채용"에 올라가요. 공고 제목을 누르면 고치거나 마감할 수 있어요.', `<a class="btn" href="/jobs" target="_blank" rel="noopener">${ic('ext')}게시판에서 보기</a>${add}`) + acadIntroCard(REAL.academy) + REAL.jobs.map(j => {
     const as = REAL.applicants.filter(a => a.job_id === j.id);
     return `
   <section class="card" style="margin-bottom:16px">
@@ -3369,14 +3555,22 @@ function jobDialog(j) {
   if (REAL && !j && !svcGuard('teachers')) return;
   formDialog({
     title: j ? '채용 공고 고치기' : '새 채용 공고', table: 'job_posts', row: j, after: loadJobs, okText: j ? '저장' : '올리기',
-    label: r => `${r.title} 공고를`, doneText: '센터 채용 게시판에 공고를 올렸어요',
+    label: r => `${r.title} 공고를`, doneText: '센터 채용 게시판에 공고를 올렸어요 · 가입 안 한 강사도 첫 화면 "강사 채용"에서 봐요',
+    check: d => { if (d.career_level !== '경력') d.career_years = null; if (d.headcount === 0) d.headcount = null; if (d.career_years > 40) return '경력은 40년 안으로 넣어 주세요.'; if (d.headcount > 99) return '모집 인원은 99명 안으로 넣어 주세요.'; return ''; },
     fields: [
       ['title', '공고 제목', { required: true, max: 100, placeholder: '예: 초등부 영어 강사 (파트타임)' }],
-      ['academy_field', '학원 분야', { max: 30, chips: ACADEMY_FIELDS, placeholder: '아래 예시를 누르거나 직접 적어 주세요' }],
+      ['academy_field', '학원 분야', { max: 30, chips: ACADEMY_FIELDS, placeholder: '아래 예시를 누르거나 직접 적어 주세요', value: REAL.academy.field || '' }],
       ['job_type', '근무 형태', { type: 'select', required: true, options: JOB_TYPES, value: '파트타임', half: true }], ['subject', '과목', { max: 50, placeholder: '예: 초등 영어', half: true, chips: SUBJECTS }],
-      ['pay', '급여', { max: 50, placeholder: '예: 시급 22,000원', half: true, chips: ['시급 협의', '월급 협의', '면접 후 결정'] }], ['hours', '근무 시간', { max: 50, placeholder: '예: 평일 15–20시', half: true, chips: ['평일 오후', '평일 저녁', '주말', '시간 협의'] }],
-      ['area', '지역', { max: 100, value: REAL.academy.region || '', half: true }], ['due', '모집 마감', { type: 'date', half: true }],
-      ['description', '하는 일 · 우대 사항', { max: 2000 }],
+      ['career_level', '경력', { type: 'select', required: true, options: JOB_CAREERS, value: '무관', half: true }], ['career_years', '경력 몇 년 이상 (경력일 때)', { type: 'number', placeholder: '예: 2', half: true }],
+      ['education', '학력', { type: 'select', options: JOB_EDU, blank: '학력 무관', half: true }], ['headcount', '모집 인원', { type: 'number', placeholder: '예: 1', half: true }],
+      ['pay', '급여', { max: 50, placeholder: '예: 시급 22,000원', chips: ['시급 협의', '월급 협의', '면접 후 결정'] }],
+      ['work_days', '근무 요일', { max: 50, placeholder: '예: 월~금', half: true, chips: ['월~금', '월 · 수 · 금', '화 · 목', '토 · 일', '요일 협의'] }], ['hours', '근무 시간', { max: 50, placeholder: '예: 15:00~20:00', half: true, chips: ['평일 오후', '평일 저녁', '주말', '시간 협의'] }],
+      ['area', '근무 지역', { max: 100, value: REAL.academy.region || '', half: true }], ['due', '모집 마감 (비우면 상시 모집)', { type: 'date', half: true }],
+      ['description', '하는 일', { type: 'area', rows: 4, max: 2000, placeholder: '예: 초등 3~6학년 영어 수업 (반 6~8명)\n숙제 확인 · 단어 시험' }],
+      ['requirements', '자격 요건', { type: 'area', rows: 3, max: 1000, placeholder: '예: 주 5일 근무 가능한 분' }],
+      ['preferred', '우대 사항', { type: 'area', rows: 3, max: 1000, placeholder: '예: 파닉스 수업 경험 · TESOL' }],
+      ['benefits', '복리후생 (여러 개)', { type: 'multi', options: JOB_BENEFITS, value: [] }],
+      ['process', '전형 절차', { max: 200, value: '서류 → 면접 → 시범 강의', chips: ['서류 → 면접', '서류 → 면접 → 시범 강의', '서류 → 시범 강의 → 최종 합격'] }],
       ['status', '상태', { type: 'select', required: true, value: 'open', options: [['open', '모집 중'], ['closed', '마감']] }]
     ]
   });
@@ -3390,41 +3584,19 @@ async function stepApplicant(jobId, userId, status) {
   toast(status === 'interview' ? `${a.name} 님께 연락해 면접 일정을 잡아 주세요` : status === 'hired' ? `${a.name} 님 채용을 확정했어요 · 강사용 초대 코드를 보내 주세요` : '진행 안 함으로 바꿨어요');
 }
 
-// 강사: 센터 채용 게시판
-function realJobsPage() {
-  const mine = id => JOBS.mine.find(a => a.job_id === id);
-  const fields = [...new Set(JOBS.posts.map(j => j.academy_field).filter(Boolean))];
-  if (!fields.includes(jobField)) jobField = '전체';
-  const posts = JOBS.posts.filter(j => jobField === '전체' || j.academy_field === jobField);
-  return head('채용 공고', '센터에 가입한 학원들의 강사 채용 공고예요. 지원하면 이름 · 경력과 센터 교육 이수 기록이 원장님께 전달돼요.') +
-    (SEEKER ? `<a class="hint" href="#" data-act="joinAcademy" style="margin:0 0 16px">${ic('users')}<span>학원에서 강사용 초대 코드를 받았나요?</span><b>학원 연결하기 →</b></a>` : '') +
-    (JOBS.posts.length ? `${fields.length ? `
-  <div class="filters">${['전체', ...fields].map(f => `<button class="${f === jobField ? 'on' : ''}" data-job-field="${esc(f)}">${esc(f)}${f === '전체' ? '' : ` ${JOBS.posts.filter(j => j.academy_field === f).length}`}</button>`).join('')}</div>` : ''}
-  <section class="card"><div class="list stack">
-    ${posts.map(j => {
-      const a = mine(j.id);
-      return `
-      <div class="li">
-        <span class="av" style="background:var(--navy-700)">${esc((j.academy_name || '학')[0])}</span>
-        <div><div class="t">${esc(j.title)}</div><div class="d">${fieldChip(j)}${esc(j.academy_name || '')}${j.area ? ` · ${esc(j.area)}` : ''} · ${jobLine(j)}</div>${j.description ? `<div class="d">${esc(j.description)}</div>` : ''}</div>
-        <div class="r">${a ? `<span class="chip ${MY_APP_STATE[a.status][0]}">${MY_APP_STATE[a.status][1]}</span>${a.status === 'applied' ? `<button class="btn sm" data-cancel-app="${j.id}">지원 취소</button>` : ''}`
-          : `<button class="btn sm primary" data-applyjob="${j.id}">지원하기</button>`}${j.due ? `<span class="time">마감 ${md(j.due)}</span>` : ''}</div>
-      </div>`;
-    }).join('')}
-  </div></section>` : `
-  <section class="card empty"><span class="tile-ic">${ic('brief')}</span><h2>지금 모집 중인 공고가 없어요</h2><p class="muted">학원이 공고를 올리면 여기에 바로 나와요.</p></section>`);
-}
-
 function applyJobDialog(j) {
+  const p = jobData().profile;
   formDialog({
     title: `${j.academy_name || ''} · ${j.title} 지원`, table: 'job_applications', academy: false, extra: { job_id: j.id }, after: loadJobBoard, okText: '지원하기',
     label: () => '지원서를', doneText: `${j.academy_name || '학원'}에 지원서를 보냈어요`,
     fields: [
-      ['career', '경력', { max: 200, placeholder: '예: 경력 3년 · 초등 영어 · 파닉스', chips: ['신입', '경력 1~3년', '경력 3~5년', '경력 5년 이상'] }],
-      ['phone', '연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000' }],
+      ['career', '경력', { max: 200, placeholder: '예: 경력 3년 · 초등 영어 · 파닉스', value: p ? [p.career_years != null ? (p.career_years ? `경력 ${p.career_years}년` : '신입') : '', p.subjects].filter(Boolean).join(' · ') : '', chips: ['신입', '경력 1~3년', '경력 3~5년', '경력 5년 이상'] }],
+      ['phone', '연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', value: PROFILE && PROFILE.phone ? fmtPhone(PROFILE.phone) : '' }],
       ['message', '원장님께 한마디', { max: 1000, placeholder: '예: 평일 오후 모두 가능해요.' }]
     ]
   });
+  $('#dlgForm h2').insertAdjacentHTML('afterend', p ? `<p class="muted small" style="margin:0">${ic('doc')} 내 이력서(${esc(p.headline || '한 줄 소개 없음')})가 함께 가요.</p>` : `<p class="muted small" style="margin:0">이력서가 아직 없어요. <a href="#jobs/profile" class="u">이력서를 써 두면</a> 원장님이 더 잘 알 수 있어요.</p>`);
+  if (!JOBS) $('#dlgForm').onsubmit = e => { e.preventDefault(); DEMO_JOBS.mine.push({ job_id: j.id, status: 'applied', created_at: new Date().toISOString() }); dialogEl().close(); render(); toast(`${j.academy_name}에 지원서를 보냈어요 (예시 계정)`); };
 }
 
 // 원장: 내 제휴
@@ -3747,7 +3919,7 @@ function realKidBillsPage() {
     <div class="li">
       <span class="av" style="background:${i.paid_at ? 'var(--good)' : 'var(--blue-500)'}">${ic('card')}</span>
       <div><div class="t">${+i.month.slice(5)}월 ${esc(i.title)}</div><div class="d">${i.paid_at ? `${md(i.paid_at)} 납부 확인${i.method ? ` · ${esc(i.method)}` : ''}` : i.reported_at ? `${md(i.reported_at.slice(0, 10))}에 보냈다고 알렸어요 · 학원이 확인하면 납부 완료로 바뀌어요` : i.due ? `납부 기한 ${md(i.due)}` : '납부 기한 없음'}</div></div>
-      <div class="r"><b class="num">${won(i.amount)}</b>${i.paid_at ? '<span class="chip good">납부 완료</span>'
+      <div class="r"><b class="num">${won(i.amount)}</b>${discLine(i)}${i.paid_at ? '<span class="chip good">납부 완료</span>'
         : i.reported_at ? `<span class="btns"><span class="chip warn">학원 확인 중</span><button class="btn sm" data-kid-unpay="${i.id}">알림 취소</button></span>`
         : `<span class="btns">${ddChip(i.due)}<button class="btn sm primary" data-kid-pay="${i.id}">내기</button></span>`}</div>
     </div>`;
@@ -3792,7 +3964,8 @@ function familyTodo() {
   unreadNotices().slice(0, 3).forEach(n => items.push([esc(n.title), `${esc(REAL.academy.name)} 공지`, `#news/${n.id}`, '<span class="chip crit">새 공지</span>']));
   if (ROLE === 'parent') REAL.kidBills.filter(i => !i.paid_at).slice(0, 3).forEach(i => {
     const k = REAL.kids.find(x => x.id === i.student_id);
-    items.push([`${+i.month.slice(5)}월 ${esc(i.title)} ${won(i.amount)}`, `${k ? `${esc(k.name)} · ` : ''}${i.due ? `기한 ${md(i.due)}` : '기한 없음'}`, '#kid/bills', ddChip(i.due)]);
+    items.push([`${+i.month.slice(5)}월 ${esc(i.title)} ${won(i.amount)}`, `${k ? `${esc(k.name)} · ` : ''}${i.due ? `기한 ${md(i.due)}` : '기한 없음'}`, '#kid/bills',
+      i.reported_at ? '<span class="chip warn">학원 확인 중</span>' : `${ddChip(i.due)}<button class="btn sm primary" data-kid-pay="${i.id}">바로 내기</button>`]);
   });
   REAL.kids.forEach(k => {
     const a = REAL.kidAttend.find(x => x.student_id === k.id && x.day === TODAY);
@@ -4604,7 +4777,8 @@ const MESSAGES_AREA = { name: '채팅', icon: 'chat', desc: '친구 추가하고
 const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
 // 채용 공고 게시판: 학원에 아직 연결 안 된 강사(구직 중)만 봐요. 학원 강사 메뉴에는 없고, 공고 · 지원자 관리는 원장 "강사 채용"
-const JOBS_AREA = { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage };
+const JOBS_AREA = { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${jobData().posts.length}건`, render: jobsPage, detail: jobDetailPage,
+  title: id => id === 'profile' ? '내 이력서' : id === 'mine' ? '지원 현황' : (jobData().posts.find(j => j.id === id) || {}).title };
 const SCHEDULE_AREA = { name: '일정·시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
@@ -4727,6 +4901,7 @@ const FAMILY_AREAS = {
   }
 };
 let MY = AREAS[ROLE];
+if (DEMO_SEEKER) { SEEKER = true; MY = { jobs: JOBS_AREA }; }
 
 /* ---------- 새 소식 빨간 점: 메뉴마다 마지막으로 본 뒤에 남이 올린 게 있으면 점, 열어 보면 사라져요 ---------- */
 let SEEN = {};          // 메뉴 경로 → 마지막으로 본 시각 (user_seen, 예시 계정은 sessionStorage)
@@ -5202,7 +5377,8 @@ function home() {
     // 수강료 · 오늘 일정 · 공지가 먼저, 유학 안내는 맨 아래
     return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${c.name}(${c.grade})의 학원 ${c.academies}곳을 한 화면에서 봐요.`) +
       todo([
-        ['10월 하늘영어학원 수강료', '300,000원 · 오늘까지', '#kid/bills', '<span class="chip crit">D-0</span>'],
+        ...c.bills.map((x, i) => [x, i]).filter(([x]) => !x.paid).map(([x, i]) => [`${x.month} ${x.acad} 수강료`, `${won(x.amount * 1e4)} · ${x.due === 'D-0' ? '오늘까지' : x.due}`, '#kid/bills',
+          x.reported ? '<span class="chip warn">학원 확인 중</span>' : `<span class="chip crit">${x.due}</span><button class="btn sm primary" data-pay="${i}">바로 내기</button>`]),
         c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
         ...promos
@@ -5391,6 +5567,10 @@ function bind() {
   on('[data-att-rest]', b => markAttendance(REAL.students.filter(s => (s.class_name || '반 미지정') === b.dataset.attRest && !REAL.attend.map[s.id]).map(s => s.id), 'present'));
   on('[data-act="billMonth"]', billMonthDialog);
   on('[data-act="addPlan"]', () => planDialog(null));
+  on('[data-demo-disc]', () => toast('예시 계정에서는 바꿀 수 없어요'));
+  on('[data-act="addDisc"]', () => discountDialog(null));
+  on('[data-act="applyDisc"]', () => REAL.students.length ? applyDiscountDialog() : toast('먼저 원생을 추가해 주세요'));
+  on('[data-edit-disc]', b => discountDialog(REAL.discounts.find(x => x.id === b.dataset.editDisc)));
   on('[data-edit-plan]', b => planDialog(REAL.plans.find(p => p.id === b.dataset.editPlan)));
   on('[data-act="applyPlan"]', () => REAL.students.length ? applyPlanDialog() : toast('먼저 원생을 추가해 주세요'));
   on('[data-act="addInvoice"]', () => REAL.students.length ? invoiceDialog(null) : billMonthDialog());
@@ -5465,6 +5645,7 @@ function bind() {
   on('[data-app-step]', b => { const [j, u, st] = b.dataset.appStep.split(':'); stepApplicant(j, u, st); });
   on('[data-cancel-app]', async b => {
     if (!confirm('지원을 취소할까요?')) return;
+    if (!JOBS) { DEMO_JOBS.mine = DEMO_JOBS.mine.filter(a => a.job_id !== b.dataset.cancelApp); render(); toast('지원을 취소했어요'); return; }
     const { error } = await SB.from('job_applications').delete().eq('job_id', b.dataset.cancelApp).eq('user_id', USER.id);
     if (error) { toast('취소하지 못했어요'); return; }
     await loadJobBoard(); render(); toast('지원을 취소했어요');
@@ -5562,9 +5743,11 @@ function bind() {
     render(); toast('센터 채용 게시판에 공고를 올렸어요');
   });
   on('[data-interview]', b => { const [jid, i] = b.dataset.interview.split(':'); const a = DATA.jobs.find(j => j.id === jid).applicants[i]; a.step = '면접 제안 보냄'; render(); toast(`${a.name} 님께 면접을 제안했어요`); });
-  on('[data-applyjob]', b => {
-    if (JOBS) return applyJobDialog(JOBS.posts.find(x => x.id === b.dataset.applyjob));
-    const j = DATA.jobs.find(x => x.id === b.dataset.applyjob); j.applied = true; render(); toast(`${j.academy}에 지원서를 보냈어요`); });
+  on('[data-applyjob]', b => applyJobDialog(jobData().posts.find(x => x.id === b.dataset.applyjob)));
+  on('[data-act="editCv"]', profileFormDialog);
+  on('[data-act="editIntro"]', introDialog);
+  on('[data-act="demoIntro"]', () => toast('예시 계정에서는 바꿀 수 없어요'));
+  jbBind(document.getElementById('view'), render);
   // 제휴
   on('[data-cat]', b => { partnerCat = b.dataset.cat; render(); });
   on('[data-job-field]', b => { jobField = b.dataset.jobField; render(); });
@@ -5756,8 +5939,8 @@ function bind() {
     col.ondrop = e => { e.preventDefault(); col.classList.remove('drop'); moveLead(e.dataTransfer.getData('text/plain'), col.dataset.stage); };
   });
   // 학부모 · 학생
-  on('[data-pay]', b => { const x = DATA.child.bills[b.dataset.pay]; payDialog({ idx: +b.dataset.pay, title: `${x.acad} ${x.month} 수강료`, amount: x.amount * 1e4 }); });
-  on('[data-kid-pay]', b => { const i = REAL.kidBills.find(x => x.id === b.dataset.kidPay); payDialog({ id: i.id, title: `${+i.month.slice(5)}월 ${i.title}`, amount: i.amount }); });
+  on('[data-pay]', (b, e) => { e.preventDefault(); const x = DATA.child.bills[b.dataset.pay]; payDialog({ idx: +b.dataset.pay, title: `${x.acad} ${x.month} 수강료`, amount: x.amount * 1e4 }); });
+  on('[data-kid-pay]', (b, e) => { e.preventDefault(); const i = REAL.kidBills.find(x => x.id === b.dataset.kidPay); payDialog({ id: i.id, title: `${+i.month.slice(5)}월 ${i.title}`, amount: i.amount }); });
   on('[data-kid-unpay]', async b => {
     if (!confirm('"보냈어요" 알림을 취소할까요?')) return;
     const { error } = await SB.rpc('report_invoice_paid', { p_invoice: b.dataset.kidUnpay, p_cancel: true });
@@ -5973,7 +6156,8 @@ const loadPaperwork = () => loadRows('paperwork', 'created_at');
 // 강사 담당 반: 강사는 내 반(이 반 학생만 보여요), 원장은 강사별로 (원장이 정한 반 + 시간표 담당 반)
 async function loadMyClasses() { const { data } = await SB.rpc('my_teacher_classes', { p_academy: REAL.academy.id }); REAL.myClasses = data || []; }
 async function loadTeacherClasses() { const { data } = await SB.rpc('list_teacher_classes', { p_academy: REAL.academy.id }); REAL.teacherClasses = data || []; }
-const loadPlans = () => loadRows('tuition_plans', 'amount').then(() => { REAL.plans = REAL.tuition_plans; });
+const loadPlans = () => Promise.all([loadRows('tuition_plans', 'amount'), ROLE === 'owner' ? loadRows('discount_presets', 'created_at') : null])
+  .then(() => { REAL.plans = REAL.tuition_plans; REAL.discounts = REAL.discount_presets || []; });
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
   const [v, mine, rep] = await Promise.all([
@@ -6034,11 +6218,12 @@ async function loadJobs() {
 }
 // 강사: 모집 중인 공고 전체 + 내 지원
 async function loadJobBoard() {
-  const [j, a] = await Promise.all([
-    SB.from('job_posts').select('*').eq('status', 'open').order('created_at', { ascending: false }),
-    SB.from('job_applications').select('job_id, status, created_at').eq('user_id', USER.id)
+  const [b, a, p] = await Promise.all([
+    SB.rpc('public_job_board'),
+    SB.from('job_applications').select('job_id, status, created_at').eq('user_id', USER.id),
+    SB.from('teacher_profiles').select('*').eq('user_id', USER.id).maybeSingle()
   ]);
-  JOBS = { posts: j.data || [], mine: a.data || [] };
+  JOBS = { posts: (b.data && b.data.posts) || [], acads: (b.data && b.data.academies) || [], mine: a.data || [], profile: p.data || null };
 }
 const loadPartnerApps = async () => {
   const { data } = await SB.from('partner_applications').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false });
@@ -6189,7 +6374,7 @@ async function boot() {
     if (!PROFILE.name && !PROFILE.username) { rolePicker(user, true); return; }
 
     // 소속 학원 (여러 곳이면 먼저 들어간 곳)
-    const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region, family, auto, pay_bank, pay_account, pay_holder, pay_note)')
+    const { data: mem } = await SB.from('academy_members').select('role, academies(id, name, region, family, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed)')
       .eq('user_id', user.id).order('created_at').limit(1);
     if (!mem || !mem.length) {
       // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요

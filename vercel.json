@@ -5,6 +5,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/area/:id", "destination": "/area/:id.html" },
+    { "source": "/jobs", "destination": "/jobs.html" },
     { "source": "/app", "destination": "/app.html" },
     { "source": "/demo/:role", "destination": "/app.html" }
   ]

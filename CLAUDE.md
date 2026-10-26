@@ -70,6 +70,7 @@
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`(지역은 시·도 → 시·군·구 고르기, 꼭 골라야 해요), 나머지는 `join_academy(코드)`.
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).
   - `leads`: 상담·등록(문의→상담→체험수업→등록). 원장·강사 읽기·쓰기, 원장만 삭제. "등록"으로 옮기면 트리거가 `students`에 자동 추가.
+  - 수강료 할인: 청구마다 원가 `invoices.list_amount` · 실제 받을 금액 `amount` · 할인 내역 `discount_note`(원가 ≥ 금액). 자주 쓰는 할인 `discount_presets`(원장만, % 또는 원), 학생마다 늘 받는 할인 `students.discount_id` → "이 달 청구서 만들기" · 자동 청구(`private.apply_discount`) · 현장 결제 · 영수증에 원가와 할인이 함께. 화면: 수납 "정해 둔 수강료" 카드 아래 "자주 쓰는 할인", 청구 창에서 할인을 누르면 금액 계산(`bindDiscount`), 목록은 `discLine`.
   - 수강료 미리 정하기: `tuition_plans`(이름 · 한 달 금액 · 주로 쓰는 반, 원장 쓰기 · 원장·강사 읽기). 수납·청구 화면 위 "정해 둔 수강료"에서 만들고 "학생에게 붙이기"(반 전체 한 번에). "이 달 청구서 만들기"는 수강료가 붙은 학생을 그 금액으로 저절로 만들어요. 강사 메뉴에도 "원생 명단"(`#students`).
   - 행정 지원: `attendance`(학생·날짜마다 출석/지각/결석/조퇴, 원장·강사 읽기, 쓰기는 `mark_attendance(학생들, 날짜, 상태|null)` RPC만), `invoices`(수납·청구, 금액은 원 단위, 학생 이름·반은 트리거가 채움), `expenses`(지출), `incomes`(수납 밖의 수입: 교재 판매·특강 등), `paperwork`(서류 마감, `repeat` 매달·매년이면 제출 완료할 때 다음 회차를 화면이 만들어요, `auto_key`는 자동으로 찾아 준 서류 표시). 돈·서류는 원장만.
   - 서류 자동 처리(`#admin/paper`): `paperSuggestions()`가 강사 급여 → 원천세(3.3% 예상 세액), 새 강사 → 채용 통보 · 4대보험, 반 수강료 변경 → 교습비 변경 신고, 1월~2월 10일 → 사업장현황신고를 찾아 줘요. `makePaperDoc()`로 원생 명부 · 출석부 · 수강료 납부 내역 · 교습비 표 · 강사 명단 · 원천세 계산표 · 사업장현황 수입 요약을 엑셀로 만들어요.
@@ -77,6 +78,7 @@
   - 강사 교육: `training_videos`(관리자만 쓰기, 원장·강사는 배부된 것만 보기, 영상은 유튜브·비메오 주소), `training_reflections`(영상당 한 사람 하나, 쓰면 이수 완료). 원장도 듣고 써요. 리플렉션 내용은 본인만 바로 읽고, 원장은 `academy_training_report(학원)`로 우리 강사 것까지 봐요. 관리자는 내용 없이 `admin_training_progress()`(이수 수) · `admin_video_reflections(영상)`(이름·학원·날짜)만.
   - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
   - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기. `academy_id`는 학원과 이어진 신청(프로그램에서 신청 · 접수 번호로 잇기).
+  - 채용 게시판(사람인처럼, `assets/jobs.js` · `jobs.css`를 첫 화면 `/jobs`와 프로그램 `#jobs`가 함께 써요): 검색 · 지역(시·도) · 분야 · 근무 형태 · 경력 · 최신/마감 임박순(`JB`, `jbBoard`), 공고 카드(`jbCard`) · 상세(`jbDetail`: 지원 자격 · 근무 조건 · 하는 일 · 자격 요건 · 우대 · 복리후생 · 전형 절차 · 학원 정보) · 가입한 학원 탭(`jbAcademies`). `job_posts`에 `career_level` · `career_years` · `education` · `headcount` · `work_days` · `requirements` · `preferred` · `benefits[]` · `process`. 학원 소개는 `academies.intro` · `field` · `homepage` · `listed`(공고 없어도 공개), 원장 "강사 채용" 위 `acadIntroCard`. 강사 이력서 `teacher_profiles`(본인만, `open_to_offers`면 센터 강사풀 `admin_teacher_pool()`), 지원자 목록 `list_job_applicants`가 `profile`도 돌려줘요. 강사 화면 `#jobs` · `#jobs/공고` · `#jobs/profile` 내 이력서 · `#jobs/mine` 지원 현황. 예시 계정 `/demo/seeker`(`DEMO_SEEKER`, `DEMO_JOBS`).
   - 채용: 공고 게시판(`JOBS_AREA`)은 학원에 아직 연결 안 된 강사(`SEEKER`)만 봐요 — 학원 강사 메뉴에는 없어요. `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
   - 제휴: `partner_applications`(원장 · 강사 신청, 신청한 사람은 트리거. 강사가 올리면 `owner_review` → 원장이 `decide_partner_request(신청, 승인?, 의견)`으로 승인하면 new, 반려하면 closed. 관리자는 owner_review를 못 보고 new→contacted→connected→closed 처리). 강사 메뉴 `#mou`(제휴처 · 유학 안내 · 내 제휴 신청). 제휴처 목록 자체는 `data.js`의 `partners`.
   - 유학: `abroad_promos`(원장이 학부모에게 안내, 강사도 봐요), `abroad_requests`(학부모·학생 신청 · 강사가 학부모 대신 신청하면 `via_name`·`via_role` → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
@@ -125,22 +127,26 @@
 17. ~~채팅(메신저)~~ (완료 · 친구 · 그룹 · 프로필까지)
 18. ~~새 소식 빨간 점 (확인하면 사라짐)~~ (완료)
 19. ~~4라운드: 시간 드롭다운 · 가로 스크롤 · 원생 들고 남 · 단계 설명 · 회원 상세 · 이용 분야 간결 · 채팅 · 자료실 폴더 · 관리자 홈 · 사용법 안내 · 현장 결제 직접 입력 · 원천세 계산 · 학부모 스위치 · 자동 처리~~ (완료)
+20. ~~5라운드: 첫 화면 개편(운영 프로그램 + 추가 서비스 3) · 사람인 같은 채용 게시판 · /jobs · 강사 이력서 · 수강료 할인 · 홈 목록 깨짐 · 학부모 바로 내기~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
 - 회원: 테스트 계정 `test_owner`(홍길동), 구글 계정 박윤지(인투어학원 원장).
 
 # 파일 구조
-- `index.html`: 첫 화면. 홈페이지가 아니라 프로그램 입구처럼 반반으로 나눈다.
-  - 왼쪽(남색) "지원받기": 분야 고르기 → `#area/admin` 분야 상세 → `#apply/admin` 지원 신청 → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
+- `index.html`: 첫 화면. 전체 너비 남색 + 위쪽 머리글(로고 · 운영 프로그램 · 추가 서비스 · 이용 사례 · 강사 채용 · [로그인] [무료로 시작하기]). 문구는 원장님 기준.
+  - 구조는 "운영 프로그램 1개(무료로 시작) + 필요할 때만 붙이는 추가 서비스 3개(상담 후 진행)". `areas.js`의 `SITE_AREAS`에 `kind: 'program'`(행정·재정 자동화 `admin` · 학생·학부모 관리 `members` · 강사와 함께 쓰기 `teachers`) / `'service'`(홍보 대행 `promo` · 유학·캠프 제휴 `mou` · 강사 구하기 `hire`), `PROGRAM_AREAS` · `SERVICE_AREAS`. 프로그램은 "무료로 시작하기 · 예시 계정", 서비스는 "상담 신청하기". 행정 자동화를 "신청 → 매니저 연락 → 견적"으로 소개하지 않는다. 파트너 이름은 카드 제목이 아니라 "공식 파트너 ○○"로 작게.
+  - 처음 화면 순서(`homeView`): 메인 메시지(역할별 화면 그림 `roleScreens`) → ① 운영 프로그램 + 각자 자기 화면(역할 카드 → /demo/역할) → ② 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개(`SITE_FAQ` 세 번째 값 true) → 시작하기 띠. 자세한 설명 · 질문 전체 · 비용은 분야 상세(`/area/…`)와 `#faq`로.
+  - 해시 화면(`VIEWS`): `#apply/분야` 추가 서비스 상담 신청(서비스 3개 + "프로그램 도입 도움"), `#done`, `#ask`, `#check`, `#faq`(질문 전체 · 비용 · 사업자 정보), `#demo`(예시 계정 고르기, `/demo/seeker` 구직 강사 포함), `#login` · `#signup`(로그인 패널 `#program`을 보여 주고 소개는 숨김, `#signup/teacher`는 강사로 골라 두고 가입 뒤 `/app#jobs`). 그 밖의 해시(`#program-sec` 등)는 처음 화면의 그 자리로.
+  - 강사로 일하고 싶은 분: `/jobs`(빌드가 `dist/jobs.html`, `vercel.json` rewrite). `public_job_board()`(가입 안 해도 됨)로 공고 · 가입한 학원, 공고가 없으면 예시 공고(`JOB_SAMPLES`)에 "예시" 표시. 상세는 `/jobs#job/공고`.
+  - (예전) 분야 상세 흐름: `/area/admin` 분야 상세 → 프로그램이면 가입, 서비스면 `#apply/분야` → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
   - 분야 상세페이지: 그림(`HERO_ART`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅 로고 `assets/brand/intomarketing-logo.png`(가로) · `intomarketing-mark.png`(세로, 앱 제휴 · 홍보 소개 칸).
-  - 오른쪽(흰색) "프로그램 쓰기": 아이디 로그인·회원가입(`?signup=1`), 구글로 계속하기, "예시 계정 들어가보기"(데모), "초대 코드가 뭐예요?" 설명, "로그인 유지하기"
-  - 휴대폰에서는 위쪽 탭(지원받기 / 프로그램 이용하기)으로 바로 오간다.
-  - 왼쪽 첫 화면 순서: 센터가 무엇인지(지원 서비스 + 운영 프로그램) → 이렇게 시작해요 → 지원 분야 → 비용 안내(상담 후 견적, `SITE_PRICE`) → 이용 사례(예시, `SITE_STORIES`) → 자주 묻는 질문(`SITE_FAQ`) → 운영 정보(예시, `SITE_ORG` — 실제 정보가 정해지면 여기만 바꾸기). 모두 `assets/areas.js`.
+  - 로그인 패널(`#login` · `#signup`, 예전 `?signup=1`도): 아이디 로그인·회원가입, 구글로 계속하기, "예시 계정 들어가보기"(`DEMO_ROLES`), "초대 코드가 뭐예요?" 설명, "로그인 유지하기"
+  - 비용 안내(`SITE_PRICE`, 운영 프로그램 · 채용 공고 무료) · 이용 사례(예시, `SITE_STORIES`) · 자주 묻는 질문(`SITE_FAQ`) · 운영 정보(예시, `SITE_ORG` — 실제 정보가 정해지면 여기만 바꾸기). 모두 `assets/areas.js`.
   - 분야 상세 주소는 `/area/admin`처럼 진짜 주소(검색 노출용). 빌드가 분야마다 제목 · 설명 · canonical이 들어간 `dist/area/분야.html`과 `robots.txt` · `sitemap.xml`을 만들고, `vercel.json` rewrites가 `/area/:id`를 이어 줘요. 화면 안에서 분야 · 처음 링크는 pushState로 바뀌고 탭 제목도 바뀌어요(`setMeta`). 예전 `#area/…` 주소는 저절로 바꿔 줘요. 그래서 `index.html`의 파일 주소는 `/assets/…`처럼 `/`로 시작해요.
   - 연락 예정(`etaText`): 고른 연락 시간대(`CONTACT_SLOT`) 기준으로, 주말 · 공휴일(`HOLIDAYS`, 해마다 다음 해 것 더하기)은 건너뛰어요.
   - 사업자 정보: `areas.js`의 `SITE_ORG`(상호 · 대표자 · 사업자등록번호 · 통신판매업 · 주소 · 고객센터 · 이메일 · 개인정보 보호책임자). 지금은 예시, 실제 정보로 바꾸고 `ready: true`.
-  - 신청서(`#apply`) · 가입 전 문의(`#ask`): 필수 표시 *, 전화번호 자동 하이픈 · 형식 확인, 지역은 시·도 → 시·군·구 고르기(`assets/regions.js`의 `regionPicker`), 개인정보 수집 · 이용 동의(필수), 끝나면 `#done`에 접수 번호 · 연락 예정 시각(`etaText`: 평일 16:30 전이면 오늘 오후 6시 전, 아니면 다음 평일 오전).
+  - 상담 신청서(`#apply`) · 가입 전 문의(`#ask`): 필수 표시 *, 전화번호 자동 하이픈 · 형식 확인, 지역은 시·도 → 시·군·구 고르기(`assets/regions.js`의 `regionPicker`), 개인정보 수집 · 이용 동의(필수), 끝나면 `#done`에 접수 번호 · 연락 예정 시각(`etaText`: 평일 16:30 전이면 오늘 오후 6시 전, 아니면 다음 평일 오전).
   - 스타일은 `assets/site.css`
 - `login.html`, `service.html`: 예전 주소. 첫 화면으로 넘겨 주기만 한다.
 - 공유 미리보기: 각 페이지의 og 메타 태그 + `assets/og.png`(1200×630), 탭 아이콘 `assets/favicon.svg`

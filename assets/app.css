@@ -93,7 +93,7 @@ nav { display: grid; gap: 2px; }
 .list { display: grid; }
 .li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
 .li:first-child { border-top: 0; padding-top: 0; }
-.li:not(:has(> .av)) { grid-template-columns: minmax(0, 1fr) auto; }
+.li:not(:has(> .av, > .dotmark)) { grid-template-columns: minmax(0, 1fr) auto; }
 .li:last-child { padding-bottom: 0; }
 .li.link { border-radius: 10px; transition: background .15s; }
 .li.link:hover { background: var(--sunk); }
@@ -960,3 +960,21 @@ dialog:has(.dlg.wide) { width: min(900px, calc(100vw - 32px)); }
 .svc-cell select { width: 100%; border: 0; background: transparent; font-size: 14px; font-weight: 700; color: var(--ink); padding: 2px 0; cursor: pointer; }
 .svc-cell.st-active select { color: var(--good); } .svc-cell.st-consulting select { color: var(--warn); }
 .svc-acad > .btn { justify-self: start; }
+
+/* 수강료 할인: 원가 · 할인 내역 */
+.disc-row { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); display: grid; gap: 10px; }
+.disc-row h3 { margin: 0; font-size: 15px; }
+.time.disc s { color: var(--muted); }
+.time.disc { color: var(--good); font-weight: 600; }
+
+/* 채용: 이력서 · 지원 단계 */
+.info-dl { margin: 8px 0 0; display: grid; gap: 6px; }
+.info-dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; font-size: 13.5px; }
+.info-dl dt { color: var(--muted); }
+.info-dl dd { margin: 0; font-weight: 600; word-break: break-all; }
+.cv { margin-top: 6px; font-size: 13px; }
+.cv summary { cursor: pointer; color: var(--blue-600); font-weight: 700; }
+.app-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.app-steps span { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.app-steps span.on { background: var(--blue-50); color: var(--blue-600); }
+#view .jb-list { margin: 0 -4px; }
