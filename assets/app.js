@@ -114,11 +114,12 @@ const noStudents = () => `
 /* ================= 원장 · 행정 지원 ================= */
 function attendPage() {
   if (REAL) return realAttendPage();
-  const sum = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]);
-  if (!DATA.attendance.length) return head('출결', `${DATA.today} · 오늘은 수업이 없는 날이에요.`) + `<section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>오늘은 수업이 없어요</h2><p class="muted">시간표에 오늘 요일 수업이 없어요. 다른 날 출결은 수업이 있는 날 열어 보세요.</p><a class="btn" href="#schedule">시간표 보기</a></section>`;
+  const rows = ROLE === 'teacher' ? DATA.attendance.filter(c => c.teacher === ME.name) : DATA.attendance; // 강사는 내 반만
+  const sum = rows.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]);
+  if (!rows.length) return head('출결', `${DATA.today} · 오늘은 수업이 없는 날이에요.`) + `<section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>오늘은 수업이 없어요</h2><p class="muted">시간표에 오늘 요일 수업이 없어요. 다른 날 출결은 수업이 있는 날 열어 보세요.</p><a class="btn" href="#schedule">시간표 보기</a></section>`;
   return head('출결', `오늘 ${sum[0]}/${sum[1]}명 출석 · 강사가 수업 중에 입력하면 학부모에게 바로 알림이 가요.`) + `
   <section class="card"><div class="list">
-    ${DATA.attendance.map(c => `
+    ${rows.map(c => `
       <div class="li">
         <span class="av" style="background:var(--navy-700)">${c.cls[0]}</span>
         <div><div class="t">${c.cls} <span class="muted small">${c.time}</span></div>${bar(c.present / c.total * 100)}</div>
@@ -931,6 +932,8 @@ function realOwnerTodo() {
   items.push(...scheduleTodo().filter(i => !i[0].startsWith('오늘 수업')));
   if (REAL.students.length && REAL.todoDay === TODAY && !REAL.todos.length) items.push(['오늘 할 일 주기', '반 전체에 한 번에 줄 수 있어요 · 학생 · 학부모 앱에 바로 보여요', '#members/todos', '<span class="chip mute">할 일</span>']);
   const apv = REAL.approvals.filter(a => a.status === 'pending');
+  const mkr = REAL.promoReqs.filter(r => r.status === 'owner_review');
+  if (mkr.length) items.push([`강사 홍보 의뢰 ${mkr.length}건 결재하기`, mkr.slice(0, 3).map(r => `${esc(r.requester_name || '강사')} · ${esc(r.title)}`).join(' / '), '#promo/requests', '<span class="chip warn">원장 결재</span>']);
   const pa = REAL.partnerApps.filter(a => a.status === 'owner_review');
   if (pa.length) items.push([`강사 제휴 신청 ${pa.length}건 승인하기`, pa.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.partner_name)}`).join(' / '), '#mou/mine', '<span class="chip warn">원장 확인</span>']);
   if (apv.length) items.push([`강사 결재 ${apv.length}건 확인하기`, apv.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">결재 대기</span>']);
@@ -1890,14 +1893,14 @@ function decideDialog(a, ok) {
 /* ================= 원장 · 강사 관리 ================= */
 function staffPage() {
   const total = DATA.training.length;
-  if (REAL && !DATA.staff.length) return head('우리 학원 강사', '센터 교육 이수 현황을 확인해요.') + `
+  if (REAL && !DATA.staff.length && !(REAL.teacherClasses || []).length) return head('우리 학원 강사', '센터 교육 이수 현황을 확인해요.') + `
   <section class="card empty">
     <span class="tile-ic">${ic('users')}</span>
     <h2>아직 합류한 강사님이 없어요</h2>
     <p class="muted">강사용 초대 코드로 가입하면 여기에 나오고, 센터 교육 이수 현황도 함께 보여요.</p>
     <a class="btn primary" href="#members/invite">초대 코드 보기</a>
   </section>`;
-  return head('우리 학원 강사', REAL ? '센터 교육 이수 현황을 확인해요.' : '센터 교육 이수 현황과 담당 반을 확인해요.') + `
+  return head('우리 학원 강사', REAL ? '센터 교육 이수 현황과 담당 반을 확인해요.' : '센터 교육 이수 현황과 담당 반을 확인해요.') + (DATA.staff.length ? `
   <section class="card"><div class="list">
     ${DATA.staff.map(s => `
       <div class="li">
@@ -1905,8 +1908,51 @@ function staffPage() {
         <div><div class="t">${s.name} <span class="muted small">${s.cls}</span></div><div class="d">${REAL ? s.since : `근무 시작 ${s.since}`}</div></div>
         <div class="r"><span class="time">센터 교육 이수</span><b class="num">${DATA.training.filter(t => t.status[s.name] === 'done').length}/${total}</b></div>
       </div>`).join('')}
-  </div></section>
+  </div></section>` : '') + `
+  ${teacherClassesCard()}
   <a class="hint" href="#teachers/hire">${ic('brief')}<span>강사가 더 필요하세요? 센터 채용 게시판에 공고를 올릴 수 있어요</span><b>강사 채용 →</b></a>`;
+}
+// 원장: 강사마다 담당 반 정하기 — 강사는 담당 반 학생(과 직접 추가한 학생)만 원생 명단 · 출결 · 할 일 · 리포트에서 봐요
+function teacherClassesCard() {
+  const list = REAL ? REAL.teacherClasses || [] : DATA.staff.map(s => ({ user_id: s.name, name: s.name, classes: s.cls.includes('초등 A·B') ? ['초등 A반', '초등 B반'] : [s.cls], timetable_classes: [] }));
+  if (!list.length) return '';
+  return `
+  <h2 class="sec-title">강사 담당 반</h2>
+  <section class="card">
+    <p class="muted small" style="margin:0 0 12px">강사님은 <b>담당 반 학생</b>만 원생 명단 · 출결 · 할 일 · 성장 리포트에서 봐요. 시간표에 담당 강사로 넣은 반은 저절로 담당 반이 돼요. 강사님이 직접 추가한 학생도 보여요.</p>
+    <div class="list stack">${list.map(t => `
+      <div class="li"><span class="av" style="background:var(--r-teacher)">${esc((t.name || '?')[0])}</span>
+        <div><div class="t">${esc(t.name)}</div><div class="needs">${t.classes.length || t.timetable_classes.length
+          ? t.classes.map(c => `<span class="chip info">${esc(c)}</span>`).join('') + t.timetable_classes.filter(c => !t.classes.includes(c)).map(c => `<span class="chip mute" title="시간표에서">${esc(c)} · 시간표</span>`).join('')
+          : '<span class="chip warn">담당 반 없음 · 학생이 안 보여요</span>'}</div></div>
+        <div class="r"><button class="btn sm" data-t-classes="${esc(t.user_id)}">담당 반 정하기</button></div></div>`).join('')}</div>
+  </section>`;
+}
+function teacherClassesDialog(t) {
+  if (!REAL) { toast('예시 계정에서는 바꿀 수 없어요'); return; }
+  const d = dialogEl();
+  const opts = [...new Set([...allClassNames(), ...REAL.timetable.map(x => x.class_name), ...t.classes, ...t.timetable_classes].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="tcForm" novalidate>
+    <h2>${esc(t.name)} 선생님 담당 반</h2>
+    <p class="muted small" style="margin:-6px 0 0">고른 반의 학생만 선생님 화면에 보여요. 시간표에서 담당인 반은 따로 고르지 않아도 보여요.</p>
+    <div class="fav-pick"><fieldset><legend>반</legend>${opts.length ? opts.map(c => {
+      const tt = t.timetable_classes.includes(c);
+      return `<label><input type="checkbox" value="${esc(c)}" ${t.classes.includes(c) || tt ? 'checked' : ''} ${tt && !t.classes.includes(c) ? 'disabled' : ''}><span>${esc(c)}${tt ? ' <small class="muted">시간표</small>' : ''}</span></label>`; }).join('') : '<p class="muted small">아직 반이 없어요. 아래에 반 이름을 적어 주세요.</p>'}</fieldset></div>
+    <label class="f">다른 반 더하기 <input name="more" maxlength="50" placeholder="예: 중등 심화반"></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#tcForm').onsubmit = async e => {
+    e.preventDefault();
+    const picked = [...d.querySelectorAll('.fav-pick input:checked:not(:disabled)')].map(c => c.value);
+    const more = e.target.elements.more.value.trim(); if (more) picked.push(more);
+    const { error } = await SB.rpc('set_teacher_classes', { p_academy: REAL.academy.id, p_user: t.user_id, p_classes: picked });
+    if (error) { const m = $('#dlgMsg'); m.textContent = '저장하지 못했어요.'; m.hidden = false; return; }
+    d.close(); await loadTeacherClasses(); render(); toast('담당 반을 정했어요');
+  };
 }
 
 function trainingList(base) {
@@ -2098,13 +2144,15 @@ function servicesPage() {
 
 /* ---------- 실제 데이터: 홍보 의뢰 (Supabase promo_requests) ---------- */
 // 접수 → 인투마케팅 연결 → 작업 중 → 시안 확인 → 완료
-const MK_STATE = { new: ['info', '접수', 10], contacted: ['info', '인투마케팅 연결', 30], working: ['warn', '작업 중', 60], review: ['warn', '시안 확인 필요', 85], done: ['good', '완료', 100] };
+const MK_STATE = { owner_review: ['warn', '원장님 결재 기다리는 중', 5], rejected: ['mute', '원장님이 반려', 0], new: ['info', '접수', 10], contacted: ['info', '인투마케팅 연결', 30], working: ['warn', '작업 중', 60], review: ['warn', '시안 확인 필요', 85], done: ['good', '완료', 100] };
 let mkWho = 'all';
 const mkBy = r => r.requester_role === 'teacher' ? `${esc(r.requester_name || '강사')} 강사 의뢰` : r.requester_name ? `${esc(r.requester_name)} 원장 의뢰` : '원장 의뢰';
 function realPromoRequestsPage() {
   const all = REAL.promoReqs, owner = ROLE === 'owner';
   const fromT = all.filter(r => r.requester_role === 'teacher');
-  const list = all.filter(r => mkWho === 'all' || (mkWho === 'teacher' ? r.requester_role === 'teacher' : r.requester_role !== 'teacher'));
+  // 원장 결재를 기다리는 강사 의뢰가 맨 위에
+  const list = all.filter(r => mkWho === 'all' || (mkWho === 'teacher' ? r.requester_role === 'teacher' : r.requester_role !== 'teacher'))
+    .sort((a, b) => (b.status === 'owner_review') - (a.status === 'owner_review'));
   const add = `<a class="btn primary" href="#promo/services">${ic('plus')}새 의뢰</a>`;
   if (!list.length) return head('내 의뢰', '') + `
   <section class="card empty">
@@ -2113,8 +2161,8 @@ function realPromoRequestsPage() {
     <p class="muted">홍보 서비스에서 필요한 작업을 골라 의뢰하면, 센터가 인투마케팅 담당자와 연결하고 진행 상황을 여기에 적어 드려요.</p>
     ${add}
   </section>`;
-  return head('내 의뢰', owner ? '강사님이 맡긴 의뢰까지 모두 보여요. 센터가 인투마케팅에 연결하고 단계가 바뀔 때마다 여기에 적혀요. 접수 단계에서는 취소할 수 있어요.'
-    : '내가 맡긴 의뢰예요. 원장님도 같이 봐요. 접수 단계에서는 취소할 수 있어요.', add) +
+  return head('내 의뢰', owner ? '강사님이 맡긴 의뢰까지 모두 보여요. 강사님 의뢰는 원장님이 승인해야 센터로 넘어가요. 센터가 인투마케팅에 연결하고 단계가 바뀔 때마다 여기에 적혀요.'
+    : '내가 맡긴 의뢰예요. 원장님이 결재(승인)하면 센터로 넘어가고, 그 뒤 진행 상황이 여기에 적혀요.', add) +
   (owner && fromT.length ? `<div class="filters">${[['all', `전체 ${all.length}`], ['owner', `원장 의뢰 ${all.length - fromT.length}`], ['teacher', `강사 의뢰 ${fromT.length}`]].map(([k, l]) => `<button class="${mkWho === k ? 'on' : ''}" data-mk-who="${k}">${l}</button>`).join('')}</div>` : '') + `
   <section class="card"><div class="list stack">
     ${list.map(r => {
@@ -2123,8 +2171,9 @@ function realPromoRequestsPage() {
       <div class="li">
         <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--blue-600)'}">${ic('megaphone')}</span>
         <div><div class="t">${esc(r.title)}${owner ? ` <span class="chip ${r.requester_role === 'teacher' ? 'warn' : 'mute'}">${mkBy(r)}</span>` : ''}</div><div class="d">${esc(r.service)} · ${md(r.created_at.slice(0, 10))} 의뢰${r.want_by ? ` · ${md(r.want_by)}까지` : ''}</div>${bar(pct)}
+          ${r.owner_comment ? `<div class="d"><b>원장님 의견</b> ${esc(r.owner_comment)}</div>` : ''}
           ${r.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(r.admin_memo)}</div>` : ''}</div>
-        <div class="r"><span class="chip ${c}">${l}</span>${r.status === 'new' ? `<button class="btn sm" data-cancel-mk="${r.id}">취소</button>` : ''}</div>
+        <div class="r"><span class="chip ${c}">${l}</span>${owner && r.status === 'owner_review' ? `<span class="btns"><button class="btn sm primary" data-mk-decide="${r.id}:1">승인</button><button class="btn sm" data-mk-decide="${r.id}:0">반려</button></span>` : ''}${['new', 'owner_review', 'rejected'].includes(r.status) ? `<button class="btn sm" data-cancel-mk="${r.id}">${r.status === 'rejected' ? '지우기' : '취소'}</button>` : ''}</div>
       </div>`;
     }).join('')}
   </div></section>
@@ -2132,7 +2181,8 @@ function realPromoRequestsPage() {
 }
 function promoReqDialog(service) {
   formDialog({
-    title: `${service} 의뢰`, table: 'promo_requests', extra: { service }, okText: '의뢰하기', doneText: '의뢰했어요 · 센터가 인투마케팅에 연결해 드려요',
+    title: `${service} 의뢰`, table: 'promo_requests', extra: { service }, okText: ROLE === 'teacher' ? '원장님께 결재 올리기' : '의뢰하기',
+    doneText: ROLE === 'teacher' ? '의뢰를 올렸어요 · 원장님이 승인하면 센터로 넘어가요' : '의뢰했어요 · 센터가 인투마케팅에 연결해 드려요',
     after: async () => { await loadPromoReqs(); location.hash = '#promo/requests'; },
     label: () => '',
     fields: [
@@ -2178,6 +2228,7 @@ function leadsPage() {
   </div>`;
 }
 
+const DEMO_MY_CLASSES = ['초등 A반', '초등 B반']; // 예시 강사(김민지)의 담당 반
 // 원생 명단 찾기: 위쪽 검색에서 학생 · 반을 누르면 여기에 채워져요
 let STU_Q = '';
 const stuMatch = (q, ...f) => !q || f.some(x => String(x || '').includes(q));
@@ -2187,12 +2238,13 @@ const stuFilterBar = (classes, n) => `
     ${STU_Q ? `<span class="muted small">"${esc(STU_Q)}" ${n}명</span>` : ''}</div>`;
 function studentsPage() {
   if (REAL) return realStudentsPage();
-  const list = DATA.students.filter(s => stuMatch(STU_Q, s.name, s.cls, s.parent, s.phone, s.grade));
-  return head('원생 명단', `원생 ${DATA.academy.students}명 중 일부 · 학부모 연락처와 출석률, 수납 상태를 함께 봐요.`) + stuFilterBar([...new Set(DATA.students.map(s => s.cls))].sort(), list.length) + `
+  const mine = ROLE === 'teacher' ? DATA.students.filter(s => DEMO_MY_CLASSES.includes(s.cls)) : DATA.students;
+  const list = mine.filter(s => stuMatch(STU_Q, s.name, s.cls, s.parent, s.phone, s.grade));
+  return head('원생 명단', ROLE === 'teacher' ? `담당 반(${DEMO_MY_CLASSES.join(' · ')}) 학생 ${mine.length}명이에요. 다른 반 학생은 보이지 않아요.` : `원생 ${DATA.academy.students}명 중 일부 · 학부모 연락처와 출석률, 수납 상태를 함께 봐요.`) + stuFilterBar([...new Set(mine.map(s => s.cls))].sort(), list.length) + `
   <section class="card"><div class="table">
-    <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>10월 수납</span></div>
+    <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>${ROLE === 'teacher' ? '' : '10월 수납'}</span></div>
     ${list.map(s => `
-      <div class="tr"><span><b>${s.name}</b> <span class="muted small">${s.grade}</span></span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${s.phone}</span></span><span class="num">${s.attend}%</span><span>${s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
+      <div class="tr"><span><b>${s.name}</b> <span class="muted small">${s.grade}</span></span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${s.phone}</span></span><span class="num">${s.attend}%</span><span>${ROLE === 'teacher' ? '' : s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
   </div></section>`;
 }
 
@@ -2228,7 +2280,8 @@ function realStudentsPage() {
     <p class="muted small" style="margin:0">학부모·학생용 코드로 가입했지만 아직 아이와 이어지지 않았어요. 아이 줄의 "앱 연결"을 눌러 이어 주면 그 아이의 출결 · 수납 · 반 공지가 앱에 보여요.</p>
     <div class="needs" style="margin-top:10px">${waiting.map(f => `<span class="chip warn">${esc(f.name)} · ${ROLE_NAMES[f.role]}</span>`).join('')}</div>
   </section>` : '';
-  return head('원생 명단', `원생 ${all.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ' 추가 · 수정한 내용은 원장님 명단에도 바로 보여요.'}`, all.length ? add : '') + wait + body +
+  const mineNote = ROLE === 'teacher' ? `<div class="hint" style="margin:0 0 14px">${ic('users')}<span>${(REAL.myClasses || []).length ? `담당 반 <b style="color:inherit">${REAL.myClasses.map(esc).join(' · ')}</b> 학생과 직접 추가한 학생만 보여요.` : '아직 담당 반이 없어요. 원장님이 담당 반을 정하거나 시간표에 선생님을 담당 강사로 넣으면 그 반 학생이 보여요. 직접 추가한 학생은 바로 보여요.'}</span></div>` : '';
+  return head('원생 명단', `원생 ${all.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ' 추가 · 수정한 내용은 원장님 명단에도 바로 보여요.'}`, all.length ? add : '') + mineNote + wait + body +
     (canEdit ? `<a class="hint" href="#members/invite">${ic('users')}<span>강사님·학부모님을 학원에 초대하려면 초대 코드를 보내 주세요</span><b>초대 코드 →</b></a>` : '');
 }
 
@@ -2783,6 +2836,27 @@ function teacherAbroadPage() {
 }
 
 // 원장: 강사 제휴 신청 승인 · 반려
+// 원장: 강사 홍보 의뢰 결재 (승인하면 센터로)
+function decidePromoDialog(r, ok) {
+  const d = dialogEl();
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="mkForm" novalidate>
+    <h2>${esc(r.title)} 의뢰 ${ok ? '승인' : '반려'}</h2>
+    <p class="muted small" style="margin:0">${esc(r.requester_name || '강사')} 선생님이 올린 ${esc(r.service)} 의뢰예요.${ok ? ' 승인하면 센터가 인투마케팅과 연결하고, 상담 때 비용을 안내해 드려요.' : ''}</p>
+    ${r.detail ? `<p class="d pre" style="margin:0">"${esc(r.detail)}"</p>` : ''}
+    <label class="f">선생님께 남길 말<textarea name="c" rows="3" maxlength="500" placeholder="${ok ? '예: 좋아요, 진행해 주세요.' : '예: 이번 달 예산이 없어서 다음 달에 해요.'}"></textarea></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn ${ok ? 'primary' : 'danger'}">${ok ? '승인 · 센터로 보내기' : '반려'}</button></div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#mkForm').onsubmit = async e => {
+    e.preventDefault();
+    const { error } = await SB.rpc('decide_promo_request', { p_id: r.id, p_ok: ok, p_comment: e.target.elements.c.value });
+    if (error) { const m = $('#dlgMsg'); m.textContent = '저장하지 못했어요. 이미 처리된 의뢰인지 확인해 주세요.'; m.hidden = false; return; }
+    d.close(); await loadPromoReqs(); render(); toast(ok ? '승인했어요 · 센터가 연결해 드려요' : '반려했어요');
+  };
+}
 function decidePartnerDialog(a, ok) {
   const d = dialogEl();
   d.innerHTML = `
@@ -3365,6 +3439,8 @@ const MESSAGES_AREA = { name: '메신저', icon: 'chat', desc: '친구 추가하
   render: messagesPage, detail: chatPage, title: id => { const c = convsData().find(x => x.id === id); return c ? convName(c) : ''; } };
 const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
+// 채용 공고 게시판: 학원에 아직 연결 안 된 강사(구직 중)만 봐요. 학원 강사 메뉴에는 없고, 공고 · 지원자 관리는 원장 "강사 채용"
+const JOBS_AREA = { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage };
 const SCHEDULE_AREA = { name: '일정·시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
@@ -3416,7 +3492,7 @@ const AREAS = {
   },
   teacher: {
     attend: { name: '출결', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
-    students: { name: '원생 명단', icon: 'users', desc: '원생 추가 · 정보 고치기', stat: () => `원생 ${REAL ? REAL.students.length : DATA.academy.students}명`, render: studentsPage },
+    students: { name: '원생 명단', icon: 'users', desc: '담당 반 학생 · 추가 · 고치기', stat: () => `담당 반 원생 ${REAL ? REAL.students.length : DATA.students.filter(x => DEMO_MY_CLASSES.includes(x.cls)).length}명`, render: studentsPage },
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
@@ -3424,7 +3500,6 @@ const AREAS = {
     library: LIBRARY_AREA,
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
-    jobs: { name: '강사 채용', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
     approvals: { name: '결재', icon: 'check', desc: '물품 · 비용을 원장님께 결재받기', stat: () => { const n = apvData().filter(a => a.status === 'pending').length; return n ? `결재 대기 ${n}건` : `올린 결재 ${apvData().length}건`; }, render: approvalsTeacherPage },
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '학부모님께 설명할 제휴 · 유학 안내, 신청은 원장님 확인 뒤 센터로', stat: () => REAL ? `내 신청 ${REAL.partnerApps.length + REAL.abroad.requests.length}건` : `제휴처 ${DATA.partners.length}곳`,
       subs: {
@@ -3450,8 +3525,8 @@ const AREAS = {
   },
   student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, messages: MESSAGES_AREA, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
 };
-AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
-const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
+AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보 의뢰 · 원장님 결재 뒤 센터로' };
+const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done' && r.status !== 'rejected').length : DATA.promoRequests.length;
 // 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 공지
 const kidStat = () => REAL.kids.length ? REAL.kids.map(k => esc(k.name)).join(' · ') : '아이 연결 전';
 const newsArea = { name: '공지', icon: 'chat', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
@@ -3533,7 +3608,7 @@ const NEWS = {
   }
 };
 // 예시 계정: 처음 들어오면 몇 곳에 점이 보이고, 열어 보면 사라져요
-const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'promo/requests'], teacher: ['approvals', 'learn', 'jobs'],
+const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'promo/requests'], teacher: ['approvals', 'learn'],
   parent: ['news', 'kid/bills', 'abroad'], student: ['todos', 'reports'] };
 function newsKeys() {
   if (!REAL && !CENTER) return DEMO && !USER ? Object.fromEntries((DEMO_NEWS[ROLE] || []).map(k => [k, () => [`${TODAY}T00:00:00`]])) : {};
@@ -3597,7 +3672,7 @@ function markSeen(path) {
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
   owner: [['학원 운영', '출결 · 돈 · 서류 · 학생 · 일정', ['admin', 'members', 'schedule']], ['강사 · 소통', '강사 교육 · 채용 · 메신저 · 자료', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
-  teacher: [['수업', '출결 · 원생 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'todos', 'reports', 'schedule']], ['소통 · 자료', '메신저 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 채용 · 제휴 · 홍보', ['learn', 'jobs', 'mou', 'promo', 'center']]],
+  teacher: [['수업', '출결 · 원생 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'todos', 'reports', 'schedule']], ['소통 · 자료', '메신저 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 메신저 · 자료실', ['news', 'messages', 'library', 'center']]],
   admin: [['센터', '센터 관리 · 메신저', ['center', 'messages']]]
@@ -3716,7 +3791,7 @@ const stuPath = () => ROLE === 'owner' ? 'members/students' : ROLE === 'teacher'
 function searchPeople(q) {
   q = q.trim(); const path = stuPath();
   if (!q || !path) return [];
-  const studs = REAL ? REAL.students.map(s => [s.name, s.class_name, s.grade, s.parent_name, s.parent_phone]) : DATA.students.map(s => [s.name, s.cls, s.grade, s.parent, s.phone]);
+  const studs = REAL ? REAL.students.map(s => [s.name, s.class_name, s.grade, s.parent_name, s.parent_phone]) : DATA.students.filter(s => ROLE !== 'teacher' || DEMO_MY_CLASSES.includes(s.cls)).map(s => [s.name, s.cls, s.grade, s.parent, s.phone]);
   const out = [];
   const classes = [...new Set(studs.map(x => x[1]).filter(Boolean))].filter(c => c.includes(q));
   classes.slice(0, 3).forEach(c => out.push([`#${path}`, c, `반 · 학생 ${studs.filter(x => x[1] === c).length}명`, 'users', c]));
@@ -3926,7 +4001,7 @@ const AREA_INTRO = {
     ${flowSteps([['서비스 골라 의뢰', '필요한 작업 · 원하는 날짜를 적어요'], ['센터가 연결', '센터가 확인하고 인투마케팅 담당자와 이어 드려요'], ['상담 · 견적', '담당자가 연락해 내용과 비용을 정해요'], ['작업 · 시안 확인', '시안이 나오면 "내 의뢰"에서 확인해요'], ['완료', '결과물을 받고 마무리해요']])}
     <div class="row-btns"><a class="btn primary" href="#promo/services">의뢰하러 가기</a><a class="btn" href="${MK}" target="_blank" rel="noopener">인투마케팅 사이트 ${ic('ext')}</a></div>
   </section>
-  ${qaList([['강사도 의뢰할 수 있나요?', '네. 강사님도 맡은 반 특강 · 설명회 홍보를 직접 의뢰할 수 있어요. 원장님은 강사님이 무엇을 의뢰했는지 "내 의뢰"에서 모두 볼 수 있어요.'],
+  ${qaList([['강사도 의뢰할 수 있나요?', '네. 강사님도 맡은 반 특강 · 설명회 홍보를 의뢰할 수 있어요. 강사님 의뢰는 원장님이 "내 의뢰"에서 승인해야 센터로 넘어가요(비용이 드는 일이라 원장님 결재를 거쳐요).'],
     ['비용은 어떻게 정해져요?', '작업 내용에 따라 달라서, 인투마케팅 담당자가 상담하면서 견적을 안내해요. 견적을 보고 진행 여부를 정하면 돼요.'],
     ['의뢰를 취소할 수 있나요?', '센터가 연결하기 전(접수 단계)이면 "내 의뢰"에서 바로 취소할 수 있어요.']])}`
 };
@@ -4018,7 +4093,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
+    teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || path === 'guide' || path === 'help' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -4125,6 +4200,8 @@ function bind() {
     await loadPartnerApps(); render(); toast('신청을 취소했어요');
   });
   on('[data-act="addPromo"]', () => promoDialog(null));
+  on('[data-t-classes]', b => teacherClassesDialog(((REAL && REAL.teacherClasses) || []).find(t => t.user_id === b.dataset.tClasses) || {}));
+  on('[data-mk-decide]', b => { const [id, ok] = b.dataset.mkDecide.split(':'); decidePromoDialog(REAL.promoReqs.find(r => r.id === id), ok === '1'); });
   on('[data-pa-decide]', b => { const [id, ok] = b.dataset.paDecide.split(':'); decidePartnerDialog(REAL.partnerApps.find(a => a.id === id), ok === '1'); });
   on('[data-edit-promo]', (b, e) => { e.preventDefault(); promoDialog(abroadData().promos.find(p => p.id === b.dataset.editPromo)); });
   on('[data-edit-ab]', b => abroadMemoDialog(abroadData().requests.find(r => r.id === b.dataset.editAb)));
@@ -4532,6 +4609,9 @@ async function loadSchedule() {
   }
 }
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
+// 강사 담당 반: 강사는 내 반(이 반 학생만 보여요), 원장은 강사별로 (원장이 정한 반 + 시간표 담당 반)
+async function loadMyClasses() { const { data } = await SB.rpc('my_teacher_classes', { p_academy: REAL.academy.id }); REAL.myClasses = data || []; }
+async function loadTeacherClasses() { const { data } = await SB.rpc('list_teacher_classes', { p_academy: REAL.academy.id }); REAL.teacherClasses = data || []; }
 const loadPlans = () => loadRows('tuition_plans', 'amount').then(() => { REAL.plans = REAL.tuition_plans; });
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
@@ -4733,7 +4813,7 @@ async function boot() {
     if (!mem || !mem.length) {
       // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요
       if (!CENTER && PROFILE.role === 'teacher' && location.hash.startsWith('#jobs')) {
-        useProfile(); SEEKER = true; MY = { jobs: AREAS.teacher.jobs };
+        useProfile(); SEEKER = true; MY = { jobs: JOBS_AREA };
         await loadJobBoard(); render(); return;
       }
       if (!CENTER) { onboarding(user); return; }
@@ -4752,9 +4832,9 @@ async function boot() {
       approvals: [], reports: [], library: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans()]);
-    if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
+    if (ROLE === 'owner') await Promise.all([loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
-    if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs(), loadPartnerApps()]);
+    if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
