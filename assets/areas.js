@@ -27,7 +27,7 @@ const SITE_AREAS = [
     ],
     steps: ['학원 정보·반·원생 등록 (기존 엑셀 명단은 매니저가 옮겨 드려요)', '출결·청구서 사용 시작', '행정 마감은 센터가 미리 알리고 서식을 채워 드려요'],
     faq: [
-      ['지금 쓰는 엑셀 명단을 옮길 수 있나요?', '네. 담당 매니저가 기존 원생 명단과 수납 내역을 옮겨 드려요.'],
+      ['지금 쓰는 엑셀 명단을 옮길 수 있나요?', '네. 원생 명단 · 지출은 "엑셀로 올리기"로 한 번에 올릴 수 있고, 어려우면 담당 매니저가 옮겨 드려요.'],
       ['교육청 서류를 대신 제출해 주나요?', '학원 정보로 서식을 채워 드리고, 제출은 원장님이 내용을 확인한 뒤 진행해요.']
     ],
     demo: 'app.html?role=owner#admin' },
@@ -107,3 +107,105 @@ const SITE_AREAS = [
     link: ['인투마케팅 바로가기', MARKETING_URL],
     demo: 'app.html?role=owner#promo' }
 ];
+
+/* ---------- 상세페이지 꾸미기: 분야마다 색 · 핵심 포인트 · 지원 내용 아이콘 · 그림 · 파트너 소개 ---------- */
+Object.assign(SITE_ICON, {
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  doc: '<path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/>',
+  video: '<rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 10l5-3v10l-5-3"/>',
+  pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-12 7l-6 2 2-6a8 8 0 1 1 16-3z"/>',
+  brief: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  phone: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
+  leads: '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  plane: '<path d="M10.5 13.5L3 11l2-2 7.5 1.5L17 6a2 2 0 0 1 3 3l-4.5 4.5L17 21l-2 2-2.5-7.5L9 19v3l-2-1-1-2H3l1.5-2.5z"/>',
+  school: '<path d="M3 10l9-6 9 6"/><path d="M5 10v9h14v-9M9 19v-5h6v5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5M8 7h7"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
+  film: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'
+});
+
+// 분야마다 포인트 색(--ac) · 핵심 포인트 3가지 · 지원 내용 4가지의 아이콘
+const AREA_LOOK = {
+  admin: { accent: '#5ec8ff', itemIcons: ['cal', 'card', 'chart', 'doc'],
+    points: [['clock', '한 화면에서 끝', '출결 · 수납 · 지출을 한곳에서 바로 입력해요.'], ['bell', '마감은 먼저 알려요', '교육청 · 공단 서류는 마감 전에 홈에 떠요.'], ['doc', '엑셀도 그대로', '쓰던 원생 · 지출 엑셀을 한 번에 올려요.']] },
+  teachers: { accent: '#4fe0b0', itemIcons: ['video', 'pen', 'check', 'brief'],
+    points: [['video', '본부가 매달 배부', '센터 교육팀이 만든 영상이 자동으로 와요.'], ['pen', '보고 끝이 아니에요', '리플렉션으로 배운 걸 수업에 옮겨요.'], ['brief', '채용도 센터 안에서', '교육 이수 기록과 함께 지원서가 와요.']] },
+  members: { accent: '#ffc861', itemIcons: ['leads', 'users', 'chat', 'phone'],
+    points: [['leads', '문의를 놓치지 않게', '문의 → 상담 → 체험 → 등록을 카드로 챙겨요.'], ['chat', '읽었는지까지 확인', '공지마다 읽은 가족 · 안 읽은 가족이 보여요.'], ['phone', '학부모 앱 무료', '우리 아이 출결 · 수납 · 공지를 한 앱에서.']] },
+  mou: { accent: '#27c8e6', itemIcons: ['sun', 'plane', 'school', 'mic'],
+    points: [['handshake', '계약 없이 신청만', '센터가 인투유학과 MOU를 맺어 두었어요.'], ['globe', '유학 전문 상담사', '학부모 상담은 인투유학 전문가가 맡아요.'], ['spark', '학원의 새 프로그램', '방학 캠프 · 설명회로 학부모 만족을 높여요.']] },
+  promo: { accent: '#ff8a8a', itemIcons: ['pen', 'image', 'film', 'target'],
+    points: [['megaphone', '학원 홍보 전문', '학원만 맡아 온 인투마케팅이 직접 해요.'], ['spark', '필요한 것만 골라서', '블로그 · 디자인 · 영상 · 광고를 따로 맡겨요.'], ['chart', '진행 상황이 보여요', '접수부터 시안 확인까지 프로그램에서 확인해요.']] }
+};
+
+// 제휴 파트너 소개 (logo가 없으면 글자 로고로 보여 줘요)
+const PARTNERS = {
+  mou: { name: '인투유학', logo: 'assets/brand/intoyuhak-logo.png', tagline: '유학 전문 · 공식 제휴 파트너', sub: '센터가 미리 MOU를 맺어 두어서, 원장님은 신청만 하면 연결돼요', url: 'https://intoabroad.com', cta: '인투유학 바로가기',
+    desc: '인투유학은 방학 영어캠프부터 조기유학, 어학연수, 해외 대학 진학까지 학생 한 명 한 명의 유학을 처음부터 끝까지 함께하는 유학 전문 기업이에요. 학원지원센터 회원 학원은 따로 계약하지 않아도 인투유학의 프로그램과 상담사를 바로 연결받아요.',
+    flow: [['users', '학부모가 앱에서 신청', '학원이 안내한 프로그램에 상담 신청'], ['check', '원장님 확인', '학부모와 통화하고 "연결 요청"'], ['globe', '인투유학 상담사 연결', '센터가 1일 안에 전문 상담사 배정'], ['plane', '상담 · 출국 준비', '진행 상황은 학원 화면에서 함께 봐요']] },
+  promo: { name: '인투마케팅', logo: null, tagline: '학원 홍보 전문 · 공식 홍보 파트너', sub: '의뢰하면 센터가 담당자를 연결하고 학원 정보를 함께 전달해요', url: MARKETING_URL, cta: '인투마케팅 바로가기',
+    desc: '인투마케팅은 학원 홍보를 전문으로 하는 마케팅 파트너예요. 지역 학부모가 실제로 찾아보는 블로그 · 플레이스 · SNS를 중심으로, 학원 이미지에 맞는 디자인과 영상까지 한 팀이 맡아요.',
+    flow: [['megaphone', '프로그램에서 의뢰', '필요한 서비스를 골라 내용을 적어요'], ['users', '인투마케팅 연결', '센터가 담당자를 연결하고 학원 정보를 전달'], ['image', '시안 확인', '시안을 보고 고칠 점을 전달해요'], ['check', '게시 · 리포트', '진행 상황은 "의뢰 현황"에서 확인']] }
+};
+
+// 상세페이지 맨 위 그림 (분야 색 --ac로 칠해요)
+const HERO_ART = {
+  admin: `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <rect x="30" y="24" width="170" height="150" rx="16" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
+    <rect x="46" y="42" width="70" height="10" rx="5" fill="rgba(255,255,255,.6)"/>
+    ${[0, 1, 2, 3].map(i => `<g transform="translate(46 ${66 + i * 24})"><rect width="138" height="16" rx="8" fill="rgba(255,255,255,.08)"/><circle cx="10" cy="8" r="5" fill="${i === 2 ? '#ffb4ab' : 'var(--ac)'}"/><rect x="22" y="5" width="${60 + i * 8}" height="6" rx="3" fill="rgba(255,255,255,.5)"/></g>`).join('')}
+    <rect x="180" y="64" width="112" height="72" rx="14" fill="#fff"/>
+    <rect x="194" y="78" width="40" height="8" rx="4" fill="#c9cdf8"/>
+    <rect x="194" y="94" width="76" height="14" rx="5" fill="var(--ac)"/>
+    <rect x="194" y="116" width="54" height="6" rx="3" fill="#dfe3ff"/>
+    <circle cx="262" cy="150" r="22" fill="var(--ac)"/><path d="M252 150l7 7 13-14" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  teachers: `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <rect x="24" y="30" width="190" height="120" rx="16" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
+    <circle cx="119" cy="90" r="26" fill="var(--ac)"/><path d="M112 77l20 13-20 13z" fill="#fff"/>
+    <rect x="40" y="134" width="158" height="5" rx="2.5" fill="rgba(255,255,255,.2)"/><rect x="40" y="134" width="96" height="5" rx="2.5" fill="var(--ac)"/>
+    <rect x="176" y="96" width="122" height="84" rx="14" fill="#fff"/>
+    <rect x="190" y="110" width="52" height="8" rx="4" fill="#c9cdf8"/>
+    ${[0, 1, 2].map(i => `<rect x="190" y="${128 + i * 13}" width="${92 - i * 18}" height="6" rx="3" fill="#dfe3ff"/>`).join('')}
+    <path d="M268 30l24 24-34 34h-24V64z" fill="var(--ac)" opacity=".9"/><path d="M236 86l8-2" stroke="#fff" stroke-width="3"/>
+  </svg>`,
+  members: `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <rect x="40" y="16" width="96" height="172" rx="20" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.3)"/>
+    <rect x="56" y="40" width="64" height="44" rx="10" fill="var(--ac)"/><rect x="64" y="52" width="40" height="6" rx="3" fill="#fff"/><rect x="64" y="64" width="28" height="6" rx="3" fill="rgba(255,255,255,.7)"/>
+    ${[0, 1, 2].map(i => `<rect x="56" y="${96 + i * 22}" width="64" height="14" rx="7" fill="rgba(255,255,255,.14)"/>`).join('')}
+    <rect x="156" y="44" width="140" height="60" rx="16" fill="#fff"/>
+    <circle cx="180" cy="74" r="12" fill="var(--ac)"/><rect x="200" y="62" width="70" height="8" rx="4" fill="#c9cdf8"/><rect x="200" y="78" width="50" height="6" rx="3" fill="#dfe3ff"/>
+    <rect x="176" y="118" width="120" height="50" rx="14" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)"/>
+    <path d="M192 143l8 8 16-16" stroke="var(--ac)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="226" y="138" width="54" height="8" rx="4" fill="rgba(255,255,255,.55)"/>
+  </svg>`,
+  mou: `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <circle cx="150" cy="108" r="74" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.28)"/>
+    <ellipse cx="150" cy="108" rx="30" ry="74" fill="none" stroke="rgba(255,255,255,.22)"/>
+    <path d="M76 108h148M86 72h128M86 144h128" stroke="rgba(255,255,255,.22)"/>
+    <path d="M60 160C110 40 230 40 278 70" stroke="var(--ac)" stroke-width="3" fill="none" stroke-dasharray="2 9" stroke-linecap="round"/>
+    <g transform="translate(262 58) rotate(28)"><path d="M0 0l22 8-22 8 4-8z" fill="#fff"/></g>
+    <circle cx="60" cy="160" r="9" fill="var(--ac)"/><circle cx="60" cy="160" r="3.5" fill="#fff"/>
+    <rect x="196" y="128" width="104" height="54" rx="14" fill="#fff"/><rect x="210" y="142" width="48" height="8" rx="4" fill="#9fe4f2"/><rect x="210" y="158" width="70" height="6" rx="3" fill="#dfe3ff"/>
+  </svg>`,
+  promo: `<svg viewBox="0 0 320 200" aria-hidden="true">
+    <rect x="24" y="28" width="120" height="150" rx="14" fill="#fff"/>
+    <rect x="36" y="40" width="96" height="62" rx="8" fill="var(--ac)"/><circle cx="62" cy="64" r="10" fill="rgba(255,255,255,.7)"/><path d="M36 102l34-26 22 16 14-10 26 20z" fill="rgba(255,255,255,.45)"/>
+    <rect x="36" y="114" width="80" height="8" rx="4" fill="#c9cdf8"/>${[0, 1, 2].map(i => `<rect x="36" y="${130 + i * 12}" width="${92 - i * 16}" height="6" rx="3" fill="#dfe3ff"/>`).join('')}
+    <rect x="160" y="40" width="136" height="80" rx="14" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
+    ${[0, 1, 2, 3, 4].map(i => `<rect x="${176 + i * 22}" y="${100 - [18, 30, 24, 44, 52][i]}" width="12" height="${[18, 30, 24, 44, 52][i]}" rx="3" fill="${i > 2 ? 'var(--ac)' : 'rgba(255,255,255,.4)'}"/>`).join('')}
+    <path d="M178 150l60-24v64l-60-24z" fill="var(--ac)"/><rect x="164" y="140" width="16" height="20" rx="4" fill="#fff"/><path d="M252 140c8 4 8 16 0 20M262 132c14 8 14 28 0 36" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </svg>`
+};
+
+SITE_AREAS.forEach(a => Object.assign(a, AREA_LOOK[a.id], { partner: PARTNERS[a.id] || null, art: HERO_ART[a.id] }));
