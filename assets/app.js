@@ -1454,85 +1454,281 @@ async function openLib(id, download) {
   if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
 }
 
-/* ================= 메신저 (Supabase conversations · messages) =================
-   1:1 대화. 누구와 대화할 수 있는지는 DB(private.message_academy)가 정해요:
+/* ================= 메신저: 카톡처럼 친구 · 채팅 (Supabase friends · conversations · messages) =================
+   친구: 이름 · 아이디 · 아이 이름으로 찾아서 내가 추가한 사람만 보여요(find_people은 한 글자 이상 쳐야 나와요).
+   채팅: 1:1과 그룹. 누구와 이야기할 수 있는지는 DB(private.message_academy)가 정해요:
    원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 가족만).
    새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
-const MSG = { convs: [], contacts: null, msgs: {}, loaded: false };
+const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false };
+let MSG_TAB = null; // 'friends' | 'chats'
 const WHO = { admin: '센터 관리자', owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
+const DEMO_FRIENDS = [
+  { user_id: 'df1', name: '김민지', role: 'teacher', academy_name: '하늘영어학원', status_msg: '초등 A·B반 담당이에요', can_message: true },
+  { user_id: 'df2', name: '김은정', role: 'parent', academy_name: '하늘영어학원', kids: '이서연', status_msg: '', can_message: true },
+  { user_id: 'df3', name: '학원지원센터', role: 'admin', status_msg: '평일 9–18시', can_message: true }
+];
 const DEMO_CONVS = [
-  { id: 'dc1', other_name: '김민지', other_role: 'teacher', last_at: '2026-10-25T08:10:00Z', last_text: '내일 보강 수업 강의실 2번 써도 될까요?', unread: 1, can_send: true },
-  { id: 'dc2', other_name: '김은정', other_role: 'parent', last_at: '2026-10-24T11:00:00Z', last_text: '서연이 다음 주 화요일 결석해요.', unread: 0, can_send: true },
-  { id: 'dc3', other_name: '학원지원센터', other_role: 'admin', last_at: '2026-10-22T02:00:00Z', last_text: '제휴 연결이 완료됐어요.', unread: 0, can_send: true }
+  { id: 'dc1', kind: 'direct', other_name: '김민지', other_role: 'teacher', last_at: '2026-10-25T08:10:00Z', last_text: '내일 보강 수업 강의실 2번 써도 될까요?', unread: 1, can_send: true, members: 2 },
+  { id: 'dc4', kind: 'group', title: '초등 B반 선생님방', last_at: '2026-10-25T05:00:00Z', last_text: '이번 주 단어 시험 범위 공유해요', unread: 0, can_send: true, members: 4 },
+  { id: 'dc2', kind: 'direct', other_name: '김은정', other_role: 'parent', last_at: '2026-10-24T11:00:00Z', last_text: '서연이 다음 주 화요일 결석해요.', unread: 0, can_send: true, members: 2 },
+  { id: 'dc3', kind: 'direct', other_name: '학원지원센터', other_role: 'admin', last_at: '2026-10-22T02:00:00Z', last_text: '제휴 연결이 완료됐어요.', unread: 0, can_send: true, members: 2 }
 ];
 const convsData = () => USER ? MSG.convs : DEMO_CONVS;
+const friendsData = () => USER ? MSG.friends || [] : DEMO_FRIENDS;
 const msgUnread = () => sum(convsData(), c => Number(c.unread) || 0);
 const msgTime = s => { const d = new Date(s); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const msgWhen = s => { const d = ymd(new Date(s)); return d === TODAY ? msgTime(s) : md(d); };
+const ROLE_COLOR = { admin: 'var(--navy-700)', teacher: 'var(--good)', owner: 'var(--blue-600)', parent: 'var(--warn)', student: '#8b5cf6' };
+// 프로필 사진(없으면 이름 첫 글자)
+const pfp = (name, url, role, cls = '') => url
+  ? `<span class="av pfp ${cls}"><img src="${esc(url)}" alt=""></span>`
+  : `<span class="av pfp ${cls}" style="background:${ROLE_COLOR[role] || 'var(--blue-500)'}">${esc((name || '?')[0])}</span>`;
+const groupPfp = c => `<span class="av pfp grp">${ic('users')}</span>`;
+const convName = c => c.kind === 'group' ? (c.title || '그룹 채팅') : c.other_name;
+const whoLine = x => [WHO[x.role], x.kids ? `${x.kids} ${x.role === 'parent' ? '학부모' : ''}`.trim() : '', x.role === 'owner' || x.role === 'admin' ? x.academy_name : ''].filter(Boolean).map(esc).join(' · ');
+const myPfp = () => pfp(ME.name, PROFILE && PROFILE.avatar_url, ROLE);
 
 function messagesPage() {
-  const list = convsData();
-  const add = `<button class="btn primary" data-act="newChat">${ic('plus')}새 대화</button>`;
-  const can = { owner: '센터 관리자 · 강사 · 학부모 · 학생', teacher: '원장님 · 다른 강사 · 학부모 · 학생', parent: '원장님 · 선생님 · 우리 아이', student: '원장님 · 선생님 · 부모님', admin: '원장님' }[ROLE] || '';
-  return head('메신저', `${can}과 1:1로 이야기할 수 있어요.`, add) + (list.length ? `
+  const convs = convsData(), friends = friendsData();
+  if (!MSG_TAB) MSG_TAB = convs.length ? 'chats' : 'friends';
+  if (USER && MSG.friends === null) loadFriends().then(() => { if (location.hash === '#messages') render(); });
+  const tabs = `<div class="msg-tabs">${[['friends', `친구 ${friends.length}`], ['chats', `채팅${msgUnread() ? ` <span class="count-dot">${msgUnread()}</span>` : ''}`]].map(([k, l]) => `<button class="${MSG_TAB === k ? 'on' : ''}" data-msg-tab="${k}">${l}</button>`).join('')}</div>`;
+  const acts = MSG_TAB === 'friends' ? `<button class="btn primary" data-act="addFriend">${ic('plus')}친구 추가</button>`
+    : `<button class="btn" data-act="newGroup">${ic('users')}그룹 채팅</button><button class="btn primary" data-act="newChat">${ic('plus')}새 채팅</button>`;
+  return head('메신저', '친구로 추가한 사람과 1:1이나 그룹으로 이야기해요. 이름 · 아이디로 찾아서 추가한 사람만 친구 목록에 보여요.', acts) + tabs +
+    (MSG_TAB === 'friends' ? friendsView(friends) : chatsView(convs));
+}
+function friendsView(friends) {
+  const groups = ['admin', 'owner', 'teacher', 'parent', 'student'].map(r => [r, friends.filter(x => x.role === r)]).filter(([, l]) => l.length);
+  return `
+  <section class="card me-card">
+    ${myPfp()}
+    <div><b>${esc(ME.name)}</b><span class="muted small">${PROFILE && PROFILE.status_msg ? esc(PROFILE.status_msg) : '상태 메시지를 적어 보세요'}</span></div>
+    <button class="btn sm" data-act="editProfile">프로필 편집</button>
+  </section>` + (friends.length ? `
+  <section class="card"><div class="list">${groups.map(([r, l]) => `<h3 class="ct-h">${WHO[r]} ${l.length}</h3>${l.map(f => `
+    <a class="li link conv" href="#messages" data-friend="${f.user_id}">
+      ${pfp(f.name, f.avatar_url, f.role)}
+      <div><div class="t">${esc(f.name)} <span class="muted small">${whoLine(f)}</span></div><div class="d">${esc(f.status_msg || '')}</div></div>
+      <div class="r">${f.can_message === false ? '<span class="chip mute">대화 불가</span>' : ''}</div>
+    </a>`).join('')}`).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('users')}</span><h2>아직 친구가 없어요</h2>
+    <p class="muted">"친구 추가"에서 이름이나 아이디로 찾아 추가해 주세요. 같은 학원 사람 중 이야기할 수 있는 사이만 찾아져요.</p>
+    <button class="btn primary" data-act="addFriend">친구 추가</button></section>`);
+}
+function chatsView(list) {
+  return list.length ? `
   <section class="card"><div class="list">${list.map(c => `
     <a class="li link conv" href="#messages/${c.id}">
-      <span class="av" style="background:${c.other_role === 'admin' ? 'var(--navy-700)' : c.other_role === 'teacher' ? 'var(--good)' : c.other_role === 'owner' ? 'var(--blue-600)' : 'var(--warn)'}">${esc((c.other_name || '?')[0])}</span>
-      <div><div class="t">${esc(c.other_name)} <span class="muted small">${WHO[c.other_role] || ''}${c.academy_name && c.other_role === 'owner' && ROLE === 'admin' ? ` · ${esc(c.academy_name)}` : ''}</span></div><div class="d">${esc(c.last_text || '아직 메시지가 없어요')}</div></div>
+      ${c.kind === 'group' ? groupPfp(c) : pfp(c.other_name, c.other_avatar, c.other_role)}
+      <div><div class="t">${esc(convName(c))} <span class="muted small">${c.kind === 'group' ? `${c.members}명` : `${WHO[c.other_role] || ''}${c.academy_name && c.other_role === 'owner' && ROLE === 'admin' ? ` · ${esc(c.academy_name)}` : ''}`}</span></div><div class="d">${esc(c.last_text || '아직 메시지가 없어요')}</div></div>
       <div class="r">${c.last_at ? `<span class="time">${msgWhen(c.last_at)}</span>` : ''}${+c.unread ? `<span class="count-dot">${c.unread}</span>` : ''}</div>
     </a>`).join('')}</div></section>` : `
-  <section class="card empty"><span class="tile-ic">${ic('chat')}</span><h2>아직 대화가 없어요</h2><p class="muted">"새 대화"를 눌러 이야기할 사람을 골라 주세요.</p>${add}</section>`);
+  <section class="card empty"><span class="tile-ic">${ic('chat')}</span><h2>아직 채팅이 없어요</h2><p class="muted">친구를 골라 1:1로 이야기하거나, 여러 명을 골라 그룹 채팅을 만들어 보세요.</p>
+    <div class="row-btns" style="justify-content:center"><button class="btn" data-act="newGroup">그룹 채팅</button><button class="btn primary" data-act="newChat">새 채팅</button></div></section>`;
 }
 
 function chatPage(id) {
   const c = convsData().find(x => x.id === id);
   if (!c) return notFound();
   if (USER && !(id in MSG.msgs)) loadMessages(id);
+  if (USER && c.kind === 'group' && !MSG.people[id]) loadPeople(id).then(() => drawChatLog(id, true));
   const msgs = USER ? MSG.msgs[id] : [{ sender_id: 'o', body: c.last_text, created_at: c.last_at }];
   return `
   <section class="card chat">
-    <div class="chat-head"><span class="av" style="background:var(--blue-600)">${esc(c.other_name[0])}</span><div><b>${esc(c.other_name)}</b><span class="muted small">${WHO[c.other_role] || ''}${c.academy_name ? ` · ${esc(c.academy_name)}` : ''}</span></div></div>
-    <div class="chat-log" id="chatLog">${chatLog(msgs)}</div>
+    <div class="chat-head">${c.kind === 'group' ? groupPfp(c) : pfp(c.other_name, c.other_avatar, c.other_role)}
+      <div><b>${esc(convName(c))}</b><span class="muted small">${c.kind === 'group' ? `${c.members}명` : `${WHO[c.other_role] || ''}${c.academy_name ? ` · ${esc(c.academy_name)}` : ''}`}</span></div>
+      ${c.kind === 'group' ? `<button class="btn sm" data-act="groupInfo" style="margin-left:auto">${ic('users')}대화 상대 ${c.members}</button>` : ''}</div>
+    <div class="chat-log" id="chatLog">${chatLog(msgs, c)}</div>
     ${c.can_send === false ? '<p class="muted small chat-off">학원을 나갔거나 연결이 끊겨서 더 이상 메시지를 보낼 수 없어요.</p>' : `
     <form class="chat-send" id="chatSend" novalidate><textarea name="body" rows="1" maxlength="2000" placeholder="메시지 입력 (Enter 보내기 · Shift+Enter 줄 바꿈)"></textarea><button class="btn primary">보내기</button></form>`}
   </section>`;
 }
-function chatLog(msgs) {
+function chatLog(msgs, c) {
   if (msgs == null) return '<p class="muted small" style="text-align:center">불러오는 중…</p>';
   if (!msgs.length) return '<p class="muted small" style="text-align:center">첫 메시지를 보내 보세요.</p>';
-  let day = '';
+  const people = c && c.kind === 'group' ? MSG.people[c.id] || [] : null;
+  let day = '', prev = '';
   return msgs.map(m => {
     const d = ymd(new Date(m.created_at)), sep = d !== day ? `<div class="chat-day">${d === TODAY ? '오늘' : `${+d.slice(5, 7)}월 ${+d.slice(8)}일`}</div>` : '';
-    day = d;
-    return `${sep}<div class="bubble ${USER && m.sender_id === USER.id ? 'mine' : ''}"><p>${esc(m.body)}</p><time>${msgTime(m.created_at)}</time></div>`;
+    const mine = USER && m.sender_id === USER.id;
+    // 그룹에서는 다른 사람 말풍선 위에 사진 · 이름 (같은 사람이 이어서 쓰면 한 번만)
+    let who = '';
+    if (people && !mine && (prev !== m.sender_id || sep)) {
+      const p = people.find(x => x.user_id === m.sender_id) || { name: '나간 사람' };
+      who = `<div class="bub-who">${pfp(p.name, p.avatar_url, p.role, 'sm')}<b>${esc(p.name)}</b></div>`;
+    }
+    day = d; prev = m.sender_id;
+    return `${sep}${who}<div class="bubble ${mine ? 'mine' : ''} ${people && !mine ? 'in-grp' : ''}"><p>${esc(m.body)}</p><time>${msgTime(m.created_at)}</time></div>`;
   }).join('');
 }
 
-function newChatDialog() {
-  if (!USER) { toast('예시 계정에서는 대화를 시작할 수 없어요'); return; }
+// 친구 보기: 사진 · 상태 메시지 · 1:1 채팅 · 친구 삭제
+function friendDialog(f) {
   const d = dialogEl();
-  const draw = () => {
-    const q = ($('#ctQ') || { value: '' }).value.trim();
-    const list = (MSG.contacts || []).filter(x => !q || x.name.includes(q) || (x.kids || '').includes(q));
-    const groups = ['admin', 'owner', 'teacher', 'parent', 'student'].map(r => [r, list.filter(x => x.role === r)]).filter(([, l]) => l.length);
-    $('#ctList').innerHTML = MSG.contacts === null ? '<p class="muted small">불러오는 중…</p>' : groups.length ? groups.map(([r, l]) => `
-      <h3 class="ct-h">${WHO[r]} ${l.length}</h3>${l.map(x => `<button type="button" class="ct" data-ct="${x.user_id}"><span class="av">${esc(x.name[0])}</span><span><b>${esc(x.name)}</b><small>${x.kids ? `${esc(x.kids)} ${r === 'parent' ? '학부모' : ''}` : esc(x.academy_name || '')}</small></span></button>`).join('')}`).join('')
-      : '<p class="muted small">대화할 수 있는 사람이 없어요. 학원에 합류한 사람만 보여요.</p>';
-    $('#ctList').querySelectorAll('[data-ct]').forEach(b => b.onclick = async () => {
-      const { data, error } = await SB.rpc('start_conversation', { p_other: b.dataset.ct });
-      if (error) { toast('대화를 시작할 수 없는 사람이에요'); return; }
-      d.close(); await loadConvs(); location.hash = `#messages/${data}`;
+  d.innerHTML = `<div class="dlg pf-card">
+    ${pfp(f.name, f.avatar_url, f.role, 'lg')}
+    <h2>${esc(f.name)}</h2><p class="muted small" style="margin:0">${whoLine(f)}</p>
+    ${f.status_msg ? `<p class="pf-msg">${esc(f.status_msg)}</p>` : ''}
+    <div class="acts"><button type="button" class="btn danger" id="pfDel">친구 삭제</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>${f.can_message === false ? '' : '<button type="button" class="btn primary" id="pfChat">1:1 채팅</button>'}</div></div>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  if ($('#pfChat')) $('#pfChat').onclick = () => { d.close(); openDirect(f.user_id); };
+  $('#pfDel').onclick = async () => {
+    if (!USER) { toast('예시 계정에서는 지울 수 없어요'); return; }
+    if (!confirm(`${f.name} 님을 친구에서 뺄까요? 지난 채팅은 그대로 남아요.`)) return;
+    await SB.rpc('remove_friend', { p_user: f.user_id }); d.close(); await loadFriends(); render(); toast('친구에서 뺐어요');
+  };
+}
+async function openDirect(uid) {
+  if (!USER) { toast('예시 계정에서는 대화를 시작할 수 없어요'); return; }
+  const { data, error } = await SB.rpc('start_conversation', { p_other: uid });
+  if (error) { toast('대화를 시작할 수 없는 사람이에요'); return; }
+  await loadConvs(); MSG_TAB = 'chats'; location.hash = `#messages/${data}`;
+}
+
+// 친구 추가: 이름 · 아이디 · 아이 이름을 쳐야만 찾아져요
+function addFriendDialog() {
+  if (!USER) { toast('예시 계정에서는 친구를 추가할 수 없어요'); return; }
+  const d = dialogEl();
+  d.innerHTML = `<div class="dlg"><h2>친구 추가</h2>
+    <p class="muted small" style="margin:0">같은 학원에서 이야기할 수 있는 사람만 찾아져요. 이름 일부, 아이디 전체, 아이 이름으로 찾을 수 있어요.</p>
+    <input id="ctQ" class="ct-q" placeholder="이름 · 아이디 · 아이 이름" autocomplete="off"><div class="ct-list" id="ctList"><p class="muted small">찾을 사람의 이름을 쳐 주세요.</p></div>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  d.showModal(); $('#dlgCancel').onclick = () => { d.close(); render(); };
+  let timer = 0, seq = 0;
+  const search = async () => {
+    const q = $('#ctQ').value.trim(), my = ++seq;
+    if (!q) { $('#ctList').innerHTML = '<p class="muted small">찾을 사람의 이름을 쳐 주세요.</p>'; return; }
+    const { data } = await SB.rpc('find_people', { p_q: q });
+    if (my !== seq || !d.open) return;
+    const list = data || [];
+    $('#ctList').innerHTML = list.length ? list.map(x => `<div class="ct">${pfp(x.name, x.avatar_url, x.role)}<span><b>${esc(x.name)}</b><small>${whoLine(x)}</small></span>
+      ${x.is_friend ? '<span class="chip good" style="margin-left:auto">친구</span>' : `<button type="button" class="btn sm primary" style="margin-left:auto" data-add-fr="${x.user_id}">추가</button>`}</div>`).join('')
+      : '<p class="muted small">찾는 사람이 없어요. 같은 학원에 합류한 사람인지 확인해 주세요.</p>';
+    $('#ctList').querySelectorAll('[data-add-fr]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const { error } = await SB.rpc('add_friend', { p_user: b.dataset.addFr });
+      if (error) { b.disabled = false; toast('추가하지 못했어요'); return; }
+      b.outerHTML = '<span class="chip good" style="margin-left:auto">친구</span>'; await loadFriends(); toast('친구로 추가했어요');
     });
   };
-  d.innerHTML = `<div class="dlg"><h2>새 대화</h2><input id="ctQ" class="ct-q" placeholder="이름 · 아이 이름으로 찾기"><div class="ct-list" id="ctList"></div>
-    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  $('#ctQ').oninput = () => { clearTimeout(timer); timer = setTimeout(search, 250); };
+  $('#ctQ').focus();
+}
+
+// 친구 고르기 (1:1이면 한 명, 그룹이면 여러 명 + 방 이름)
+function pickFriendsDialog({ group, conv }) {
+  if (!USER) { toast('예시 계정에서는 대화를 시작할 수 없어요'); return; }
+  const d = dialogEl(), inRoom = conv ? (MSG.people[conv.id] || []).map(p => p.user_id) : [];
+  const draw = () => {
+    const q = ($('#ctQ') || { value: '' }).value.trim();
+    const list = friendsData().filter(f => f.can_message !== false && !inRoom.includes(f.user_id) && (!q || f.name.includes(q) || (f.kids || '').includes(q)));
+    $('#ctList').innerHTML = MSG.friends === null ? '<p class="muted small">불러오는 중…</p>' : list.length ? list.map(f => group
+      ? `<label class="ct">${pfp(f.name, f.avatar_url, f.role)}<span><b>${esc(f.name)}</b><small>${whoLine(f)}</small></span><input type="checkbox" name="fr" value="${f.user_id}" style="margin-left:auto;width:18px;height:18px"></label>`
+      : `<button type="button" class="ct" data-ct="${f.user_id}">${pfp(f.name, f.avatar_url, f.role)}<span><b>${esc(f.name)}</b><small>${whoLine(f)}</small></span></button>`).join('')
+      : `<p class="muted small">${friendsData().length ? '고를 수 있는 친구가 없어요.' : '아직 친구가 없어요. 먼저 친구를 추가해 주세요.'}</p>`;
+    $('#ctList').querySelectorAll('[data-ct]').forEach(b => b.onclick = () => { d.close(); openDirect(b.dataset.ct); });
+  };
+  d.innerHTML = `<form method="dialog" class="dlg" id="pickForm" novalidate><h2>${conv ? '대화 상대 초대' : group ? '그룹 채팅 만들기' : '새 채팅'}</h2>
+    ${group && !conv ? '<label class="f">방 이름<input name="title" maxlength="50" placeholder="예: 초등 B반 학부모방"></label>' : ''}
+    <input id="ctQ" class="ct-q" placeholder="친구 이름으로 찾기"><div class="ct-list" id="ctList"></div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><button type="button" class="btn" id="goAdd">친구 추가</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>${group ? `<button class="btn primary">${conv ? '초대하기' : '만들기'}</button>` : ''}</div></form>`;
   d.showModal(); $('#dlgCancel').onclick = () => d.close(); $('#ctQ').oninput = draw; draw();
-  if (MSG.contacts === null) SB.rpc('message_contacts').then(({ data }) => { MSG.contacts = data || []; if (d.open) draw(); });
+  $('#goAdd').onclick = () => { d.close(); addFriendDialog(); };
+  if (MSG.friends === null) loadFriends().then(() => { if (d.open) draw(); });
+  $('#pickForm').onsubmit = async e => {
+    e.preventDefault();
+    const ids = [...d.querySelectorAll('[name=fr]:checked')].map(x => x.value);
+    const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+    if (!ids.length) return fail('친구를 한 명 이상 골라 주세요.');
+    if (conv) {
+      const { error } = await SB.rpc('add_group_members', { p_conv: conv.id, p_members: ids });
+      if (error) return fail('초대하지 못했어요. 다시 시도해 주세요.');
+      d.close(); await Promise.all([loadConvs(), loadPeople(conv.id)]); render(); toast(`${ids.length}명을 초대했어요`); return;
+    }
+    const names = friendsData().filter(f => ids.includes(f.user_id)).map(f => f.name);
+    const title = e.target.elements.title.value.trim() || [ME.name, ...names].slice(0, 4).join(', ');
+    const { data, error } = await SB.rpc('create_group', { p_title: title, p_members: ids });
+    if (error) return fail('만들지 못했어요. 다시 시도해 주세요.');
+    d.close(); await loadConvs(); MSG_TAB = 'chats'; location.hash = `#messages/${data}`;
+  };
+}
+const newChatDialog = () => pickFriendsDialog({ group: false });
+
+// 그룹 대화 상대 · 방 이름 바꾸기 · 초대 · 나가기
+function groupInfoDialog(c) {
+  if (!USER) { toast('예시 그룹이에요'); return; }
+  const d = dialogEl(), people = MSG.people[c.id] || [];
+  d.innerHTML = `<form method="dialog" class="dlg" id="grpForm" novalidate><h2>대화 상대 ${people.length}명</h2>
+    <label class="f">방 이름<input name="title" maxlength="50" value="${esc(c.title || '')}"></label>
+    <div class="ct-list">${people.map(p => `<div class="ct">${pfp(p.name, p.avatar_url, p.role)}<span><b>${esc(p.name)}${p.user_id === USER.id ? ' (나)' : ''}</b><small>${whoLine(p)}</small></span></div>`).join('')}</div>
+    <div class="acts"><button type="button" class="btn danger" id="grpLeave">나가기</button><button type="button" class="btn" id="grpInvite">초대</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">저장</button></div></form>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  $('#grpInvite').onclick = () => { d.close(); pickFriendsDialog({ group: true, conv: c }); };
+  $('#grpLeave').onclick = async () => {
+    if (!confirm('이 그룹 채팅에서 나갈까요? 나가면 대화 내용이 목록에서 사라져요.')) return;
+    const { error } = await SB.rpc('leave_conversation', { p_conv: c.id });
+    if (error) { toast('나가지 못했어요'); return; }
+    d.close(); await loadConvs(); location.hash = '#messages'; toast('그룹 채팅에서 나왔어요');
+  };
+  $('#grpForm').onsubmit = async e => {
+    e.preventDefault();
+    await SB.rpc('rename_group', { p_conv: c.id, p_title: e.target.elements.title.value });
+    d.close(); await loadConvs(); render(); toast('방 이름을 저장했어요');
+  };
+}
+
+// 내 프로필: 사진 · 이름 · 상태 메시지 (사진은 공개 버킷 avatars/내 id/…)
+function profileDialog() {
+  if (!USER) { toast('예시 계정에서는 바꿀 수 없어요'); return; }
+  const d = dialogEl();
+  let url = PROFILE.avatar_url || null;
+  d.innerHTML = `<form method="dialog" class="dlg" id="pfForm" novalidate><h2>프로필 편집</h2>
+    <div class="pf-edit"><span id="pfPic">${pfp(ME.name, url, ROLE, 'lg')}</span>
+      <div class="pf-btns"><label class="btn sm">사진 고르기<input type="file" id="pfFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>${url ? '<button type="button" class="btn sm" id="pfNoPic">사진 빼기</button>' : ''}<span class="muted small">5MB 이하 이미지</span></div></div>
+    <label class="f">이름<input name="name" maxlength="50" value="${esc(PROFILE.name || '')}"></label>
+    <label class="f">상태 메시지 <span class="muted small">친구에게 보여요</span><input name="status" maxlength="60" value="${esc(PROFILE.status_msg || '')}" placeholder="예: 평일 14–21시 연락 가능해요"></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div></form>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  $('#pfFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) return fail('5MB 이하 사진으로 골라 주세요.');
+    const ext = (f.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'png';
+    const path = `${USER.id}/${Math.random().toString(36).slice(2)}.${ext}`;
+    $('#pfPic').innerHTML = '<span class="av pfp lg">…</span>';
+    const { error } = await SB.storage.from('avatars').upload(path, f, { contentType: f.type });
+    if (error) { $('#pfPic').innerHTML = pfp(ME.name, url, ROLE, 'lg'); return fail('사진을 올리지 못했어요. 다시 시도해 주세요.'); }
+    url = SB.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    $('#pfPic').innerHTML = pfp(ME.name, url, ROLE, 'lg');
+  };
+  if ($('#pfNoPic')) $('#pfNoPic').onclick = () => { url = null; $('#pfPic').innerHTML = pfp(ME.name, null, ROLE, 'lg'); };
+  $('#pfForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, name = el.name.value.trim();
+    if (!name) return fail('이름을 적어 주세요.');
+    const row = { name, status_msg: el.status.value.trim() || null, avatar_url: url };
+    const { error } = await SB.from('profiles').update(row).eq('id', USER.id);
+    if (error) return fail('저장하지 못했어요. 다시 시도해 주세요.');
+    Object.assign(PROFILE, row); ME.name = esc(name); ME.av = ME.name[0];
+    d.close(); render(); toast('프로필을 저장했어요');
+  };
 }
 
 async function loadConvs() {
-  const { data } = await SB.rpc('my_conversations');
+  const { data } = await SB.rpc('my_chats');
   MSG.convs = data || []; MSG.loaded = true;
+}
+async function loadFriends() {
+  const { data } = await SB.rpc('my_friends');
+  MSG.friends = data || [];
+}
+async function loadPeople(id) {
+  const { data } = await SB.rpc('conversation_people', { p_conv: id });
+  MSG.people[id] = data || [];
 }
 async function loadMessages(id, since) {
   let q = SB.from('messages').select('id, sender_id, body, created_at').eq('conversation_id', id).order('created_at').limit(500);
@@ -1544,6 +1740,8 @@ async function loadMessages(id, since) {
   if (c && +c.unread) { c.unread = 0; SB.rpc('mark_conversation_read', { p_conv: id }); }
   else if (!since) SB.rpc('mark_conversation_read', { p_conv: id });
   const grew = !before || MSG.msgs[id].length !== before.length;
+  // 그룹에 새로 들어온 사람이 쓰면 대화 상대를 다시 불러와요
+  if (c && c.kind === 'group' && MSG.people[id] && MSG.msgs[id].some(m => !MSG.people[id].some(p => p.user_id === m.sender_id))) await loadPeople(id);
   if (grew) drawChatLog(id);
   return grew;
 }
@@ -1552,7 +1750,7 @@ function drawChatLog(id) {
   const log = $('#chatLog');
   if (!log || location.hash !== `#messages/${id}`) return;
   const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
-  log.innerHTML = chatLog(MSG.msgs[id]);
+  log.innerHTML = chatLog(MSG.msgs[id], MSG.convs.find(x => x.id === id));
   if (atEnd || log.dataset.first !== '1') { log.scrollTop = log.scrollHeight; log.dataset.first = '1'; }
   updateMsgBadge();
 }
@@ -3043,8 +3241,8 @@ function attendStat() {
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
-const MESSAGES_AREA = { name: '메신저', icon: 'chat', desc: '원장 · 강사 · 학부모 · 학생 1:1 대화', stat: () => { const n = msgUnread(); return n ? `안 읽은 메시지 ${n}개` : `대화 ${convsData().length}개`; },
-  render: messagesPage, detail: chatPage, title: id => (convsData().find(c => c.id === id) || {}).other_name };
+const MESSAGES_AREA = { name: '메신저', icon: 'chat', desc: '친구 추가하고 1:1 · 그룹 채팅', stat: () => { const n = msgUnread(); return n ? `안 읽은 메시지 ${n}개` : `대화 ${convsData().length}개`; },
+  render: messagesPage, detail: chatPage, title: id => { const c = convsData().find(x => x.id === id); return c ? convName(c) : ''; } };
 const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
 const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
@@ -3449,7 +3647,7 @@ function renderChrome(area) {
   const items = [...(SEEKER ? [] : [['home', '홈', 'home']]), ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`).join('');
-  $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
+  $('#me').innerHTML = `${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
     if (!PROFILE || !SB) return;
     e.preventDefault(); await SB.auth.signOut(); location.href = 'index.html';
@@ -3656,6 +3854,12 @@ function bind() {
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
   // 메신저
   on('[data-act="newChat"]', newChatDialog);
+  on('[data-act="newGroup"]', () => pickFriendsDialog({ group: true }));
+  on('[data-act="addFriend"]', addFriendDialog);
+  on('[data-act="editProfile"]', profileDialog);
+  on('[data-msg-tab]', b => { MSG_TAB = b.dataset.msgTab; render(); });
+  on('[data-friend]', (b, e) => { e.preventDefault(); const f = friendsData().find(x => x.user_id === b.dataset.friend); if (f) friendDialog(f); });
+  on('[data-act="groupInfo"]', () => groupInfoDialog(convsData().find(x => x.id === location.hash.split('/')[1])));
   const chatForm = $('#chatSend');
   if (chatForm) {
     const id = location.hash.split('/')[1], ta = chatForm.elements.body;
@@ -4154,7 +4358,7 @@ async function boot() {
     if (!data.session) { location.replace('index.html'); return; }
     const user = USER = data.session.user;
     const [{ data: p }, { data: admin }] = await Promise.all([
-      SB.from('profiles').select('username, name, role, academy_name').eq('id', user.id).maybeSingle(),
+      SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg').eq('id', user.id).maybeSingle(),
       SB.rpc('am_center_admin')
     ]);
     PROFILE = p || {};

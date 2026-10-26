@@ -607,3 +607,27 @@ button.tt-blk:hover { background: var(--blue-100); }
 .apply-groups fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 12px; margin: 0; }
 .apply-groups legend { font-size: 13px; font-weight: 700; padding: 0 4px; }
 .apply-groups legend label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* 메신저: 친구 · 채팅 탭, 프로필 사진, 그룹 */
+.msg-tabs { display: flex; gap: 4px; background: var(--surface); border-radius: 14px; padding: 4px; margin-bottom: 14px; width: fit-content; }
+.msg-tabs button { border: 0; background: none; font: inherit; font-size: 14px; font-weight: 700; color: var(--muted); padding: 9px 20px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.msg-tabs button.on { background: var(--navy-900, #0b1150); color: #fff; }
+.av.pfp { overflow: hidden; color: #fff; font-weight: 700; display: grid; place-items: center; flex: none; }
+.av.pfp img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av.pfp.grp { background: var(--blue-100); color: var(--blue-600); }
+.av.pfp.grp .icon { width: 20px; height: 20px; }
+.av.pfp.lg { width: 76px; height: 76px; border-radius: 26px; font-size: 28px; }
+.av.pfp.sm { width: 26px; height: 26px; border-radius: 9px; font-size: 12px; }
+.me-card { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.me-card .av { width: 52px; height: 52px; border-radius: 18px; font-size: 20px; }
+.me-card > div { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.me-card b { font-size: 16px; }
+.bub-who { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-top: 4px; }
+.bubble.in-grp { margin-left: 32px; }
+.pf-card { justify-items: center; text-align: center; }
+.pf-card .acts { width: 100%; }
+.pf-msg { margin: 0; background: var(--sunk); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.pf-edit { display: flex; align-items: center; gap: 16px; }
+.pf-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pf-btns .muted { flex-basis: 100%; }
+.ct label, label.ct { cursor: pointer; }

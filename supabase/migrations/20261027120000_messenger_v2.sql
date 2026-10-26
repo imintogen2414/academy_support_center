@@ -38,7 +38,7 @@ alter table public.conversations
   add column created_by uuid references auth.users (id) on delete set null;
 alter table public.conversations alter column user_a drop not null, alter column user_b drop not null;
 alter table public.conversations drop constraint conversations_check;
-alter table public.conversations add constraint conversations_kind_check
+alter table public.conversations add constraint conversations_pair_check
   check ((kind = 'direct' and user_a is not null and user_b is not null and user_a < user_b) or (kind = 'group' and user_a is null and user_b is null));
 
 create table public.conversation_members (
@@ -78,10 +78,8 @@ $$;
 revoke execute on function private.can_send(uuid) from public, anon;
 grant execute on function private.can_send(uuid) to authenticated;
 
-drop policy "내 대화방만" on public.conversations;
-create policy "내 대화방만" on public.conversations for select to authenticated using (private.in_conversation(id));
-drop policy "내 대화방에 내 이름으로 보내기" on public.messages;
-create policy "내 대화방에 내 이름으로 보내기" on public.messages for insert to authenticated
+alter policy "내 대화방만" on public.conversations using (private.in_conversation(id));
+alter policy "내 대화방에 내 이름으로 보내기" on public.messages
   with check (sender_id = (select auth.uid()) and private.can_send(conversation_id));
 
 -- 사람 정보 한 줄 (이름 · 역할 · 학원 · 아이 · 사진 · 상태 메시지)
@@ -103,7 +101,6 @@ grant execute on function private.person_row(uuid, uuid) to authenticated;
 
 /* ---------- RPC ---------- */
 -- 이야기할 수 있는 사람 중에서 이름 · 아이디 · 아이 이름으로 찾기 (한 글자 이상, 최대 20명)
-drop function public.message_contacts();
 create function public.find_people(p_q text)
 returns table (user_id uuid, name text, role text, academy_name text, kids text, avatar_url text, status_msg text, is_friend boolean)
 language sql
@@ -257,8 +254,8 @@ as $$
   order by m.joined_at;
 $$;
 
-drop function public.my_conversations();
-create function public.my_conversations()
+-- 대화 목록: 1:1 · 그룹 모두 (예전 my_conversations는 모양이 달라서 새 이름)
+create function public.my_chats()
 returns table (id uuid, kind text, title text, other_id uuid, other_name text, other_role text, other_avatar text, academy_name text,
                members bigint, last_at timestamptz, last_text text, unread bigint, can_send boolean)
 language sql
@@ -281,9 +278,12 @@ as $$
   limit 300;
 $$;
 
+-- 예전 "대화할 수 있는 사람 전부" · 예전 대화 목록은 더 이상 쓰지 않아요
+revoke execute on function public.message_contacts(), public.my_conversations() from public, anon, authenticated;
+
 revoke execute on function public.find_people(text), public.add_friend(uuid), public.remove_friend(uuid), public.my_friends(),
   public.create_group(text, uuid[]), public.add_group_members(uuid, uuid[]), public.rename_group(uuid, text), public.leave_conversation(uuid),
-  public.conversation_people(uuid), public.my_conversations() from public, anon;
+  public.conversation_people(uuid), public.my_chats() from public, anon;
 grant execute on function public.find_people(text), public.add_friend(uuid), public.remove_friend(uuid), public.my_friends(),
   public.create_group(text, uuid[]), public.add_group_members(uuid, uuid[]), public.rename_group(uuid, text), public.leave_conversation(uuid),
-  public.conversation_people(uuid), public.my_conversations() to authenticated;
+  public.conversation_people(uuid), public.my_chats() to authenticated;
