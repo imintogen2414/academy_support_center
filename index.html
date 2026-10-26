@@ -130,22 +130,49 @@ function homeView() {
     <p class="lede">필요한 지원 분야를 골라 보세요. 자세히 보고 바로 신청할 수 있어요.</p>
     <div class="label">무엇을 지원받고 싶으세요?</div>
     <div class="glist">${SITE_AREAS.map(a => `
-      <a class="grow" href="#area/${a.id}"><span class="ic">${sic(a.icon)}</span><span><b>${a.name}</b><small>${a.short}</small></span><span class="go">자세히 ›</span></a>`).join('')}
+      <a class="grow" href="#area/${a.id}" style="--ac:${a.accent}"><span class="ic">${sic(a.icon)}</span><span><b>${a.name}</b><small>${a.short}</small></span><span class="go">자세히 ›</span></a>`).join('')}
     </div>
     <div class="acts"><a class="btn light" href="#apply">지원 신청하기</a></div>`;
 }
 
-// 분야 상세페이지: 소개 → 이런 고민 → 지원 내용 → 진행 과정 → 자주 묻는 질문 → 다른 분야
+// 분야 상세페이지: 그림이 있는 첫 화면 → 핵심 포인트 → 이런 고민 → 지원 내용 → (파트너 소개) → 진행 과정 → 자주 묻는 질문 → 다른 분야
+// 분야마다 포인트 색(--ac)이 달라요. 색 · 그림 · 파트너 정보는 assets/areas.js
+function partnerView(p, a) {
+  const brand = p.logo
+    ? `<img src="${p.logo}" alt="${p.name}" class="p-logo">`
+    : `<span class="p-word">${p.name}</span>`;
+  return `
+    <section class="d-sec partner">
+      <h3>공식 파트너 · ${p.name}<small>${p.sub}</small></h3>
+      <div class="p-card">
+        <div class="p-brand">${brand}<span class="p-tag">${p.tagline}</span></div>
+        <p>${p.desc}</p>
+        <a class="btn primary sm" href="${p.url}" target="_blank" rel="noopener">${p.cta} ${sic('ext')}</a>
+      </div>
+      <ol class="p-flow">${p.flow.map(([icon, t, d]) => `<li><span class="p-ic">${sic(icon)}</span><b>${t}</b><small>${d}</small></li>`).join('')}</ol>
+    </section>`;
+}
 function areaView(a) {
   const idx = SITE_AREAS.indexOf(a) + 1;
   const second = a.link
     ? `<a class="btn outline" href="${a.link[1]}" target="_blank" rel="noopener">${a.link[0]} ${sic('ext')}</a>`
     : `<a class="btn outline" href="${a.demo}">실제 화면 미리 보기</a>`;
   return `
+  <div class="area" style="--ac:${a.accent}">
     <a class="back" href="#">‹ 전체 지원 분야</a>
-    <div class="d-head"><div class="big-ic">${sic(a.icon)}</div><span class="kick">지원 분야 ${idx}/${SITE_AREAS.length} · ${a.name}</span></div>
-    <h1>${a.title}</h1>
-    <p class="lede">${a.lede}</p>
+    <div class="d-hero">
+      <div class="d-hero-text">
+        <div class="d-head"><div class="big-ic">${sic(a.icon)}</div><span class="kick">지원 분야 ${idx}/${SITE_AREAS.length} · ${a.name}</span></div>
+        <h1>${a.title}</h1>
+        <p class="lede">${a.lede}</p>
+        <div class="acts"><a class="btn light" href="#apply/${a.id}">이 지원 신청하기</a>${second}</div>
+      </div>
+      <div class="d-art">${a.partner && a.partner.logo ? `<div class="art-badge"><img src="${a.partner.logo}" alt=""></div>` : ''}${a.art}</div>
+    </div>
+
+    <div class="points">${a.points.map(([icon, t, d]) => `
+      <div><span class="pt-ic">${sic(icon)}</span><b>${t}</b><small>${d}</small></div>`).join('')}
+    </div>
 
     <section class="d-sec">
       <h3>이런 고민 있으세요?</h3>
@@ -156,7 +183,7 @@ function areaView(a) {
       <h3>이렇게 지원해요<small>${a.name}에서 받을 수 있는 지원 ${a.items.length}가지</small></h3>
       <div class="feats">${a.items.map(([t, d, list], i) => `
         <article>
-          <span class="n">0${i + 1}</span>
+          <div class="f-top"><span class="f-ic">${sic(a.itemIcons[i] || a.icon)}</span><span class="n">0${i + 1}</span></div>
           <b>${t}</b>
           <p>${d}</p>
           <ul>${list.map(x => `<li>${sic('check')}<span>${x}</span></li>`).join('')}</ul>
@@ -164,10 +191,11 @@ function areaView(a) {
       </div>
     </section>
 
+    ${a.partner ? partnerView(a.partner, a) : `
     <section class="d-sec">
       <h3>진행 과정</h3>
       <ol class="flow">${a.steps.map(s => `<li>${s}</li>`).join('')}</ol>
-    </section>
+    </section>`}
 
     <section class="d-sec">
       <h3>자주 묻는 질문</h3>
@@ -176,13 +204,14 @@ function areaView(a) {
 
     <section class="d-sec">
       <h3>다른 지원 분야</h3>
-      <div class="chips">${SITE_AREAS.filter(x => x !== a).map(x => `<a href="#area/${x.id}">${sic(x.icon)}${x.name}</a>`).join('')}</div>
+      <div class="chips">${SITE_AREAS.filter(x => x !== a).map(x => `<a href="#area/${x.id}" style="--ac:${x.accent}">${sic(x.icon)}${x.name}</a>`).join('')}</div>
     </section>
 
     <div class="sticky-cta">
       <span><b>${a.name}</b> · 신청하면 담당 매니저가 1일 안에 연락드려요</span>
       <div class="acts"><a class="btn light" href="#apply/${a.id}">이 지원 신청하기</a>${second}</div>
-    </div>`;
+    </div>
+  </div>`;
 }
 
 function applyView(pick) {
