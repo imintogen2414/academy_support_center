@@ -52,6 +52,7 @@ let USER = null;    // Supabase 로그인 사용자
 let CENTER = null;  // 센터 관리자 자료 { videos, done, requests, admins, refl, partnerApps, abroad } (관리자가 아니면 null)
 let JOBS = null;    // 강사: 센터 채용 게시판 { posts, mine } (데모면 null)
 let SEEKER = false; // 아직 학원에 합류하지 않은 강사가 채용 공고만 보는 중
+let PARTNER = null; // 파트너 담당자: 'intomarketing' · 'intoabroad' (센터 관리 화면 중 우리 회사 몫만 CENTER에 채워서 같이 써요)
 const MK = DATA.marketingUrl;
 
 function toast(msg) {
@@ -1861,7 +1862,7 @@ function settingsPage() {
   const P = PROFILE || {}, demo = !USER, idLogin = USER && /@id\.academysupportcenter\.app$/.test(USER.email || '');
   const row = (k, v) => `<div class="set-row"><span>${k}</span><b>${v}</b></div>`;
   const none = '<span class="muted">등록 전</span>';
-  const roleName = ROLE === 'admin' ? '센터 관리자' : SEEKER ? '강사 (학원 연결 전)' : `${ROLE_NAMES[ROLE] || ''}${CENTER ? ' · 센터 관리자' : ''}`;
+  const roleName = ROLE === 'admin' ? '센터 관리자' : SEEKER ? '강사 (학원 연결 전)' : `${ROLE === 'partner' ? ME.label : ROLE_NAMES[ROLE] || ''}${CENTER && !CENTER.partner ? ' · 센터 관리자' : ''}`;
   const card = (title, body, sub = '') => `<section class="card set-card"><div class="card-head"><h2>${title}</h2>${sub}</div>${body}</section>`;
   const me = card('내 정보', `
     <div class="set-me">${pfp(ME.name, P.avatar_url, ROLE, 'lg')}<div><b>${ME.name}</b><span class="muted small">${esc(P.status_msg || '상태 메시지 없음')}</span></div></div>
@@ -2450,7 +2451,7 @@ function promoReqDialog(service) {
   if (REAL && !svcGuard('promo')) return;
   formDialog({
     title: `${service} 의뢰`, table: 'promo_requests', extra: { service }, okText: ROLE === 'teacher' ? '원장님께 결재 올리기' : '의뢰하기',
-    doneText: ROLE === 'teacher' ? '의뢰를 올렸어요 · 원장님이 승인하면 센터로 넘어가요' : '의뢰했어요 · 센터가 인투마케팅에 연결해 드려요',
+    doneText: ROLE === 'teacher' ? '의뢰를 올렸어요 · 원장님이 승인하면 센터로 넘어가요' : '의뢰했어요 · 인투마케팅 담당자와 센터에 바로 전달돼요',
     after: async () => { await loadPromoReqs(); location.hash = '#promo/requests'; },
     label: () => '',
     fields: [
@@ -3578,7 +3579,7 @@ function centerRequestsPage() {
 
 function requestDialog(r) {
   formDialog({
-    title: `${r.academy_name} 지원 신청`, table: 'support_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    title: `${r.academy_name} 지원 신청`, table: 'support_requests', row: r, academy: false, noDelete: true, after: reloadCenter,
     label: () => '신청을',
     fields: [
       ['status', '상태', { type: 'select', required: true, options: Object.entries(REQ_STATE).map(([k, [, l]]) => [k, l]) }],
@@ -3635,6 +3636,21 @@ function centerAdminsPage() {
     <p class="msg" id="adminMsg" hidden></p>
     <p class="muted small" style="margin:10px 0 0">구글 이메일로 추가한 분은 그 구글 계정으로 "구글로 계속하기" 로그인을 해야 관리자로 인정돼요. 아이디는 이미 가입한 아이디만 추가할 수 있어요.</p>
   </section>
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>파트너 담당자</h2><span class="sub">인투유학 · 인투마케팅</span></div>
+    <p class="muted small" style="margin:0 0 10px">담당자로 넣은 사람은 로그인하면 자기 회사로 온 신청(인투마케팅: 홍보 의뢰 · 인투유학: 유학 상담 · 유학 제휴)만 보고 바로 처리해요. 센터장은 지금처럼 전부 보고, 문제가 있을 때만 바꿔요. 먼저 사이트에 가입한 아이디나 구글 이메일로 넣어 주세요.</p>
+    <form class="admin-add" id="partnerAdd" novalidate>
+      <label class="f">아이디 또는 구글 이메일<input name="who" maxlength="200" placeholder="예: intomk_kim 또는 kim@gmail.com" autocapitalize="off"></label>
+      <label class="f">회사<select name="partner">${Object.entries(PARTNER_INFO).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select></label>
+      <label class="f">이름 (선택)<input name="name" maxlength="50" placeholder="예: 김담당"></label>
+      <button class="btn primary">담당자 넣기</button>
+    </form>
+    <p class="msg" id="partnerMsg" hidden></p>
+    ${(CENTER.partnerMembers || []).length ? `<div class="list" style="margin-top:10px">${CENTER.partnerMembers.map(m => `
+      <div class="li"><span class="av" style="background:var(--blue-500)">${esc((m.name || m.username || m.email || '?')[0])}</span>
+        <div><div class="t">${esc(m.name || m.username || '')} <span class="chip info">${PARTNER_INFO[m.partner].name}</span></div><div class="d">${m.username ? `아이디 ${esc(m.username)}` : esc(m.email || '')} · 마지막 로그인 ${m.last_sign_in_at ? md(m.last_sign_in_at.slice(0, 10)) : '-'}</div></div>
+        <div class="r"><button class="btn sm danger" data-rm-partner="${m.user_id}">빼기</button></div></div>`).join('')}</div>` : '<p class="muted small" style="margin:10px 0 0">아직 넣은 담당자가 없어요. 담당자가 없으면 지금처럼 센터가 받아서 연결해요.</p>'}
+  </section>
   <section class="card">
     <div class="card-head"><h2>지금 관리자</h2><span class="sub">${CENTER.admins.length}명</span></div>
     <div class="list">${CENTER.admins.map(a => `
@@ -3655,7 +3671,7 @@ const filterBar = (all, labels, cur, attr) => `<div class="filters">${[['all', '
   `<button class="${k === cur ? 'on' : ''}" data-${attr}="${k}">${l} ${k === 'all' ? all.length : all.filter(r => r.status === k).length}</button>`).join('')}</div>`;
 function centerPartnersPage() {
   const all = CENTER.partnerApps, list = all.filter(a => paFilter === 'all' || a.status === paFilter);
-  return head('제휴 신청', '원장님이 "바로 신청"한 제휴예요. 제휴처와 연결하면서 상태를 바꿔 두면 원장님 "내 제휴"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
+  return head('제휴 신청', partnerNote() || `원장님이 "바로 신청"한 제휴예요. 제휴처와 연결하면서 상태를 바꿔 두면 원장님 "내 제휴"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.${watchNote('intoabroad')}`) +
     filterBar(all, PA_LABEL, paFilter, 'pa-filter') + (list.length ? `
   <section class="card"><div class="list stack">${list.map(a => {
     const [next, nl] = PA_NEXT[a.status];
@@ -3671,7 +3687,7 @@ function centerPartnersPage() {
 }
 function partnerAppDialog(a) {
   formDialog({
-    title: `${a.academy_name || '학원'} · ${a.partner_name}`, table: 'partner_applications', row: a, academy: false, noDelete: true, after: loadCenter,
+    title: `${a.academy_name || '학원'} · ${a.partner_name}`, table: 'partner_applications', row: a, academy: false, noDelete: true, after: reloadCenter,
     label: () => '신청을',
     fields: [
       ['status', '상태', { type: 'select', required: true, options: Object.entries(PA_LABEL) }],
@@ -3690,7 +3706,7 @@ async function stepPartnerApp(id, status) {
 // 센터: 원장이 연결 요청한 유학 상담
 function centerAbroadPage() {
   const list = CENTER.abroad.filter(r => r.status === 'forwarded' || r.status === 'done');
-  return head('유학 상담', '학부모가 신청하고 원장님이 확인해서 넘긴 유학 상담이에요. 인투유학 상담사에게 연결한 뒤 "연결 완료"로 바꿔 주세요.') + (list.length ? `
+  return head('유학 상담', partnerNote() || `학부모가 신청하고 원장님이 확인해서 넘긴 유학 상담이에요. 인투유학 상담사에게 연결한 뒤 "연결 완료"로 바꿔 주세요.${watchNote('intoabroad')}`) + (list.length ? `
   <section class="card"><div class="list stack">${list.map(r => `
     <div class="li">
       <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc(r.parent_name[0])}</span>
@@ -3699,11 +3715,11 @@ function centerAbroadPage() {
         ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}${r.owner_memo ? `<div class="d"><b>원장 메모</b> ${esc(r.owner_memo)}</div>` : ''}${r.admin_memo ? `<div class="d"><b>센터 메모</b> ${esc(r.admin_memo)}</div>` : ''}</div>
       <div class="r"><span class="chip ${AB_STATE[r.status][0]}">${AB_STATE[r.status][1]}</span>${r.status === 'forwarded' ? `<button class="btn sm primary" data-cab-step="${r.id}:done">연결 완료</button>` : ''}</div>
     </div>`).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('globe')}</span><h2>연결 요청된 상담이 아직 없어요</h2><p class="muted">원장님이 학부모 신청을 확인하고 "인투유학 연결 요청"을 누르면 여기에 와요.</p></section>`) +
-  `<a class="hint" href="${DATA.abroadUrl}" target="_blank" rel="noopener">${ic('globe')}<span>유학 상담은 인투유학 상담사에게 연결해요</span><b>인투유학 →</b></a>`;
+  (CENTER.partner ? '' : `<a class="hint" href="${DATA.abroadUrl}" target="_blank" rel="noopener">${ic('globe')}<span>유학 상담은 인투유학 상담사에게 연결해요</span><b>인투유학 →</b></a>`);
 }
 function centerAbroadDialog(r) {
   formDialog({
-    title: `${r.parent_name} 님 유학 상담`, table: 'abroad_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    title: `${r.parent_name} 님 유학 상담`, table: 'abroad_requests', row: r, academy: false, noDelete: true, after: reloadCenter,
     label: () => '신청을',
     fields: [
       ['status', '상태', { type: 'select', required: true, options: [['forwarded', '센터 연결 중'], ['done', '상담 연결 완료']] }],
@@ -3717,7 +3733,7 @@ const MK_NEXT = { new: ['contacted', '연결함으로'], contacted: ['working', 
 let mkFilter = 'all';
 function centerPromoPage() {
   const all = CENTER.promoReqs, list = all.filter(r => mkFilter === 'all' || r.status === mkFilter);
-  return head('홍보 의뢰', '원장님이 맡긴 홍보 작업이에요. 인투마케팅 담당자에게 넘기고 단계를 바꿔 주면 원장님 "내 의뢰"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
+  return head('홍보 의뢰', partnerNote() || `원장님이 맡긴 홍보 작업이에요. 인투마케팅 담당자에게 넘기고 단계를 바꿔 주면 원장님 "내 의뢰"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.${watchNote('intomarketing')}`) +
     filterBar(all, Object.fromEntries(Object.entries(MK_STATE).map(([k, [, l]]) => [k, l])), mkFilter, 'mk-filter') + (list.length ? `
   <section class="card"><div class="list stack">${list.map(r => {
     const next = MK_NEXT[r.status];
@@ -3731,11 +3747,11 @@ function centerPromoPage() {
       <div class="r"><span class="chip ${MK_STATE[r.status][0]}">${MK_STATE[r.status][1]}</span>${next ? `<button class="btn sm ${next[0] === 'done' ? 'primary' : ''}" data-mk-step="${r.id}:${next[0]}">${next[1]}</button>` : ''}</div>
     </div>`;
   }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('megaphone')}</span><h2>여기에 해당하는 의뢰가 없어요</h2><p class="muted">원장님이 홍보 서비스에서 의뢰하면 여기에 쌓여요.</p></section>`) +
-  `<a class="hint" href="${MK}" target="_blank" rel="noopener">${ic('megaphone')}<span>홍보 작업은 인투마케팅 담당자에게 연결해요</span><b>인투마케팅 →</b></a>`;
+  (CENTER.partner ? '' : `<a class="hint" href="${MK}" target="_blank" rel="noopener">${ic('megaphone')}<span>홍보 작업은 인투마케팅 담당자에게 연결해요</span><b>인투마케팅 →</b></a>`);
 }
 function centerPromoDialog(r) {
   formDialog({
-    title: `${r.academy_name || '학원'} · ${r.service}`, table: 'promo_requests', row: r, academy: false, noDelete: true, after: loadCenter,
+    title: `${r.academy_name || '학원'} · ${r.service}`, table: 'promo_requests', row: r, academy: false, noDelete: true, after: reloadCenter,
     label: () => '의뢰를',
     fields: [
       ['status', '단계', { type: 'select', required: true, options: Object.entries(MK_STATE).map(([k, [, l]]) => [k, l]) }],
@@ -4043,7 +4059,7 @@ function centerTasksPage() {
 }
 function taskMemoDialog(t) {
   formDialog({
-    title: `${t.academy_name || '학원'} · ${t.kind}`, table: 'center_tasks', row: t, academy: false, noDelete: true, after: loadCenter,
+    title: `${t.academy_name || '학원'} · ${t.kind}`, table: 'center_tasks', row: t, academy: false, noDelete: true, after: reloadCenter,
     label: () => '맡긴 일을',
     fields: [
       ['status', '상태', { type: 'select', required: true, options: Object.entries(TASK_STATE).map(([k, [, l]]) => [k, l]) }],
@@ -4281,7 +4297,7 @@ const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'p
   parent: ['news', 'kid/bills', 'abroad'], student: ['todos', 'reports'] };
 function newsKeys() {
   if (!REAL && !CENTER) return DEMO && !USER ? Object.fromEntries((DEMO_NEWS[ROLE] || []).map(k => [k, () => [`${TODAY}T00:00:00`]])) : {};
-  return { ...(REAL ? NEWS[ROLE] || {} : {}), ...(CENTER ? NEWS.center : {}) };
+  return { ...(REAL ? NEWS[ROLE] || {} : {}), ...(CENTER && !CENTER.partner ? NEWS.center : {}) };
 }
 // 경로(영역 또는 영역/세부)에 새 소식이 있는지: 영역이면 그 아래 세부 중 하나라도
 function hasNews(path) {
@@ -4586,7 +4602,24 @@ function svcHint() {
   if (on.length === 5) return '';
   return `<a class="hint" href="#services">${ic('star')}<span>센터 지원 ${on.length ? `${on.map(a => SVC_AREAS[a]).join(' · ')} 이용 중` : '아직 이용 중인 분야가 없어요'}${cs.length ? ` · ${cs.map(a => SVC_AREAS[a]).join(' · ')} 상담 중` : ''}</span><b>분야 보기 · 신청 →</b></a>`;
 }
+// 파트너 담당자 홈: 새로 온 것부터
+function partnerTodo() {
+  const items = [];
+  const mk = CENTER.promoReqs.filter(r => r.status === 'new');
+  if (mk.length) items.push([`새 홍보 의뢰 ${mk.length}건`, mk.slice(0, 3).map(r => `${esc(r.academy_name || '')} · ${esc(r.service)}`).join(' / '), '#promo', '<span class="chip crit">새 의뢰</span>']);
+  const ab = CENTER.abroad.filter(r => r.status === 'forwarded');
+  if (ab.length) items.push([`유학 상담 ${ab.length}건 연결하기`, ab.slice(0, 3).map(r => `${esc(r.parent_name)} · ${esc(r.program)}`).join(' / '), '#abroad', '<span class="chip crit">새 상담</span>']);
+  const pa = CENTER.partnerApps.filter(a => a.status === 'new');
+  if (pa.length) items.push([`유학 제휴 신청 ${pa.length}건`, pa.slice(0, 3).map(a => `${esc(a.academy_name || '')} · ${esc(a.partner_name)}`).join(' / '), '#partners', '<span class="chip crit">새 신청</span>']);
+  if (!items.length) items.push(['새로 온 신청이 없어요', '학원에서 신청하면 바로 여기에 떠요', Object.keys(MY)[0] ? `#${Object.keys(MY)[0]}` : '#home', '<span class="chip good">여유</span>']);
+  return items;
+}
+const partnerNote = () => CENTER && CENTER.partner ? '학원에서 신청하면 센터를 거치지 않고 바로 여기로 와요. 단계를 바꾸고 안내를 남기면 원장님 화면에 그대로 보여요. 센터장도 함께 보고, 문제가 있을 때만 도와요.' : '';
+const watchNote = kind => CENTER && !CENTER.partner && (CENTER.partnerMembers || []).some(m => m.partner === kind) ? ` 지금은 ${PARTNER_INFO[kind].name} 담당자가 바로 받아 처리해요. 문제가 있을 때만 바꿔 주세요.` : '';
 function home() {
+  if (ROLE === 'partner') {
+    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${PARTNER_INFO[PARTNER].name} 담당자 화면이에요.`) + todo(partnerTodo()) + `<h2 class="sec-title">받은 신청</h2>` + tiles();
+  }
   if (ROLE === 'admin') {
     return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · 학원지원센터 본부 화면이에요.`) + todo(centerTodo()) + favCard() +
       `<h2 class="sec-title">센터 관리</h2>` + subTiles('center', CENTER_AREA) +
@@ -4783,7 +4816,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services'],
-    teacher: ['home', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
+    teacher: ['home', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -4930,6 +4963,22 @@ function bind() {
     const { error } = await SB.rpc('remove_center_admin', { p_email: b.dataset.rmAdmin });
     if (error) { toast(adminError(error)); return; }
     await loadCenter(); render(); toast('관리자에서 뺐어요');
+  });
+  // 파트너 담당자 넣기 · 빼기 (관리자)
+  const partnerAdd = $('#partnerAdd');
+  if (partnerAdd) partnerAdd.onsubmit = async e => {
+    e.preventDefault();
+    const el = partnerAdd.elements, who = el.who.value.trim(), msg = $('#partnerMsg');
+    if (!who) { msg.textContent = '아이디나 구글 이메일을 적어 주세요.'; msg.hidden = false; return; }
+    const { error } = await SB.rpc('add_partner_member', { p_who: who, p_partner: el.partner.value, p_name: el.name.value.trim() || null });
+    if (error) { msg.textContent = (error.message || '').includes('not_found') ? '그 아이디 · 이메일로 가입한 사람이 없어요. 담당자가 먼저 사이트에 가입해야 해요.' : adminError(error); msg.hidden = false; return; }
+    await loadCenter(); render(); toast(`${who} 님을 ${PARTNER_INFO[el.partner.value].name} 담당자로 넣었어요`);
+  };
+  on('[data-rm-partner]', async b => {
+    if (!confirm('이 담당자를 뺄까요? 빼면 그 사람은 더 이상 신청을 볼 수 없어요.')) return;
+    const { error } = await SB.rpc('remove_partner_member', { p_user: b.dataset.rmPartner });
+    if (error) { toast('빼지 못했어요'); return; }
+    await loadCenter(); render(); toast('담당자에서 뺐어요');
   });
   const adminAdd = $('#adminAdd');
   if (adminAdd) adminAdd.onsubmit = async e => {
@@ -5389,12 +5438,24 @@ async function loadCenter() {
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
     newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries'), SB.rpc('admin_academies'), newest('center_tasks'), SB.rpc('admin_members')
   ]);
+  const { data: pm } = await SB.rpc('list_partner_members');
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = Number(x.done) || 0; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
     partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [],
-    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [] };
+    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [], partnerMembers: pm || [] };
 }
+// 파트너 담당자: 우리 회사로 바로 온 신청만 (RLS가 걸러 줘요) — 센터 화면을 그대로 써서 CENTER 모양으로 채워요
+const PARTNER_INFO = { intomarketing: { name: '인투마케팅', subs: ['promo'] }, intoabroad: { name: '인투유학', subs: ['abroad', 'partners'] } };
+async function loadPartner() {
+  const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
+  const mk = PARTNER === 'intomarketing', ab = PARTNER === 'intoabroad';
+  const [pr, ar, pa] = await Promise.all([mk ? newest('promo_requests') : { data: [] }, ab ? newest('abroad_requests') : { data: [] }, ab ? newest('partner_applications') : { data: [] }]);
+  CENTER = { partner: PARTNER, videos: [], done: {}, requests: [], admins: [], refl: {}, adminApps: [], inquiries: [], academies: [], tasks: [], members: [], partnerMembers: [],
+    promoReqs: pr.data || [], abroad: ar.data || [], partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review') };
+}
+const reloadCenter = () => CENTER && CENTER.partner ? loadPartner() : loadCenter();
+const partnerAreas = () => Object.fromEntries(PARTNER_INFO[PARTNER].subs.map(k => [k, CENTER_AREA.subs[k]]));
 // 원장: 우리 공고 + 지원자
 async function loadJobs() {
   const [j, a] = await Promise.all([
@@ -5551,7 +5612,8 @@ async function boot() {
       SB.rpc('am_center_admin')
     ]);
     PROFILE = p || {};
-    if (admin) await loadCenter();
+    if (!admin) { const { data: pt } = await SB.rpc('my_partner'); PARTNER = PARTNER_INFO[pt] ? pt : null; }
+    if (admin) await loadCenter(); else if (PARTNER) await loadPartner();
     await Promise.all([loadConvs(), loadFriends()]);
     if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', '/app#center/admins'); else { adminApplyScreen(user); return; } }
     if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
@@ -5568,6 +5630,14 @@ async function boot() {
         await loadJobBoard(); render(); return;
       }
       if (!CENTER) { onboarding(user); return; }
+      // 파트너 담당자: 우리 회사로 온 신청만 바로 받아 처리
+      if (PARTNER) {
+        ROLE = 'partner'; MY = { ...partnerAreas(), messages: MESSAGES_AREA };
+        const pn = esc(PROFILE.name || PROFILE.username || (user.email || '담당자').split('@')[0]);
+        ME = { name: pn, av: pn[0], label: `${PARTNER_INFO[PARTNER].name} 담당자`, color: 'var(--r-admin)' };
+        DATA.today = todayText();
+        await loadSeen(); render(); return;
+      }
       // 학원 없이 센터 관리만 하는 관리자
       ROLE = 'admin'; MY = { center: CENTER_AREA, messages: MESSAGES_AREA };
       const nm = esc(PROFILE.name || user.user_metadata?.full_name || PROFILE.username || (user.email || '관리자').split('@')[0]);
@@ -5590,7 +5660,8 @@ async function boot() {
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen()]);
     tailorMenus();
-    if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
+    if (CENTER && CENTER.partner) MY = { ...MY, ...partnerAreas() }; // 학원에도 속한 파트너 담당자
+    else if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   } else await loadSeen();
   render();
 }
