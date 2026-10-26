@@ -26,7 +26,10 @@ const ICON = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   plane: '<path d="M21 3L3 10.5l7 2.5 2.5 7z"/><path d="M21 3L10 13"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
-  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
+  ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'
 };
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
 
@@ -67,6 +70,13 @@ const won = n => `${(n || 0).toLocaleString()}원`;
 // 금액 칸: 치는 동안 1,000 단위 쉼표가 저절로 들어가요 (저장할 때는 쉼표를 빼요)
 const comma = v => { const d = String(v ?? '').replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''); return d ? Number(d).toLocaleString('ko-KR') : ''; };
 const numOf = v => { const d = String(v ?? '').replace(/[,\s원]/g, ''); return d === '' ? null : Number(d); };
+// 전화번호 칸: 치는 동안 010-1234-5678 모양으로
+const fmtPhone = v => {
+  const d = String(v).replace(/[^0-9]/g, '').slice(0, 11);
+  if (d.startsWith('02')) return d.length < 3 ? d : d.length < 6 ? `${d.slice(0, 2)}-${d.slice(2)}` : d.length < 10 ? `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}` : `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`;
+  return d.length < 4 ? d : d.length < 8 ? `${d.slice(0, 3)}-${d.slice(3)}` : d.length < 11 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+};
+document.addEventListener('input', e => { const t = e.target; if (t.type === 'tel' && /^[0-9-]*$/.test(t.value)) t.value = fmtPhone(t.value); });
 document.addEventListener('input', e => {
   const t = e.target;
   if (!t.classList || !t.classList.contains('won-in')) return;
@@ -105,7 +115,8 @@ const noStudents = () => `
 function attendPage() {
   if (REAL) return realAttendPage();
   const sum = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]);
-  return head('출결 관리', `오늘 ${sum[0]}/${sum[1]}명 출석 · 강사가 수업 중에 입력하면 학부모에게 바로 알림이 가요.`) + `
+  if (!DATA.attendance.length) return head('출결', `${DATA.today} · 오늘은 수업이 없는 날이에요.`) + `<section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>오늘은 수업이 없어요</h2><p class="muted">시간표에 오늘 요일 수업이 없어요. 다른 날 출결은 수업이 있는 날 열어 보세요.</p><a class="btn" href="#schedule">시간표 보기</a></section>`;
+  return head('출결', `오늘 ${sum[0]}/${sum[1]}명 출석 · 강사가 수업 중에 입력하면 학부모에게 바로 알림이 가요.`) + `
   <section class="card"><div class="list">
     ${DATA.attendance.map(c => `
       <div class="li">
@@ -118,12 +129,13 @@ function attendPage() {
 
 function billingPage() {
   if (REAL) return realBillingPage();
-  const b = DATA.billing;
-  return head('수납·청구', `${b.month} 청구 ${b.total}건 중 ${b.paid}건 납부 완료`) + `
+  // 미납 수 · 금액은 미납 목록에서 계산해서 목록 · 홈 · 메뉴 숫자가 늘 같아요
+  const b = DATA.billing, unpaid = DATA.unpaid.length, paid = b.total - unpaid;
+  return head('수납', `${b.month} 청구 ${b.total}건 중 ${paid}건 납부 · 미납 ${unpaid}건`) + `
   <div class="stats">
     <div class="stat"><span>청구</span><b class="num">${b.total}건</b></div>
-    <div class="stat"><span>납부 완료</span><b class="num">${b.paid}건</b></div>
-    <div class="stat crit"><span>미납</span><b class="num">${won(b.unpaidAmount * 1e4)}</b></div>
+    <div class="stat good"><span>납부 완료</span><b class="num">${paid}건</b></div>
+    <div class="stat crit"><span>미납 ${unpaid}건</span><b class="num">${won(sum(DATA.unpaid, u => u.amount) * 1e4)}</b></div>
   </div>
   <section class="card">
     <div class="card-head"><h2>미납 가정</h2><button class="btn sm primary" data-act="remindAll">전체 납부 안내 보내기</button></div>
@@ -181,9 +193,9 @@ function realAttendPage() {
   const when = day === TODAY ? '오늘' : `${md(day)}`;
   const pager = `
     <div class="pager"><button class="btn sm" data-day="-1" aria-label="전날">‹</button><input type="date" id="attDay" value="${day}"><button class="btn sm" data-day="1" aria-label="다음 날">›</button>${day !== TODAY ? '<button class="btn sm" data-day="0">오늘</button>' : ''}</div>`;
-  if (!list.length) return head('출결 관리', '') + noStudents();
+  if (!list.length) return head('출결', '') + noStudents();
   const cnt = k => list.filter(s => map[s.id] === k).length;
-  return head('출결 관리', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요.`) + pager + `
+  return head('출결', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요.`) + pager + `
   <div class="stats">
     <div class="stat good"><span>출석</span><b class="num">${cnt('present')}명</b></div>
     <div class="stat"><span>지각 · 조퇴</span><b class="num">${cnt('late') + cnt('early')}명</b></div>
@@ -211,7 +223,7 @@ async function markAttendance(ids, status) {
   if (error) { REAL.attend.map = before; render(); toast('저장하지 못했어요. 다시 시도해 주세요.'); }
 }
 
-/* ---------- 실제 데이터: 수납·청구 (Supabase invoices) ---------- */
+/* ---------- 실제 데이터: 수납 (Supabase invoices) ---------- */
 function realBillingPage() {
   const list = REAL.invoices.filter(i => i.month === MONTH);
   const paid = list.filter(i => i.paid_at), unpaid = list.filter(i => !i.paid_at);
@@ -239,7 +251,7 @@ function realBillingPage() {
     <div class="card-head"><h2>납부 완료 ${paid.length}건</h2><span class="sub">이름을 누르면 결제 방법·메모를 고칠 수 있어요</span></div>
     <div class="list stack">${paid.map(row).join('')}</div>
   </section>` : ''}`;
-  return head('수납·청구', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료`, acts) + plansCard() + monthBar() + `
+  return head('수납', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료`, acts) + plansCard() + monthBar() + `
   <div class="stats">
     <div class="stat"><span>청구 합계</span><b class="num">${won(sum(list, i => i.amount))}</b></div>
     <div class="stat good"><span>받은 금액</span><b class="num">${won(sum(paid, i => i.amount))}</b></div>
@@ -293,7 +305,7 @@ function planDialog(p) {
       ['name', '이름', { required: true, max: 50, placeholder: '예: 초등 주 3회', chips: ['초등 주 2회', '초등 주 3회', '중등 주 3회', '고등 주 3회', '특강'] }],
       ['amount', '한 달 금액', { type: 'won', required: true, placeholder: '예: 300,000', half: true }],
       ['class_name', '주로 쓰는 반', { type: 'select', options: allClassNames(), blank: '반 상관없음', half: true }],
-      ['memo', '메모', { max: 200, placeholder: '예: 교재비 별도' }]
+      ['memo', '메모', { max: 200, placeholder: '예: 교재비 별도', chips: ['교재비 별도', '교재비 포함', '형제 할인 가능', '차량비 별도'] }]
     ]
   });
 }
@@ -478,7 +490,7 @@ function realFinancePage() {
   const rate = t.inc ? Math.round(t.net / t.inc * 100) : null;
   const acts = `<button class="btn" data-act="finXlsx">${ic('doc')}엑셀로 내려받기</button><button class="btn" data-import="expenses">${ic('doc')}지출 엑셀로 올리기</button>
     <button class="btn" data-act="addIncome">${ic('plus')}수입 추가</button><button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`;
-  return head('재정', `${r.label} · 매출은 수납·청구에서 "납부 확인"한 금액에 직접 넣은 수입(교재 판매 · 특강 등)을 더한 거예요.`, acts) + `
+  return head('재정', `${r.label} · 매출은 수납에서 "납부 확인"한 금액에 직접 넣은 수입(교재 판매 · 특강 등)을 더한 거예요.`, acts) + `
   <div class="filters">${Object.entries(FIN_PERIODS).map(([k, l]) => `<button class="${FIN === k ? 'on' : ''}" data-fin="${k}">${l}</button>`).join('')}</div>
   ${FIN === 'month' ? monthBar() : ''}
   ${FIN === 'custom' ? `<div class="range-pick"><label>시작일<input type="date" id="finFrom" value="${r.from}"></label><span>~</span>
@@ -497,7 +509,7 @@ function realFinancePage() {
       ${t.out ? catBars(groupCats(list.filter(e => e.kind === 'out')), 'out') : '<p class="muted small" style="margin:0">이 기간에 적은 지출이 없어요. 급여 · 임대료부터 넣어 보세요.</p>'}</section>
   </div>
   <section class="card">
-    <div class="card-head"><h2>거래 내역 ${list.length}건</h2><span class="sub">누르면 고칠 수 있어요 · 수강료는 수납·청구에서 고쳐요</span></div>
+    <div class="card-head"><h2>거래 내역 ${list.length}건</h2><span class="sub">누르면 고칠 수 있어요 · 수강료는 수납에서 고쳐요</span></div>
     ${list.length ? `<div class="list">${list.slice(0, 200).map(e => `
       <a class="li link" href="#admin/finance" data-ledger="${e.src}:${e.id}">
         <span class="av time-av num">${md(e.day)}</span>
@@ -505,7 +517,7 @@ function realFinancePage() {
         <div class="r"><b class="num ${e.kind === 'out' ? 'neg' : ''}">${e.kind === 'out' ? '-' : '+'}${won(e.amount)}</b></div>
       </a>`).join('')}</div>${list.length > 200 ? '<p class="muted small">최근 200건까지 보여 줘요. 전부 보려면 엑셀로 내려받아 주세요.</p>' : ''}` : '<p class="muted small" style="margin:0">아직 없어요.</p>'}
   </section>
-  <a class="hint" href="#admin/billing">${ic('card')}<span>수강료 매출은 수납·청구에서 "납부 확인"을 누르면 저절로 들어와요</span><b>수납·청구 →</b></a>`;
+  <a class="hint" href="#admin/billing">${ic('card')}<span>수강료 매출은 수납에서 "납부 확인"을 누르면 저절로 들어와요</span><b>수납 →</b></a>`;
 }
 
 // 보고 있는 기간의 거래 내역을 엑셀로
@@ -860,8 +872,8 @@ function paperDialog(p) {
     title: p ? '서류 고치기' : '서류 추가', table: 'paperwork', row: p, after: loadPaperwork,
     label: r => `${r.title} 서류를`,
     fields: [
-      ['title', '서류 이름', { required: true, max: 100, placeholder: '예: 교습비 변경 신고' }],
-      ['org', '내는 곳', { max: 50, placeholder: '예: 교육청', half: true }], ['due', '마감일', { type: 'date', half: true }],
+      ['title', '서류 이름', { required: true, max: 100, placeholder: '예: 교습비 변경 신고', chips: ['교습비 변경 신고', '강사 채용 통보', '강사 해임 통보', '원천세 신고', '4대보험 취득 신고', '사업장현황신고', '원생 현황 보고'] }],
+      ['org', '내는 곳', { max: 50, placeholder: '예: 교육청', half: true, chips: ['교육청', '세무서 · 홈택스', '4대보험 공단', '구청'] }], ['due', '마감일', { type: 'date', half: true }],
       ['status', '상태', { type: 'select', required: true, value: 'todo', options: Object.entries(STEP_CHIP).map(([k, [, l]]) => [k, l]), half: true }],
       ['repeat', '반복', { type: 'select', required: true, value: 'none', options: [['none', '한 번만'], ['monthly', '매달 (제출하면 다음 달 것이 생겨요)'], ['yearly', '매년']], half: true }],
       ['memo', '메모', { max: 500 }]
@@ -917,7 +929,7 @@ function realOwnerTodo() {
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
   items.push(...scheduleTodo().filter(i => !i[0].startsWith('오늘 수업')));
-  if (REAL.students.length && REAL.todoDay === TODAY && !REAL.todos.length) items.push(['오늘 학생 할 일 주기', '반 전체에 한 번에 줄 수 있어요 · 학생 · 학부모 앱에 바로 보여요', '#members/todos', '<span class="chip mute">할 일</span>']);
+  if (REAL.students.length && REAL.todoDay === TODAY && !REAL.todos.length) items.push(['오늘 할 일 주기', '반 전체에 한 번에 줄 수 있어요 · 학생 · 학부모 앱에 바로 보여요', '#members/todos', '<span class="chip mute">할 일</span>']);
   const apv = REAL.approvals.filter(a => a.status === 'pending');
   const pa = REAL.partnerApps.filter(a => a.status === 'owner_review');
   if (pa.length) items.push([`강사 제휴 신청 ${pa.length}건 승인하기`, pa.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.partner_name)}`).join(' / '), '#mou/mine', '<span class="chip warn">원장 확인</span>']);
@@ -966,7 +978,7 @@ function schedulePage() {
   const acts = [ROLE === 'owner' ? `<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
   const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && classOk(t.class_name)).sort((a, b) => a.start_time.localeCompare(b.start_time));
   const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
-  return head('일정 · 시간표', staff ? '학부모 · 학생에게도 같은 시간표와 일정이 보여요. 강의실 · 담당 강사 · 메모는 원장님과 강사님에게만 보여요.' : '학원 시간표와 시험 · 행사 · 휴원 일정이에요.', acts) + `
+  return head('일정·시간표', staff ? '학부모 · 학생에게도 같은 시간표와 일정이 보여요. 강의실 · 담당 강사 · 메모는 원장님과 강사님에게만 보여요.' : '학원 시간표와 시험 · 행사 · 휴원 일정이에요.', acts) + `
   <div class="sch-bar">
     <div class="filters">${[['week', '주간 시간표'], ['month', '월간 일정']].map(([k, l]) => `<button class="${SCH_VIEW === k ? 'on' : ''}" data-sch-view="${k}">${l}</button>`).join('')}</div>
     ${opts.length > 1 ? `<div class="filters">${opts.map(([k, l]) => `<button class="${c === k ? 'on' : ''}" data-sch-class="${esc(k)}">${esc(l)}</button>`).join('')}</div>` : ''}
@@ -1050,9 +1062,9 @@ function ttDialog(t) {
     fields: [
       ['class_name', '반', { required: true, max: 50, chips: classes, placeholder: '예: 초등 B반' }],
       ['weekday', '요일', { type: 'select', required: true, options: WEEK.map(d => [d, `${WD[d]}요일`]), value: 1, half: true }],
-      ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', half: true }],
+      ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', half: true, chips: SUBJECTS }],
       ['start_time', '시작', { type: 'time', required: true, value: '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: '17:30', half: true }],
-      ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지' }],
+      ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true, chips: ['1강의실', '2강의실', '3강의실', '자습실'] }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지', chips: staffNames() }],
       ['note', '메모 (원장·강사만)', { max: 300, placeholder: '예: 격주 단어 시험' }]
     ]
   });
@@ -1110,12 +1122,12 @@ function todosPage() {
   if (!REAL) return head('오늘 할 일', '학원과 부모님이 정해 준 할 일이에요. 다 하면 체크!') + `<section class="card">${homeworkList()}</section>`;
   const when = REAL.todoDay === TODAY ? '오늘' : md(REAL.todoDay);
   if (isStaff()) {
-    if (!REAL.students.length) return head('학생 할 일', '') + noStudents();
+    if (!REAL.students.length) return head('오늘 할 일', '') + noStudents();
     const groups = byClass(REAL.students);
     const targets = groups.map(([cls, ss]) => `<option value="c:${esc(cls)}">${esc(cls)} 전체 (${ss.length}명)</option>`).join('') +
       groups.map(([cls, ss]) => `<optgroup label="${esc(cls)}">${ss.map(s => `<option value="s:${s.id}">${esc(s.name)}</option>`).join('')}</optgroup>`).join('');
     const all = REAL.todos;
-    return head('학생 할 일', `${when} · 반 전체나 학생 한 명에게 할 일을 주면 학생 · 학부모 앱에 바로 보여요. 학생이 체크하면 여기서도 보여요.`) + todoDayBar() + `
+    return head('오늘 할 일', `${when} · 반 전체나 학생 한 명에게 할 일을 주면 학생 · 학부모 앱에 바로 보여요. 학생이 체크하면 여기서도 보여요.`) + todoDayBar() + `
     <div class="stats"><div class="stat"><span>${when} 할 일</span><b class="num">${all.length}개</b></div><div class="stat good"><span>완료</span><b class="num">${all.filter(t => t.done_at).length}개</b></div>
       <div class="stat"><span>할 일 받은 학생</span><b class="num">${new Set(all.map(t => t.student_id)).size}/${REAL.students.length}명</b></div></div>
     ${todoAddForm(targets, '예: 단어 20개 외우기')}` + groups.map(([cls, ss]) => `
@@ -1478,7 +1490,8 @@ const friendsData = () => USER ? MSG.friends || [] : DEMO_FRIENDS;
 const msgUnread = () => sum(convsData(), c => Number(c.unread) || 0);
 const msgTime = s => { const d = new Date(s); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const msgWhen = s => { const d = ymd(new Date(s)); return d === TODAY ? msgTime(s) : md(d); };
-const ROLE_COLOR = { admin: 'var(--navy-700)', teacher: 'var(--good)', owner: 'var(--blue-600)', parent: 'var(--warn)', student: '#8b5cf6' };
+// 역할 색은 첫 화면 예시 계정과 같아요 (base.css --r-*)
+const ROLE_COLOR = { admin: 'var(--r-admin)', teacher: 'var(--r-teacher)', owner: 'var(--r-owner)', parent: 'var(--r-parent)', student: 'var(--r-student)' };
 // 프로필 사진(없으면 이름 첫 글자)
 const pfp = (name, url, role, cls = '') => url
   ? `<span class="av pfp ${cls}"><img src="${esc(url)}" alt=""></span>`
@@ -1812,7 +1825,7 @@ const apvRow = (a, owner) => {
 function approvalsOwnerPage() {
   const all = apvData(), list = all.filter(a => apvFilter === 'all' || a.status === apvFilter);
   const n = k => all.filter(a => a.status === k).length;
-  return head('결재함', '강사님이 올린 물품 구입 · 재정 지출 결재예요. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요.') + `
+  return head('결재', '강사님이 올린 물품 구입 · 재정 지출 결재예요. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요.') + `
   <div class="stats">
     <div class="stat ${n('pending') ? 'crit' : ''}"><span>결재 대기</span><b class="num">${n('pending')}건</b></div>
     <div class="stat"><span>대기 금액</span><b class="num">${won(sum(all.filter(a => a.status === 'pending'), a => a.amount || 0))}</b></div>
@@ -1821,13 +1834,13 @@ function approvalsOwnerPage() {
   <div class="filters">${[['pending', `결재 대기 ${n('pending')}`], ['approved', '승인'], ['rejected', '반려'], ['all', '전체']].map(([k, l]) => `<button class="${apvFilter === k ? 'on' : ''}" data-apv-filter="${k}">${l}</button>`).join('')}</div>
   ${list.length ? `<section class="card"><div class="list stack">${list.map(a => apvRow(a, true)).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>${apvFilter === 'pending' ? '기다리는 결재가 없어요' : '아직 없어요'}</h2>
-    <p class="muted">강사님이 "결재 요청"에서 올리면 여기에 바로 나와요.</p></section>`}`;
+    <p class="muted">강사님이 "결재"에서 올리면 여기에 바로 나와요.</p></section>`}`;
 }
 // 강사: 결재 요청
 function approvalsTeacherPage() {
   const all = apvData();
   const add = `<button class="btn primary" data-act="newApv">${ic('plus')}결재 올리기</button>`;
-  return head('결재 요청', '수업에 필요한 물품이나 비용을 원장님께 결재받아요. 기다리는 동안에는 제목을 눌러 고치거나 취소할 수 있어요.', add) + (all.length ? `
+  return head('결재', '수업에 필요한 물품이나 비용을 원장님께 결재받아요. 기다리는 동안에는 제목을 눌러 고치거나 취소할 수 있어요.', add) + (all.length ? `
   <section class="card"><div class="list stack">${all.map(a => apvRow(a, false)).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>아직 올린 결재가 없어요</h2>
     <p class="muted">교재 · 수업 준비물 · 행사 비용처럼 원장님 확인이 필요한 걸 올려 주세요. 승인 · 반려되면 여기서 바로 보여요.</p>${add}</section>`);
@@ -1888,7 +1901,7 @@ function staffPage() {
   <section class="card"><div class="list">
     ${DATA.staff.map(s => `
       <div class="li">
-        <span class="av" style="background:var(--navy-700)">${s.name[0]}</span>
+        <span class="av" style="background:var(--r-teacher)">${s.name[0]}</span>
         <div><div class="t">${s.name} <span class="muted small">${s.cls}</span></div><div class="d">${REAL ? s.since : `근무 시작 ${s.since}`}</div></div>
         <div class="r"><span class="time">센터 교육 이수</span><b class="num">${DATA.training.filter(t => t.status[s.name] === 'done').length}/${total}</b></div>
       </div>`).join('')}
@@ -1972,7 +1985,7 @@ function trainingDetail(id, base) {
       ${Object.keys(t.status).length ? '' : '<p class="muted small" style="margin:0">아직 합류한 강사님이 없어요.</p>'}
       <div class="list">
         ${Object.entries(t.status).map(([n, s]) => `
-          <div class="li"><span class="av" style="background:var(--navy-700)">${n[0]}</span><div class="t">${n}</div>
+          <div class="li"><span class="av" style="background:var(--r-teacher)">${n[0]}</span><div class="t">${n}</div>
           <div class="r">${s === 'done' ? '<span class="chip good">이수</span>' : '<span class="chip mute">미이수</span>'}</div></div>`).join('')}
       </div>
     </section>
@@ -2093,14 +2106,14 @@ function realPromoRequestsPage() {
   const fromT = all.filter(r => r.requester_role === 'teacher');
   const list = all.filter(r => mkWho === 'all' || (mkWho === 'teacher' ? r.requester_role === 'teacher' : r.requester_role !== 'teacher'));
   const add = `<a class="btn primary" href="#promo/services">${ic('plus')}새 의뢰</a>`;
-  if (!list.length) return head('의뢰 현황', '') + `
+  if (!list.length) return head('내 의뢰', '') + `
   <section class="card empty">
     <span class="tile-ic">${ic('megaphone')}</span>
     <h2>아직 맡긴 홍보 작업이 없어요</h2>
     <p class="muted">홍보 서비스에서 필요한 작업을 골라 의뢰하면, 센터가 인투마케팅 담당자와 연결하고 진행 상황을 여기에 적어 드려요.</p>
     ${add}
   </section>`;
-  return head('의뢰 현황', owner ? '강사님이 맡긴 의뢰까지 모두 보여요. 센터가 인투마케팅에 연결하고 단계가 바뀔 때마다 여기에 적혀요. 접수 단계에서는 취소할 수 있어요.'
+  return head('내 의뢰', owner ? '강사님이 맡긴 의뢰까지 모두 보여요. 센터가 인투마케팅에 연결하고 단계가 바뀔 때마다 여기에 적혀요. 접수 단계에서는 취소할 수 있어요.'
     : '내가 맡긴 의뢰예요. 원장님도 같이 봐요. 접수 단계에서는 취소할 수 있어요.', add) +
   (owner && fromT.length ? `<div class="filters">${[['all', `전체 ${all.length}`], ['owner', `원장 의뢰 ${all.length - fromT.length}`], ['teacher', `강사 의뢰 ${fromT.length}`]].map(([k, l]) => `<button class="${mkWho === k ? 'on' : ''}" data-mk-who="${k}">${l}</button>`).join('')}</div>` : '') + `
   <section class="card"><div class="list stack">
@@ -2132,7 +2145,7 @@ function promoReqDialog(service) {
 
 function requestsPage() {
   if (REAL) return realPromoRequestsPage();
-  return head('의뢰 현황', '인투마케팅에 맡긴 작업이 어디까지 왔는지 보여 드려요.') + `
+  return head('내 의뢰', '인투마케팅에 맡긴 작업이 어디까지 왔는지 보여 드려요.') + `
   <section class="card"><div class="list">
     ${DATA.promoRequests.map(r => `
       <div class="li">
@@ -2165,22 +2178,31 @@ function leadsPage() {
   </div>`;
 }
 
+// 원생 명단 찾기: 위쪽 검색에서 학생 · 반을 누르면 여기에 채워져요
+let STU_Q = '';
+const stuMatch = (q, ...f) => !q || f.some(x => String(x || '').includes(q));
+const stuFilterBar = (classes, n) => `
+  <div class="stu-find"><span class="search-in">${ic('search')}<input id="stuQ" value="${esc(STU_Q)}" placeholder="이름 · 반 · 학부모 · 연락처로 찾기"></span>
+    <div class="pick-chips">${['전체', ...classes].map(c => `<button type="button" class="${(c === '전체' ? !STU_Q : STU_Q === c) ? 'on' : ''}" data-stu-q="${c === '전체' ? '' : esc(c)}">${esc(c)}</button>`).join('')}</div>
+    ${STU_Q ? `<span class="muted small">"${esc(STU_Q)}" ${n}명</span>` : ''}</div>`;
 function studentsPage() {
   if (REAL) return realStudentsPage();
-  return head('원생 명단', `원생 ${DATA.academy.students}명 중 일부 · 학부모 연락처와 출석률, 수납 상태를 함께 봐요.`) + `
+  const list = DATA.students.filter(s => stuMatch(STU_Q, s.name, s.cls, s.parent, s.phone, s.grade));
+  return head('원생 명단', `원생 ${DATA.academy.students}명 중 일부 · 학부모 연락처와 출석률, 수납 상태를 함께 봐요.`) + stuFilterBar([...new Set(DATA.students.map(s => s.cls))].sort(), list.length) + `
   <section class="card"><div class="table">
     <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>10월 수납</span></div>
-    ${DATA.students.map(s => `
+    ${list.map(s => `
       <div class="tr"><span><b>${s.name}</b> <span class="muted small">${s.grade}</span></span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${s.phone}</span></span><span class="num">${s.attend}%</span><span>${s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
   </div></section>`;
 }
 
 /* ---------- 실제 데이터: 원생 명단 (Supabase students) ---------- */
 function realStudentsPage() {
-  const list = REAL.students, canEdit = ROLE === 'owner';
+  const list = REAL.students.filter(s => stuMatch(STU_Q, s.name, s.class_name, s.parent_name, s.parent_phone, s.grade, s.memo)), canEdit = ROLE === 'owner';
   const add = `${canEdit ? `<button class="btn" data-import="students">${ic('doc')}엑셀로 올리기</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
   const by = x => x.added_by_role === 'teacher' ? `<span class="d small" style="display:block;margin-top:2px">${esc(x.added_by_name || '강사')} 선생님이 추가</span>` : '';
-  const body = list.length ? `
+  const all = REAL.students;
+  const body = list.length ? stuFilterBar(allClassNames(), list.length) + `
   <section class="card"><div class="table">
     <div class="tr th sv"><span>학생</span><span>반</span><span>학부모</span><span>메모</span><span></span></div>
     ${list.map(s => `
@@ -2191,7 +2213,8 @@ function realStudentsPage() {
         <span class="muted small">${esc(s.memo || '')}</span>
         <span class="btns">${canEdit ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button>` : ''}<button class="btn sm" data-edit-student="${s.id}">수정</button></span>
       </div>`).join('')}
-  </div></section>` : `
+  </div></section>` : all.length ? stuFilterBar(allClassNames(), 0) + `<section class="card empty"><h2>찾는 학생이 없어요</h2><p class="muted">다른 이름이나 반으로 찾아보세요.</p></section>`
+  : `
   <section class="card empty">
     <span class="tile-ic">${ic('users')}</span>
     <h2>아직 원생이 없어요</h2>
@@ -2199,13 +2222,13 @@ function realStudentsPage() {
     ${add}
   </section>`;
   const waiting = canEdit ? REAL.family.filter(f => !f.students.length) : [];
-  const wait = waiting.length && list.length ? `
+  const wait = waiting.length && all.length ? `
   <section class="card" style="margin-bottom:16px">
     <div class="card-head"><h2>앱 연결을 기다리는 가족 ${waiting.length}명</h2></div>
     <p class="muted small" style="margin:0">학부모·학생용 코드로 가입했지만 아직 아이와 이어지지 않았어요. 아이 줄의 "앱 연결"을 눌러 이어 주면 그 아이의 출결 · 수납 · 반 공지가 앱에 보여요.</p>
     <div class="needs" style="margin-top:10px">${waiting.map(f => `<span class="chip warn">${esc(f.name)} · ${ROLE_NAMES[f.role]}</span>`).join('')}</div>
   </section>` : '';
-  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ' 추가 · 수정한 내용은 원장님 명단에도 바로 보여요.'}`, list.length ? add : '') + wait + body +
+  return head('원생 명단', `원생 ${all.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ' 추가 · 수정한 내용은 원장님 명단에도 바로 보여요.'}`, all.length ? add : '') + wait + body +
     (canEdit ? `<a class="hint" href="#members/invite">${ic('users')}<span>강사님·학부모님을 학원에 초대하려면 초대 코드를 보내 주세요</span><b>초대 코드 →</b></a>` : '');
 }
 
@@ -2260,7 +2283,7 @@ function invitePage() {
   <section class="card" style="margin-top:16px">
     <div class="card-head"><h2>우리 학원 사람들</h2><span class="sub">${people.length}명</span></div>
     <div class="list">${people.map(p => `
-      <div class="li"><span class="av" style="background:var(--navy-700)">${esc(p.name[0])}</span><div class="t">${esc(p.name)}</div><div class="r"><span class="chip ${p.role === 'owner' ? 'info' : 'mute'}">${ROLE_NAMES[p.role]}</span></div></div>`).join('')}
+      <div class="li"><span class="av" style="background:${ROLE_COLOR[p.role] || 'var(--navy-700)'}">${esc(p.name[0])}</span><div class="t">${esc(p.name)}</div><div class="r"><span class="chip ${p.role === 'owner' ? 'info' : 'mute'}">${ROLE_NAMES[p.role]}</span></div></div>`).join('')}
     </div>
   </section>`;
 }
@@ -2343,9 +2366,9 @@ function studentDialog(s) {
     title: s ? '원생 정보 고치기' : '원생 추가', table: 'students', row: s, after: loadStudents, noDelete: ROLE !== 'owner',
     label: r => `${r.name} 학생을`, doneText: ROLE === 'teacher' ? '원생을 추가했어요 · 원장님 명단에도 바로 보여요' : undefined,
     fields: [
-      ['name', '이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초5', half: true }],
+      ['name', '이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초5', half: true, chips: GRADES }],
       ['class_name', '반', { max: 50, placeholder: '예: 초등 B반', half: true, chips: allClassNames().slice(0, 6) }],
-      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납·청구에서 수강료를 먼저 정해 두세요', half: true }],
+      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요', half: true }],
       ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
       ['memo', '메모', { max: 500 }]
     ]
@@ -2353,35 +2376,39 @@ function studentDialog(s) {
 }
 
 // 상담 카드 추가·수정
+// 눌러서 고르는 예시들 (직접 적어도 돼요)
+const GRADES = ['초1', '초2', '초3', '초4', '초5', '초6', '중1', '중2', '중3', '고1', '고2', '고3', '성인'];
+const SUBJECTS = ['영어', '수학', '국어', '과학', '사회', '논술', '코딩', '예체능'];
+const staffNames = () => REAL ? REAL.members.filter(m => m.role === 'teacher' || m.role === 'owner').map(m => m.name).filter(Boolean).slice(0, 8) : DATA.staff.map(x => x.name);
 const LEAD_SOURCES = ['네이버 플레이스', '인스타그램', '블로그', '재원생 추천', '전단지', '지자체·기관', '직접 방문', '전화', '기타'];
 function leadDialog(l) {
   formDialog({
     title: l ? '상담 정보 고치기' : '새 문의 추가', table: 'leads', row: l && l.raw, after: loadLeads,
     label: r => `${r.student_name} 학생 문의를`,
     fields: [
-      ['student_name', '학생 이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초3', half: true }],
-      ['want', '희망 반', { max: 50, placeholder: '예: 초등 A반', half: true }], ['source', '문의 경로', { type: 'select', options: LEAD_SOURCES, half: true }],
+      ['student_name', '학생 이름', { required: true, max: 50, half: true }], ['grade', '학년', { max: 20, placeholder: '예: 초3', half: true, chips: GRADES }],
+      ['want', '희망 반', { max: 50, placeholder: '예: 초등 A반', half: true, chips: REAL ? allClassNames().slice(0, 8) : [] }], ['source', '문의 경로', { type: 'select', options: LEAD_SOURCES, half: true }],
       ['parent_name', '학부모 이름', { max: 50, half: true }], ['parent_phone', '학부모 연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000', half: true }],
-      ['next_action', '다음 할 일', { max: 100, placeholder: '예: 상담 10/28 16:00' }],
+      ['next_action', '다음 할 일', { max: 100, placeholder: '예: 상담 10/28 16:00', chips: ['전화 상담하기', '방문 상담 예약', '레벨테스트 예약', '체험수업 예약', '체험 후 연락', '등록 안내 보내기'] }],
       ['memo', '메모', { max: 500 }],
       ['urgent', '오늘 꼭 연락해야 해요', { type: 'check' }]
     ]
   });
 }
 
-/* ---------- 실제 데이터: 학부모 공지 (Supabase notices · notice_reads) ---------- */
+/* ---------- 실제 데이터: 공지 (Supabase notices · notice_reads) ---------- */
 const noticeTo = n => n.target_class ? `${esc(n.target_class)} 가족` : '전체 학부모·학생';
 function realNoticesPage() {
   const list = REAL.notices;
   const add = `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`;
-  if (!list.length) return head('학부모 공지', '') + `
+  if (!list.length) return head('공지', '') + `
   <section class="card empty">
     <span class="tile-ic">${ic('chat')}</span>
     <h2>아직 보낸 공지가 없어요</h2>
-    <p class="muted">공지를 쓰면 학부모·학생 앱의 "학원 소식"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 가족에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
+    <p class="muted">공지를 쓰면 학부모·학생 앱의 "공지"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 가족에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
     ${add}
   </section>`;
-  return head('학부모 공지', '보낸 공지는 학부모·학생 앱 "학원 소식"에 올라가요. 제목을 누르면 누가 읽었는지 볼 수 있어요.', add) + `
+  return head('공지', '보낸 공지는 학부모·학생 앱 "공지"에 올라가요. 제목을 누르면 누가 읽었는지 볼 수 있어요.', add) + `
   <section class="card"><div class="list stack">
     ${list.map(n => {
       const st = REAL.noticeStats[n.id] || { total: 0, read: 0 };
@@ -2435,7 +2462,7 @@ function noticeDialog(n) {
 
 function noticesPage() {
   if (REAL) return realNoticesPage();
-  return head('학부모 공지', '공지를 보내면 학부모 앱에 알림이 가고, 누가 읽었는지 확인할 수 있어요.', `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`) + `
+  return head('공지', '공지를 보내면 학부모 앱에 알림이 가고, 누가 읽었는지 확인할 수 있어요.', `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`) + `
   <section class="card"><div class="list">
     ${DATA.notices.map(n => `
       <div class="li">
@@ -2512,8 +2539,8 @@ function jobDialog(j) {
     fields: [
       ['title', '공고 제목', { required: true, max: 100, placeholder: '예: 초등부 영어 강사 (파트타임)' }],
       ['academy_field', '학원 분야', { max: 30, chips: ACADEMY_FIELDS, placeholder: '아래 예시를 누르거나 직접 적어 주세요' }],
-      ['job_type', '근무 형태', { type: 'select', required: true, options: JOB_TYPES, value: '파트타임', half: true }], ['subject', '과목', { max: 50, placeholder: '예: 초등 영어', half: true }],
-      ['pay', '급여', { max: 50, placeholder: '예: 시급 2.2만 원', half: true }], ['hours', '근무 시간', { max: 50, placeholder: '예: 평일 15–20시', half: true }],
+      ['job_type', '근무 형태', { type: 'select', required: true, options: JOB_TYPES, value: '파트타임', half: true }], ['subject', '과목', { max: 50, placeholder: '예: 초등 영어', half: true, chips: SUBJECTS }],
+      ['pay', '급여', { max: 50, placeholder: '예: 시급 22,000원', half: true, chips: ['시급 협의', '월급 협의', '면접 후 결정'] }], ['hours', '근무 시간', { max: 50, placeholder: '예: 평일 15–20시', half: true, chips: ['평일 오후', '평일 저녁', '주말', '시간 협의'] }],
       ['area', '지역', { max: 100, value: REAL.academy.region || '', half: true }], ['due', '모집 마감', { type: 'date', half: true }],
       ['description', '하는 일 · 우대 사항', { max: 2000 }],
       ['status', '상태', { type: 'select', required: true, value: 'open', options: [['open', '모집 중'], ['closed', '마감']] }]
@@ -2559,19 +2586,19 @@ function applyJobDialog(j) {
     title: `${j.academy_name || ''} · ${j.title} 지원`, table: 'job_applications', academy: false, extra: { job_id: j.id }, after: loadJobBoard, okText: '지원하기',
     label: () => '지원서를', doneText: `${j.academy_name || '학원'}에 지원서를 보냈어요`,
     fields: [
-      ['career', '경력', { max: 200, placeholder: '예: 경력 3년 · 초등 영어 · 파닉스' }],
+      ['career', '경력', { max: 200, placeholder: '예: 경력 3년 · 초등 영어 · 파닉스', chips: ['신입', '경력 1~3년', '경력 3~5년', '경력 5년 이상'] }],
       ['phone', '연락처', { type: 'tel', max: 30, placeholder: '010-0000-0000' }],
       ['message', '원장님께 한마디', { max: 1000, placeholder: '예: 평일 오후 모두 가능해요.' }]
     ]
   });
 }
 
-// 원장: 내 제휴 신청
+// 원장: 내 제휴
 function realMyPartnersPage() {
   const list = REAL.partnerApps, open = list.filter(a => a.status !== 'closed'), teacher = ROLE === 'teacher';
   const review = teacher ? [] : list.filter(a => a.status === 'owner_review');
   const rows = teacher ? list : list.filter(a => a.status !== 'owner_review');
-  return head(teacher ? '내 제휴 신청' : '내 제휴', teacher ? '강사님이 올린 제휴 신청이에요. 원장님이 승인하면 센터로 넘어가고, 진행 상황이 여기에 보여요.' : '신청한 제휴의 진행 상황이에요. 강사님이 올린 신청은 원장님이 승인해야 센터로 넘어가요.') + (review.length ? `
+  return head(teacher ? '내 제휴' : '내 제휴', teacher ? '강사님이 올린 제휴 신청이에요. 원장님이 승인하면 센터로 넘어가고, 진행 상황이 여기에 보여요.' : '신청한 제휴의 진행 상황이에요. 강사님이 올린 신청은 원장님이 승인해야 센터로 넘어가요.') + (review.length ? `
   <section class="card" style="margin-bottom:16px">
     <div class="card-head"><h2>강사님이 올린 신청 ${review.length}건</h2><span class="sub">승인하면 센터가 제휴처와 연결해요</span></div>
     <div class="list stack">${review.map(a => `
@@ -2627,6 +2654,7 @@ function abroadOwnerPage() {
         <div><div class="t"><span class="nm-link" data-edit-ab="${r.id}" role="button" tabindex="0">${esc(r.parent_name)}</span> <span class="muted small">${esc([r.student_name, r.student_grade].filter(Boolean).join(' '))}</span></div>
           <div class="d">${esc(r.program)} · <a href="tel:${esc(r.phone)}" style="color:var(--blue-600)">${esc(r.phone)}</a> · ${md(r.created_at.slice(0, 10))} 신청</div>
           ${r.via_role === 'teacher' ? `<div class="d">${esc(r.via_name || '강사')} 선생님이 학부모님 대신 신청</div>` : ''}
+          ${r.contact_time ? `<div class="d">연락 받기 편한 시간: ${esc(r.contact_time)}</div>` : ''}
           ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}${r.owner_memo ? `<div class="d"><b>내 메모</b> ${esc(r.owner_memo)}</div>` : ''}${r.admin_memo ? `<div class="d"><b>센터 안내</b> ${esc(r.admin_memo)}</div>` : ''}</div>
         <div class="r"><span class="chip ${c}">${l}</span>${act}</div>
       </div>`;
@@ -2694,7 +2722,7 @@ function parentAbroadPage() {
   const active = promos.filter(p => p.active);
   const mine = REAL ? requests : requests.filter(r => r.parent_name === ME.name);
   const asked = id => mine.some(r => r.promo_id === id && r.status !== 'done');
-  return head('유학 프로그램', `${DATA.academy.name}에서 안내하는 유학 · 캠프 프로그램이에요. 상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투유학)과 연결해 드려요.`) +
+  return head('유학 상담', `${DATA.academy.name}에서 안내하는 유학 · 캠프 프로그램이에요. 상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투유학)과 연결해 드려요.`) +
     (active.length ? `<div class="grid3">${active.map(p => `
       <div class="perk">
         <span class="who">${esc(p.program)}${p.event_date ? ` · ${md(p.event_date)}` : ''}</span>
@@ -2722,7 +2750,7 @@ function abroadApplyDialog(promo) {
     fields: [
       ['program', '관심 프로그램', { type: 'select', required: true, options: ABROAD_PROGRAMS, value: promo ? promo.program : '', createOnly: true }],
       ['parent_name', '학부모 이름', { required: true, max: 50, value: ROLE === 'teacher' ? '' : PROFILE.name || '', half: true }], ['phone', '연락처', { type: 'tel', required: true, max: 30, placeholder: '010-0000-0000', half: true }],
-      ['student_name', '학생 이름', { max: 50, half: true }], ['student_grade', '학년', { max: 20, placeholder: '예: 초5', half: true }],
+      ['student_name', '학생 이름', { max: 50, half: true }], ['student_grade', '학년', { max: 20, placeholder: '예: 초5', half: true, chips: GRADES }],
       ['memo', ROLE === 'teacher' ? '학부모님이 궁금해하신 점' : '궁금한 점', { max: 1000, placeholder: '예: 처음 보내는 거라 안전이 걱정돼요.' }]
     ]
   });
@@ -2732,7 +2760,7 @@ function abroadApplyDialog(promo) {
 function teacherAbroadPage() {
   const { promos, requests } = abroadData();
   const active = promos.filter(p => p.active);
-  return head('유학 안내 · 상담', '원장님이 학부모 앱에 안내 중인 유학 프로그램이에요. 학부모님이 관심 있어 하시면 대신 상담을 신청해 주세요. 원장님이 확인한 뒤 센터가 인투유학 상담사와 연결해요.',
+  return head('유학 상담', '원장님이 학부모 앱에 안내 중인 유학 프로그램이에요. 학부모님이 관심 있어 하시면 대신 상담을 신청해 주세요. 원장님이 확인한 뒤 센터가 인투유학 상담사와 연결해요.',
     `<button class="btn primary" data-ab-apply="">${ic('plus')}학부모 대신 상담 신청</button>`) +
     (active.length ? `<div class="grid3">${active.map(p => `
       <div class="perk">
@@ -2782,7 +2810,7 @@ function kidSchedulePage() {
   return head('오늘 일정·숙제', `${c.name} · 다니는 학원 ${c.academies}곳`) + `
   <div class="grid2 even">
     <section class="card"><div class="card-head"><h2>오늘 일정</h2></div><div class="list">
-      ${c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('')}
+      ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
     </div></section>
     <section class="card"><div class="card-head"><h2>숙제</h2></div>${homeworkList()}</section>
   </div>`;
@@ -2811,14 +2839,14 @@ function kidBillsPage() {
 }
 
 function newsPage() {
-  return head('학원 소식', '학원에서 보낸 공지예요.') + `
+  return head('공지', '학원에서 보낸 공지예요.') + `
   <section class="card"><div class="list">
     ${DATA.notices.filter(n => n.to === '전체 학부모').concat([{ title: '10월 수강료 납부 안내', to: '하늘영어학원', at: '10/20' }]).map(n => `
       <div class="li"><span class="av" style="background:var(--blue-500)">${ic('chat')}</span><div><div class="t">${esc(n.title)}</div><div class="d">${n.at}</div></div><span></span></div>`).join('')}
   </div></section>`;
 }
 
-/* ---------- 실제 데이터: 학부모·학생 앱 (원장이 이어 준 아이의 출결 · 수납 · 학원 소식) ---------- */
+/* ---------- 실제 데이터: 학부모·학생 앱 (원장이 이어 준 아이의 출결 · 수납 · 공지) ---------- */
 let KID = null; // 보고 있는 아이 id (아이가 여럿이면 고를 수 있어요)
 const kidNow = () => REAL.kids.find(k => k.id === KID) || REAL.kids[0];
 const kidName = k => ROLE === 'student' ? '나' : `${esc(k.name)}`;
@@ -2832,12 +2860,12 @@ const noKid = () => `
 const unreadNotices = () => REAL.notices.filter(n => !REAL.reads.has(n.id));
 
 function kidAttendPage() {
-  if (!REAL.kids.length) return head(ROLE === 'student' ? '내 출결' : '출결', '') + noKid();
+  if (!REAL.kids.length) return head(ROLE === 'student' ? '출결' : '출결', '') + noKid();
   const k = kidNow();
   const rows = REAL.kidAttend.filter(a => a.student_id === k.id && a.day.startsWith(MONTH));
   const cnt = s => rows.filter(a => a.status === s).length;
   const came = rows.length - cnt('absent');
-  return head(ROLE === 'student' ? '내 출결' : `${kidName(k)} 출결`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''} · 선생님이 수업 중에 입력하면 바로 보여요.`) + kidPicker() + monthBar() + `
+  return head(ROLE === 'student' ? '출결' : `${kidName(k)} 출결`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''} · 선생님이 수업 중에 입력하면 바로 보여요.`) + kidPicker() + monthBar() + `
   <div class="stats">
     <div class="stat good"><span>출석률</span><b class="num">${rows.length ? Math.round(came / rows.length * 100) : 0}%</b></div>
     <div class="stat"><span>출석</span><b class="num">${cnt('present')}일</b></div>
@@ -2875,7 +2903,7 @@ function realKidBillsPage() {
 
 function realNewsPage() {
   const list = REAL.notices;
-  return head('학원 소식', `${esc(REAL.academy.name)}에서 보낸 공지예요. 열어 보면 학원에 "읽음"으로 표시돼요.`) + (list.length ? `
+  return head('공지', `${esc(REAL.academy.name)}에서 보낸 공지예요. 열어 보면 학원에 "읽음"으로 표시돼요.`) + (list.length ? `
   <section class="card"><div class="list">${list.map(n => {
     const fresh = !REAL.reads.has(n.id);
     return `
@@ -2895,7 +2923,7 @@ function newsDetail(id) {
   }
   return head(esc(n.title), `${esc(REAL.academy.name)} · ${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}`) + `
   <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
-  <a class="hint" href="#news">${ic('chat')}<span>다른 공지도 확인해 보세요</span><b>학원 소식 →</b></a>`;
+  <a class="hint" href="#news">${ic('chat')}<span>다른 공지도 확인해 보세요</span><b>공지 →</b></a>`;
 }
 
 // 학부모·학생 홈 "오늘 챙길 일"
@@ -3000,6 +3028,88 @@ async function loadVideoRefl(id) {
 const REQ_STATE = { new: ['crit', '새 신청'], contacted: ['warn', '연락함'], done: ['good', '완료'] };
 const REQ_NEXT = { new: ['contacted', '연락함으로'], contacted: ['done', '완료로'], done: ['new', '다시 열기'] };
 let reqFilter = 'all';
+/* ---------- 문의: 프로그램 쓰는 원장 · 강사 → 센터, 관리자가 답해요 (가입 전 문의는 첫 화면 #ask) ---------- */
+const INQ_CATS = ['사용 방법', '오류 신고', '비용 · 견적', '기능 제안', '계정 · 초대 코드', '기타'];
+const INQ_STATE = { new: ['warn', '답변 기다리는 중'], answered: ['good', '답변 완료'], closed: ['mute', '마무리'] };
+let INQS = null; // 내 문의 (원장 · 강사)
+async function loadMyInquiries() {
+  if (!USER) { INQS = []; return; }
+  const { data } = await SB.from('inquiries').select('*').eq('user_id', USER.id).order('created_at', { ascending: false });
+  INQS = data || [];
+}
+function helpPage() {
+  if (INQS === null) { loadMyInquiries().then(() => { if (location.hash === '#help') render(); }); }
+  const list = INQS || [];
+  return head('센터에 문의하기', '사용하다 막히는 곳, 오류, 바라는 기능을 학원지원센터 담당 매니저에게 보내요. 학원 이름과 역할이 함께 전달돼요. 평일 9:30~18:30, 보통 하루 안에 답해 드려요.') + `
+  <section class="card">
+    <form id="helpForm" class="help-form" novalidate>
+      <div class="f">무엇에 대한 문의인가요? *
+        <div class="pick-chips">${INQ_CATS.map((c, i) => `<button type="button" class="${i === 0 ? 'on' : ''}" data-inq-cat="${c}">${c}</button>`).join('')}</div>
+      </div>
+      <label class="f">내용 *<textarea name="msg" rows="4" maxlength="2000" placeholder="예: 청구서를 만들었는데 학부모 앱에 안 보여요."></textarea></label>
+      <label class="f">답을 받을 연락처 <span class="muted small">(비우면 프로그램 안에서만 답해 드려요)</span><input name="contact" type="tel" maxlength="30" placeholder="010-0000-0000"></label>
+      <p class="msg" id="helpMsg" hidden></p>
+      <div class="row-btns"><button class="btn primary">문의 보내기</button><a class="btn" href="#guide">전체 메뉴 안내 먼저 보기</a></div>
+    </form>
+  </section>
+  <h2 class="sec-title">내 문의 ${list.length}건</h2>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(q => { const [c, l] = INQ_STATE[q.status] || INQ_STATE.new; return `
+    <div class="li"><span class="av" style="background:var(--blue-50);color:var(--blue-600)">${ic('help')}</span>
+      <div><div class="t">${esc(q.category)} <span class="muted small">${md(q.created_at.slice(0, 10))} · 접수 번호 ${q.id.replace(/-/g, '').slice(0, 8).toUpperCase()}</span></div>
+        <div class="d pre">${esc(q.message)}</div>
+        ${q.answer ? `<div class="inq-ans"><b>센터 답변</b>${q.answered_at ? ` <span class="muted small">${md(q.answered_at.slice(0, 10))}</span>` : ''}<p>${esc(q.answer)}</p></div>` : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span></div></div>`; }).join('')}</div></section>`
+    : `<p class="muted">아직 보낸 문의가 없어요.</p>`}`;
+}
+async function sendInquiry(form) {
+  const msg = form.elements.msg.value.trim(), m = $('#helpMsg');
+  const fail = t => { m.textContent = t; m.hidden = false; };
+  if (!msg) return fail('문의 내용을 적어 주세요.');
+  const cat = (form.querySelector('[data-inq-cat].on') || {}).dataset?.inqCat || '기타';
+  if (!REAL) { toast('예시 계정에서는 보낼 수 없어요'); return; }
+  const btn = form.querySelector('button.primary'); btn.disabled = true;
+  const { data, error } = await SB.rpc('submit_inquiry', { p_name: null, p_contact: form.elements.contact.value.trim() || null, p_category: cat, p_message: msg, p_agreed: false });
+  btn.disabled = false;
+  if (error || !data) return fail('보내지 못했어요. 잠시 후 다시 시도해 주세요.');
+  await loadMyInquiries(); render(); toast(`문의를 보냈어요 · 접수 번호 ${data}`);
+}
+let inqFilter = 'new';
+function centerInquiriesPage() {
+  const all = CENTER.inquiries, list = all.filter(r => inqFilter === 'all' || r.status === inqFilter);
+  return head('문의', '첫 화면 "먼저 문의하기"(가입 전)와 프로그램 "센터에 문의하기"(원장 · 강사)로 들어온 문의예요. 눌러서 답변을 남기면 프로그램 쓰는 분은 바로 볼 수 있어요. 가입 전 문의는 연락처로 연락해 주세요.') + `
+  <div class="filters">${[['new', '새 문의'], ['answered', '답변 완료'], ['closed', '마무리'], ['all', '전체']].map(([k, l]) =>
+    `<button class="${k === inqFilter ? 'on' : ''}" data-inq-filter="${k}">${l} ${k === 'all' ? all.length : all.filter(r => r.status === k).length}</button>`).join('')}</div>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(q => { const [c, l] = INQ_STATE[q.status] || INQ_STATE.new; return `
+    <div class="li"><span class="av" style="background:${q.kind === 'guest' ? 'var(--warn)' : ROLE_COLOR[q.role] || 'var(--navy-700)'}">${esc((q.name || '?')[0])}</span>
+      <div><div class="t"><span class="nm-link" data-answer-inq="${q.id}" role="button" tabindex="0">${esc(q.name)}</span> <span class="chip ${q.kind === 'guest' ? 'warn' : 'info'}">${q.kind === 'guest' ? '가입 전' : `${esc(q.academy_name || '')} ${WHO[q.role] || ''}`.trim()}</span> <span class="muted small">${esc(q.category)} · ${md(q.created_at.slice(0, 10))}</span></div>
+        <div class="d pre">${esc(q.message)}</div>
+        ${q.contact ? `<div class="d"><a href="tel:${esc(q.contact)}" style="color:var(--blue-600)">${esc(q.contact)}</a></div>` : ''}
+        ${q.answer ? `<div class="inq-ans"><b>답변</b><p>${esc(q.answer)}</p></div>` : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span><button class="btn sm ${q.status === 'new' ? 'primary' : ''}" data-answer-inq="${q.id}">${q.status === 'new' ? '답변하기' : '고치기'}</button></div></div>`; }).join('')}</div></section>`
+    : `<section class="card empty"><span class="tile-ic">${ic('help')}</span><h2>여기에 해당하는 문의가 없어요</h2></section>`}`;
+}
+function answerInquiryDialog(q) {
+  const d = dialogEl();
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="ansForm" novalidate>
+    <h2>${esc(q.name)} 님 문의</h2>
+    <p class="pf-msg" style="white-space:pre-wrap">${esc(q.message)}</p>
+    <label class="f">답변<textarea name="answer" rows="5" maxlength="2000" placeholder="${q.kind === 'guest' ? '예: 10/27 전화로 안내드림 · 견적 메일 발송' : '프로그램 문의하기 화면에 그대로 보여요'}">${esc(q.answer || '')}</textarea></label>
+    <label class="f">상태<select name="status">${Object.entries(INQ_STATE).map(([k, [, l]]) => `<option value="${k}" ${k === (q.status === 'new' ? 'answered' : q.status) ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <p class="msg" id="ansMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="ansCancel">취소</button><button class="btn primary">저장</button></div>
+  </form>`;
+  d.showModal();
+  $('#ansCancel').onclick = () => d.close();
+  $('#ansForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements;
+    const { error } = await SB.rpc('answer_inquiry', { p_id: q.id, p_answer: el.answer.value, p_status: el.status.value });
+    if (error) { const m = $('#ansMsg'); m.textContent = '저장하지 못했어요.'; m.hidden = false; return; }
+    d.close(); await loadCenter(); render(); toast('답변을 저장했어요');
+  };
+}
+
 function centerRequestsPage() {
   const all = CENTER.requests, list = all.filter(r => reqFilter === 'all' || r.status === reqFilter);
   return head('지원 신청', '첫 화면 "지원받기"에서 학원이 보낸 신청이에요. 연락하면 상태를 바꿔 두세요. 학원 이름을 누르면 메모를 남길 수 있어요.') + `
@@ -3163,7 +3273,7 @@ const MK_NEXT = { new: ['contacted', '연결함으로'], contacted: ['working', 
 let mkFilter = 'all';
 function centerPromoPage() {
   const all = CENTER.promoReqs, list = all.filter(r => mkFilter === 'all' || r.status === mkFilter);
-  return head('홍보 의뢰', '원장님이 맡긴 홍보 작업이에요. 인투마케팅 담당자에게 넘기고 단계를 바꿔 주면 원장님 "의뢰 현황"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
+  return head('홍보 의뢰', '원장님이 맡긴 홍보 작업이에요. 인투마케팅 담당자에게 넘기고 단계를 바꿔 주면 원장님 "내 의뢰"에 그대로 보여요. 학원 이름을 누르면 안내를 남길 수 있어요.') +
     filterBar(all, Object.fromEntries(Object.entries(MK_STATE).map(([k, [, l]]) => [k, l])), mkFilter, 'mk-filter') + (list.length ? `
   <section class="card"><div class="list stack">${list.map(r => {
     const next = MK_NEXT[r.status];
@@ -3201,6 +3311,8 @@ const centerTodo = () => {
   const fresh = CENTER.requests.filter(r => r.status === 'new');
   const items = fresh.slice(0, 3).map(r => [`${esc(r.academy_name)} 지원 신청 연락하기`, `${esc(r.owner_name)} 원장님 · ${(r.needs || []).map(esc).join(' · ')}`, '#center/requests', '<span class="chip crit">새 신청</span>']);
   if (fresh.length > 3) items.push([`새 신청 ${fresh.length - 3}건 더 있어요`, '지원 신청에서 모두 보기', '#center/requests', '']);
+  const iq = CENTER.inquiries.filter(q => q.status === 'new');
+  if (iq.length) items.push([`새 문의 ${iq.length}건에 답하기`, iq.slice(0, 3).map(q => `${esc(q.name)} · ${esc(q.category)}`).join(' / '), '#center/inquiries', '<span class="chip crit">새 문의</span>']);
   const pa = CENTER.partnerApps.filter(a => a.status === 'new').length;
   if (pa) items.push([`새 제휴 신청 ${pa}건`, '제휴처와 연결해 주세요', '#center/partners', '<span class="chip crit">새 신청</span>']);
   const ab = CENTER.abroad.filter(r => r.status === 'forwarded').length;
@@ -3216,11 +3328,12 @@ const centerTodo = () => {
 };
 
 const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 홍보 의뢰 · 관리자',
-  stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
+  stat: () => `새 신청 ${CENTER.inquiries.filter(r => r.status === 'new').length + CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
   subs: {
     videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 이수 현황', stat: () => `영상 ${CENTER.videos.length}개 · 이수 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}건`,
       render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
     requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
+    inquiries: { name: '문의', icon: 'help', desc: '가입 전 문의 · 프로그램 쓰는 분 문의에 답하기', stat: () => `새 문의 ${CENTER.inquiries.filter(r => r.status === 'new').length}건`, render: centerInquiriesPage },
     partners: { name: '제휴 신청', icon: 'handshake', desc: '원장님이 신청한 제휴 연결', stat: () => `새 신청 ${CENTER.partnerApps.filter(a => a.status === 'new').length}건`, render: centerPartnersPage },
     abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
     promo: { name: '홍보 의뢰', icon: 'megaphone', desc: '원장님 홍보 작업을 인투마케팅에 연결', stat: () => `새 의뢰 ${CENTER.promoReqs.filter(r => r.status === 'new').length}건`, render: centerPromoPage },
@@ -3232,7 +3345,7 @@ function applicantStat() {
   return `새 지원자 ${REAL.applicants.filter(a => a.status === 'applied').length}명`;
 }
 function attendStat() {
-  if (!REAL) { const s = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]); return `오늘 ${s[0]}/${s[1]}명`; }
+  if (!REAL) { const s = DATA.attendance.reduce((a, c) => [a[0] + c.present, a[1] + c.total], [0, 0]); return DATA.attendance.length ? `오늘 ${s[0]}/${s[1]}명` : '오늘은 수업 없는 날'; }
   const { day, map } = REAL.attend;
   return `${day === TODAY ? '오늘' : md(day)} 출석 ${Object.values(map).filter(s => s === 'present' || s === 'late').length}/${REAL.students.length}명`;
 }
@@ -3241,24 +3354,31 @@ function attendStat() {
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
+// 예시 계정의 "오늘"도 실제 오늘에 맞춰요: 오늘 요일에 수업이 있는 반만 출결에, 아이 일정도 오늘 요일 것만 (일요일엔 수업 없음)
+DATA.today = todayText();
+(() => {
+  const wd = day0(TODAY).getDay(), tt = DATA.timetable.filter(t => t.weekday === wd);
+  DATA.attendance = tt.map(t => ({ ...(DATA.attendance.find(c => c.cls === t.class_name) || { total: 10, present: 10, absent: 0 }), cls: t.class_name, time: t.start_time, teacher: t.teacher_name }));
+  DATA.child.today = DATA.child.week.filter(x => x.days.includes(wd));
+})();
 const MESSAGES_AREA = { name: '메신저', icon: 'chat', desc: '친구 추가하고 1:1 · 그룹 채팅', stat: () => { const n = msgUnread(); return n ? `안 읽은 메시지 ${n}개` : `대화 ${convsData().length}개`; },
   render: messagesPage, detail: chatPage, title: id => { const c = convsData().find(x => x.id === id); return c ? convName(c) : ''; } };
 const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
-const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
+const SCHEDULE_AREA = { name: '일정·시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
     admin: { name: '행정 지원', icon: 'shield', desc: '출결·수납·재정·서류 처리를 한곳에서',
       stat: () => REAL ? `서류 마감 2주 안 ${REAL.paperwork.filter(p => p.status !== 'done' && p.due && dday(p.due) <= 14).length}건 · 미납 ${REAL.invoices.filter(i => !i.paid_at).length}건` : `행정 마감 D-0 · 미납 ${DATA.unpaid.length}건`,
       subs: {
-        attend: { name: '출결 관리', icon: 'attend', desc: '반별 출석 체크와 결석 확인', stat: attendStat, render: attendPage },
-        billing: { name: '수납·청구', icon: 'card', desc: '청구서 만들기와 미납 안내', stat: () => REAL ? `${+MONTH.slice(5)}월 미납 ${REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).length}건` : `미납 ${DATA.unpaid.filter(u => !u.sent).length}건`, render: billingPage },
+        attend: { name: '출결', icon: 'attend', desc: '반별 출석 체크와 결석 확인', stat: attendStat, render: attendPage },
+        billing: { name: '수납', icon: 'card', desc: '청구서 만들기와 미납 안내', stat: () => REAL ? `${+MONTH.slice(5)}월 미납 ${REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).length}건` : `미납 ${DATA.unpaid.length}건`, render: billingPage },
         finance: { name: '재정', icon: 'chart', desc: '기간별 매출 · 지출 · 순이익', stat: () => {
           if (!REAL) return `이번 달 +${won((DATA.finance.income - DATA.finance.expense) * 1e4)}`;
           const m = TODAY.slice(0, 7), t = finTotals(ledger().filter(e => e.day.startsWith(m)));
           return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
-        approvals: { name: '결재함', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvData().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
+        approvals: { name: '결재', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvData().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
         paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage }
       } },
     teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · ${applicantStat()}`,
@@ -3267,14 +3387,14 @@ const AREAS = {
         training: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 · 나와 강사 리플렉션', stat: () => `영상 ${DATA.training.length}개`, render: trainingPage, detail: id => trainingDetail(id, 'teachers/training') },
         hire: { name: '강사 채용', icon: 'brief', desc: '공고 올리기와 지원자 관리', stat: applicantStat, render: hirePage }
       } },
-    members: { name: '학생·학부모 관리', icon: 'users', desc: '상담·등록부터 원생 명단, 학부모 공지까지', stat: () => `새 문의 ${DATA.leads.filter(l => l.stage === 'inquiry').length}건`,
+    members: { name: '학생·학부모 관리', icon: 'users', desc: '상담·등록부터 원생 명단, 공지까지', stat: () => `새 문의 ${DATA.leads.filter(l => l.stage === 'inquiry').length}건`,
       subs: {
         leads: { name: '상담·등록', icon: 'leads', desc: '문의 → 상담 → 체험수업 → 등록', stat: () => `진행 중 ${DATA.leads.filter(l => l.stage !== 'enrolled').length}명`, render: leadsPage },
         students: { name: '원생 명단', icon: 'users', desc: '학생·학부모 연락처, 출석, 수납', stat: () => `원생 ${DATA.academy.students}명`, render: studentsPage },
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
-        todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
+        todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
         reports: REPORT_AREA,
-        notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
+        notices: { name: '공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
     messages: MESSAGES_AREA,
@@ -3291,26 +3411,26 @@ const AREAS = {
     promo: { name: '홍보 지원', icon: 'megaphone', desc: '블로그·디자인·영상을 인투마케팅이 지원', stat: () => `진행 중 의뢰 ${promoOpen()}건`,
       subs: {
         services: { name: '홍보 서비스', icon: 'megaphone', desc: '블로그 · 디자인 · 영상 · SNS 광고', stat: () => '인투마케팅 연결', render: servicesPage },
-        requests: { name: '의뢰 현황', icon: 'check', desc: '맡긴 작업의 진행 상황', stat: () => `진행 중 ${promoOpen()}건`, render: requestsPage }
+        requests: { name: '내 의뢰', icon: 'check', desc: '맡긴 작업의 진행 상황', stat: () => `진행 중 ${promoOpen()}건`, render: requestsPage }
       } }
   },
   teacher: {
-    attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
+    attend: { name: '출결', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
     students: { name: '원생 명단', icon: 'users', desc: '원생 추가 · 정보 고치기', stat: () => `원생 ${REAL ? REAL.students.length : DATA.academy.students}명`, render: studentsPage },
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
-    todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
+    todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
     reports: REPORT_AREA,
     library: LIBRARY_AREA,
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
-    jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
-    approvals: { name: '결재 요청', icon: 'check', desc: '물품 · 비용을 원장님께 결재받기', stat: () => { const n = apvData().filter(a => a.status === 'pending').length; return n ? `결재 대기 ${n}건` : `올린 결재 ${apvData().length}건`; }, render: approvalsTeacherPage },
+    jobs: { name: '강사 채용', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
+    approvals: { name: '결재', icon: 'check', desc: '물품 · 비용을 원장님께 결재받기', stat: () => { const n = apvData().filter(a => a.status === 'pending').length; return n ? `결재 대기 ${n}건` : `올린 결재 ${apvData().length}건`; }, render: approvalsTeacherPage },
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '학부모님께 설명할 제휴 · 유학 안내, 신청은 원장님 확인 뒤 센터로', stat: () => REAL ? `내 신청 ${REAL.partnerApps.length + REAL.abroad.requests.length}건` : `제휴처 ${DATA.partners.length}곳`,
       subs: {
         partners: { name: '제휴처 둘러보기', icon: 'handshake', desc: '유학 · 캠프 · 어학연수와 그 밖의 제휴', stat: () => `${DATA.partners.length}곳`, render: partnersPage },
-        abroad: { name: '유학 안내 · 상담', icon: 'globe', desc: '학부모님께 안내 · 대신 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: teacherAbroadPage },
-        mine: { name: '내 제휴 신청', icon: 'check', desc: '올린 신청과 원장님 확인 결과', stat: () => REAL ? `${REAL.partnerApps.length}건` : '0건', render: myPartnersPage }
+        abroad: { name: '유학 상담', icon: 'globe', desc: '학부모님께 안내 · 대신 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: teacherAbroadPage },
+        mine: { name: '내 제휴', icon: 'check', desc: '올린 신청과 원장님 확인 결과', stat: () => REAL ? `${REAL.partnerApps.length}건` : '0건', render: myPartnersPage }
       } },
     promo: null // 아래에서 원장 홍보 지원을 같이 써요
   },
@@ -3323,18 +3443,18 @@ const AREAS = {
         bills: { name: '수납', icon: 'card', desc: '학원별 수강료 결제', stat: () => { const n = DATA.child.bills.filter(b => !b.paid).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: kidBillsPage }
       } },
     schedule: SCHEDULE_AREA,
-    news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
+    news: { name: '공지', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
     messages: MESSAGES_AREA,
     library: LIBRARY_AREA,
-    abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
+    abroad: { name: '유학 상담', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
   student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, messages: MESSAGES_AREA, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
 };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
-// 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 학원 소식
+// 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 공지
 const kidStat = () => REAL.kids.length ? REAL.kids.map(k => esc(k.name)).join(' · ') : '아이 연결 전';
-const newsArea = { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
+const newsArea = { name: '공지', icon: 'chat', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
   render: realNewsPage, detail: newsDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title };
 const FAMILY_AREAS = {
   parent: {
@@ -3355,7 +3475,7 @@ const FAMILY_AREAS = {
     todos: { name: '오늘 할 일', icon: 'check', desc: '학원 · 부모님이 정한 할 일 체크하기', stat: todoStat, render: todosPage },
     schedule: SCHEDULE_AREA,
     reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' },
-    attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
+    attend: { name: '출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea,
     messages: MESSAGES_AREA,
     library: LIBRARY_AREA
@@ -3479,7 +3599,7 @@ const NAV_GROUPS = {
   owner: [['학원 운영', '출결 · 돈 · 서류 · 학생 · 일정', ['admin', 'members', 'schedule']], ['강사 · 소통', '강사 교육 · 채용 · 메신저 · 자료', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
   teacher: [['수업', '출결 · 원생 · 할 일 · 리포트 · 시간표', ['attend', 'students', 'todos', 'reports', 'schedule']], ['소통 · 자료', '메신저 · 자료실 · 결재', ['messages', 'library', 'approvals']], ['나의 성장 · 지원', '교육 · 채용 · 제휴 · 홍보', ['learn', 'jobs', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
-  student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '학원 소식 · 메신저 · 자료실', ['news', 'messages', 'library', 'center']]],
+  student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 메신저 · 자료실', ['news', 'messages', 'library', 'center']]],
   admin: [['센터', '센터 관리 · 메신저', ['center', 'messages']]]
 };
 // 지금 메뉴(MY)에 있는 것만, 어느 묶음에도 없는 메뉴는 마지막 묶음 뒤에
@@ -3529,13 +3649,13 @@ function startSteps() {
   if (ROLE === 'teacher') return [
     ['원생 명단 확인하기', '새 학생은 직접 추가할 수 있어요', '#students', d || (REAL && REAL.students.length > 0)],
     ['오늘 출결 입력하기', '수업 중에 이름만 누르면 돼요', '#attend', !d && Object.keys(REAL.attend.map).length > 0],
-    ['학생 할 일 주기', '반 전체나 한 명에게 오늘 할 일을 줘요', '#todos', !d && REAL.todos.length > 0],
+    ['오늘 할 일 주기', '반 전체나 한 명에게 오늘 할 일을 줘요', '#todos', !d && REAL.todos.length > 0],
     ['강사 교육 영상 보기', '보고 리플렉션을 쓰면 이수 완료예요', '#learn', !d && DATA.training.some(t => t.myRefl)],
     ['메신저 친구 추가하기', '원장님 · 학부모님과 이야기해요', '#messages', !d && fr()]
   ];
   if (ROLE === 'parent') return [
     ['아이 연결 확인하기', '원장님이 연결해 주면 아이 이름이 보여요', '#kid', d || (REAL && REAL.kids.length > 0)],
-    ['학원 소식 읽기', '공지를 읽으면 원장님이 확인할 수 있어요', '#news', !d && REAL.reads.size > 0],
+    ['공지 읽기', '공지를 읽으면 원장님이 확인할 수 있어요', '#news', !d && REAL.reads.size > 0],
     ['오늘 할 일 보기', '학원 · 부모님이 정한 할 일을 함께 봐요', '#kid/todos', !d && REAL.todos.length > 0],
     ['선생님과 메신저', '친구 추가로 선생님을 찾아 인사해 보세요', '#messages', !d && fr()]
   ];
@@ -3553,14 +3673,15 @@ function startGuide() {
   const done = steps.filter(x => x[3]).length;
   if (done === steps.length) return '';
   const next = steps.findIndex(x => !x[3]);
+  // 급한 일이 먼저 보이도록 홈에서 아래쪽에 두고, 휴대폰에선 접어 둬요 (누르면 펼쳐져요)
   return `
-  <section class="card start-guide">
-    <div class="card-head"><h2>처음이세요? 이렇게 시작해요</h2><span class="sub">${done}/${steps.length} 완료</span></div>
+  <details class="card start-guide" ${window.innerWidth > 760 ? 'open' : ''}>
+    <summary class="card-head"><h2>처음이세요? 이렇게 시작해요</h2><span class="sub">${done}/${steps.length} 완료 · 다음: ${steps[next][0]}</span><i class="sg-tg" aria-hidden="true"></i></summary>
     <div class="sg-bar"><span style="width:${done / steps.length * 100}%"></span></div>
     <ol class="sg-steps">${steps.map(([t, dsc, href, ok], i) => `
       <li class="${ok ? 'done' : i === next ? 'next' : ''}"><a href="${href}"><span class="n">${ok ? '✓' : i + 1}</span><span><b>${t}</b><small>${dsc}</small></span>${i === next ? '<span class="chip info">다음 할 일</span>' : ''}</a></li>`).join('')}</ol>
     <div class="row-btns"><a class="btn sm" href="#guide">전체 메뉴 한눈에 보기</a><button class="btn sm" data-act="hideGuide">안내 숨기기</button></div>
-  </section>`;
+  </details>`;
 }
 // 전체 메뉴 안내: 묶음 → 메뉴 → 세부를 한 화면에, 무엇을 할 수 있는지 한 줄씩
 function guidePage() {
@@ -3590,19 +3711,38 @@ function searchMenus(q) {
   });
   return out.slice(0, 8);
 }
+// 학생 · 반 · 상담 학생 찾기 (원장 · 강사) — 누르면 원생 명단이 그 이름으로 걸러져요
+const stuPath = () => ROLE === 'owner' ? 'members/students' : ROLE === 'teacher' ? 'students' : null;
+function searchPeople(q) {
+  q = q.trim(); const path = stuPath();
+  if (!q || !path) return [];
+  const studs = REAL ? REAL.students.map(s => [s.name, s.class_name, s.grade, s.parent_name, s.parent_phone]) : DATA.students.map(s => [s.name, s.cls, s.grade, s.parent, s.phone]);
+  const out = [];
+  const classes = [...new Set(studs.map(x => x[1]).filter(Boolean))].filter(c => c.includes(q));
+  classes.slice(0, 3).forEach(c => out.push([`#${path}`, c, `반 · 학생 ${studs.filter(x => x[1] === c).length}명`, 'users', c]));
+  studs.filter(x => [x[0], x[3], x[4]].some(v => String(v || '').includes(q))).slice(0, 5)
+    .forEach(([n, c, g, pn]) => out.push([`#${path}`, n, [g, c, pn ? `학부모 ${pn}` : ''].filter(Boolean).join(' · '), 'grad', n]));
+  if (ROLE === 'owner') DATA.leads.filter(l => String(l.name).includes(q)).slice(0, 3)
+    .forEach(l => out.push(['#members/leads', l.name, `상담 · ${l.grade || ''} ${l.want || ''}`.trim(), 'leads', '']));
+  return out;
+}
 (function bindSearch() {
   const inp = document.querySelector('.search input');
   if (!inp) return;
-  inp.placeholder = '메뉴 찾기 (예: 청구, 시간표, 메신저)';
   const pop = document.createElement('div'); pop.className = 'bell-pop search-pop'; pop.hidden = true; inp.parentNode.appendChild(pop);
+  const link = ([h, t, d, i, q]) => `<a href="${h}" ${q !== undefined ? `data-sq="${esc(q)}"` : ''}>${ic(i)}<span><b>${esc(t)}</b><small>${esc(d)}</small></span></a>`;
   const draw = () => {
-    const r = searchMenus(inp.value);
+    const people = searchPeople(inp.value), r = searchMenus(inp.value);
     pop.hidden = !inp.value.trim();
-    pop.innerHTML = r.length ? r.map(([h, t, d, i]) => `<a href="${h}">${ic(i)}<span><b>${esc(t)}</b><small>${esc(d)}</small></span></a>`).join('') : '<p class="muted small">찾는 메뉴가 없어요. "전체 메뉴 안내"에서 둘러보세요.</p><a href="#guide">' + ic('star') + '<span><b>전체 메뉴 안내</b></span></a>';
+    pop.innerHTML = people.length || r.length
+      ? (people.length ? `<b class="bp-title">학생 · 반</b>${people.map(link).join('')}` : '') + (r.length ? `<b class="bp-title">메뉴</b>${r.map(link).join('')}` : '')
+      : `<p class="muted small">찾는 ${stuPath() ? '학생 · 반 · ' : ''}메뉴가 없어요. "전체 메뉴 안내"에서 둘러보세요.</p><a href="#guide">${ic('star')}<span><b>전체 메뉴 안내</b></span></a>`;
   };
+  // 학생 · 반을 고르면 원생 명단을 그 이름으로 걸러서 열어요
+  const go = a => { if (a.dataset.sq !== undefined) STU_Q = a.dataset.sq; inp.value = ''; pop.hidden = true; inp.blur(); if (location.hash === a.getAttribute('href')) render(); else location.hash = a.getAttribute('href'); };
   inp.oninput = draw; inp.onfocus = draw;
-  inp.onkeydown = e => { if (e.key === 'Enter') { const a = pop.querySelector('a'); if (a) { location.hash = a.getAttribute('href'); inp.value = ''; pop.hidden = true; inp.blur(); } } if (e.key === 'Escape') { pop.hidden = true; inp.blur(); } };
-  pop.onclick = e => { if (e.target.closest('a')) { inp.value = ''; pop.hidden = true; } };
+  inp.onkeydown = e => { if (e.key === 'Enter') { const a = pop.querySelector('a'); if (a) go(a); } if (e.key === 'Escape') { pop.hidden = true; inp.blur(); } };
+  pop.onclick = e => { const a = e.target.closest('a'); if (a) { e.preventDefault(); go(a); } };
   document.addEventListener('click', e => { if (!e.target.closest('.search')) pop.hidden = true; });
 })();
 
@@ -3622,6 +3762,71 @@ function tiles() {
   return gs.map(([label, desc, ids]) => `<div class="tile-group"><h3>${label}<span>${desc}</span></h3><div class="tiles">${ids.map(id => tile(id, MY[id])).join('')}</div></div>`).join('');
 }
 
+/* ---------- 홈 "자주 쓰는 메뉴": 원하는 세부 화면을 홈에서 바로 (편집은 이 기기에 저장 · localStorage asc-fav-역할) ---------- */
+const FAV_DEFAULT = {
+  owner: ['admin/attend', 'admin/billing', 'members/students', 'members/leads', 'messages', 'schedule'],
+  teacher: ['attend', 'students', 'todos', 'messages', 'schedule', 'approvals'],
+  parent: ['kid/todos', 'kid/schedule', 'kid/attend', 'kid/bills', 'news', 'messages'],
+  student: ['todos', 'schedule', 'news', 'messages'],
+  admin: ['center/requests', 'center/inquiries', 'center/videos', 'messages']
+};
+// 고를 수 있는 모든 메뉴: [경로, 이름, 아이콘, 위 메뉴 이름]
+function allMenus() {
+  const out = [];
+  Object.entries(MY || {}).forEach(([id, a]) => {
+    if (!a) return;
+    if (!a.subs) out.push([id, a.name, a.icon, '']);
+    else Object.entries(a.subs).forEach(([sid, x]) => out.push([`${id}/${sid}`, x.name, x.icon, a.name]));
+  });
+  return out;
+}
+const favKey = () => `asc-fav-${ROLE}${USER ? `-${USER.id.slice(0, 8)}` : ''}`;
+function favPaths() {
+  const all = allMenus().map(m => m[0]);
+  let list = null;
+  try { list = JSON.parse(localStorage.getItem(favKey()) || 'null'); } catch (e) { list = null; }
+  return (list || FAV_DEFAULT[ROLE] || []).filter(p => all.includes(p)).slice(0, 8);
+}
+function favCard() {
+  if (SEEKER) return '';
+  const all = allMenus(), list = favPaths().map(p => all.find(m => m[0] === p));
+  return `
+  <section class="card fav">
+    <div class="card-head"><h2>자주 쓰는 메뉴</h2><button class="btn sm" data-act="editFav">${ic('pen')}바꾸기</button></div>
+    ${list.length ? `<div class="fav-grid">${list.map(([p, n, i, up]) => `<a href="#${p}"><span class="tile-ic">${ic(i)}</span><b>${n}${ndot(p.split('/')[0])}</b>${up ? `<small>${up}</small>` : ''}</a>`).join('')}</div>`
+      : '<p class="muted" style="margin:0">"바꾸기"를 눌러 홈에 둘 메뉴를 골라 주세요.</p>'}
+  </section>`;
+}
+function favDialog() {
+  const d = dialogEl(), cur = favPaths(), all = allMenus();
+  const groups = {};
+  all.forEach(m => (groups[m[3] || '바로 열리는 메뉴'] ||= []).push(m));
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="favForm">
+    <h2>자주 쓰는 메뉴 고르기</h2>
+    <p class="muted small" style="margin:-6px 0 0">홈 맨 위에 둘 메뉴를 최대 8개까지 골라요. 이 기기에 저장돼요.</p>
+    <div class="fav-pick">${Object.entries(groups).map(([g, ms]) => `<fieldset><legend>${g}</legend>${ms.map(([p, n, i]) => `<label><input type="checkbox" value="${p}" ${cur.includes(p) ? 'checked' : ''}>${ic(i)}<span>${n}</span></label>`).join('')}</fieldset>`).join('')}</div>
+    <p class="msg" id="favMsg" hidden></p>
+    <div class="acts"><button type="button" class="btn" id="favReset">처음대로</button><span style="flex:1"></span><button type="button" class="btn" id="favCancel">취소</button><button class="btn primary">저장</button></div>
+  </form>`;
+  d.showModal();
+  const save = v => { try { if (v) localStorage.setItem(favKey(), JSON.stringify(v)); else localStorage.removeItem(favKey()); } catch (e) { /* 저장 못 해도 이번엔 바뀌어요 */ } };
+  d.querySelectorAll('.fav-pick input').forEach(c => c.onchange = () => {
+    const n = d.querySelectorAll('.fav-pick input:checked').length;
+    if (n > 8) { c.checked = false; const m = $('#favMsg'); m.textContent = '최대 8개까지 고를 수 있어요.'; m.hidden = false; }
+  });
+  $('#favCancel').onclick = () => d.close();
+  $('#favReset').onclick = () => { save(null); d.close(); render(); toast('처음 메뉴로 되돌렸어요'); };
+  $('#favForm').onsubmit = e => {
+    e.preventDefault();
+    // 고른 순서는 메뉴 순서대로
+    save([...d.querySelectorAll('.fav-pick input:checked')].map(c => c.value));
+    d.close(); render(); toast('자주 쓰는 메뉴를 바꿨어요');
+  };
+}
+
+// 예시 강사(김민지)가 오늘 맡은 반
+const myDemoClassesToday = () => DATA.attendance.filter(c => c.teacher === ME.name);
 function todo(items) {
   return `<section class="card todo"><div class="card-head"><h2>오늘 챙길 일</h2><span class="sub">${items.length}건</span></div><div class="list">
     ${items.map(([t, d, href, chip]) => `
@@ -3631,56 +3836,59 @@ function todo(items) {
 
 function home() {
   if (ROLE === 'admin') {
-    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · 학원지원센터 본부 화면이에요.`) + todo(centerTodo()) +
+    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · 학원지원센터 본부 화면이에요.`) + todo(centerTodo()) + favCard() +
       `<h2 class="sec-title">센터 관리</h2>` + subTiles('center', CENTER_AREA) +
       `<a class="hint" href="#" data-act="pickRole">${ic('users')}<span>원장·강사로 학원 프로그램도 쓰시려면 학원을 연결해 주세요</span><b>학원 연결하기 →</b></a>`;
   }
   if (ROLE === 'owner') {
     const urgent = DATA.leads.filter(l => l.urgent).length;
-    return head(`안녕하세요, ${ME.name} 원장님`, `${DATA.today} · 할 일을 "학원 운영 · 강사·소통 · 센터 지원" 세 묶음으로 정리했어요.`) + startGuide() +
+    // 급한 일 → 자주 쓰는 메뉴 → 처음 안내(휴대폰에선 접힘) → 전체 메뉴
+    return head(`안녕하세요, ${ME.name} 원장님`, `${DATA.today} · 할 일을 "학원 운영 · 강사·소통 · 센터 지원" 세 묶음으로 정리했어요.`) +
       todo(REAL ? realOwnerTodo() : [
         ['강사 채용 통보 서류 제출', '교육청 · 서식이 미리 채워져 있어요', '#admin/paper', '<span class="chip crit">D-0</span>'],
         [`새 문의 ${urgent}건에 전화하기`, '네이버 플레이스 · 전단지', '#members/leads', '<span class="chip crit">오늘</span>'],
         ['설명회 전단지 시안 확인', '인투마케팅 · 디자인 지원', '#promo/requests', '<span class="chip warn">확인 필요</span>'],
         [`김민지 강사 교육 미이수 ${DATA.training.filter(t => t.status['김민지'] !== 'done').length}건`, '센터 교육 영상 · 가장 빠른 마감 10/31', '#teachers/training', '<span class="chip mute">알림 보내기</span>']
-      ]) + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
+      ]) + favCard() + startGuide() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
   }
   if (ROLE === 'teacher') {
     const left = DATA.training.filter(t => t.status[ME.name] !== 'done');
-    return head(`${ME.name} 선생님, 안녕하세요`, `${DATA.today} · ${DATA.academy.name}${REAL ? '' : ' 초등 A·B반'}`) + startGuide() +
+    return head(`${ME.name} 선생님, 안녕하세요`, `${DATA.today} · ${DATA.academy.name}${REAL ? '' : ' 초등 A·B반'}`) +
       todo(left.slice(0, 2).map(t => [t.title, `센터 교육 영상 · ${t.len}`, `#learn/${t.id}`, `<span class="chip warn">마감 ${t.due}</span>`])
         .concat(apvData().filter(a => a.status !== 'pending' && a.decided_at && dday(a.decided_at.slice(0, 10)) >= -3).slice(0, 2)
           .map(a => [`결재 ${APV_STATE[a.status][1]}: ${esc(a.title)}`, a.owner_comment ? esc(a.owner_comment) : '원장님이 결재했어요', '#approvals', `<span class="chip ${APV_STATE[a.status][0]}">${APV_STATE[a.status][1]}</span>`]))
         .concat(REAL ? scheduleTodo() : [])
-        .concat([['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : '초등 B반 17:00 · 수업 중에 입력해 주세요', '#attend', '<span class="chip info">오늘</span>']])) +
-      `<h2 class="sec-title">바로 가기</h2>` + tiles();
+        .concat(REAL || myDemoClassesToday().length ? [['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : `${myDemoClassesToday().map(c => `${c.cls} ${c.time}`).join(' · ')} · 수업 중에 입력해 주세요`, '#attend', '<span class="chip info">오늘</span>']] : [['오늘은 수업이 없어요', '다음 수업은 시간표에서 확인해요', '#schedule', '<span class="chip good">쉬는 날</span>']])) +
+      favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (REAL && (ROLE === 'parent' || ROLE === 'student')) {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
-      `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) + startGuide() +
-      todayTodoCard() + todo(familyTodo()) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
+      `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
+      todayTodoCard() + todo(familyTodo()) + favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
     const promos = abroadData().promos.filter(p => p.active).slice(0, 1)
       .map(p => [esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']);
-    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${c.name}(${c.grade})의 학원 ${c.academies}곳을 한 화면에서 봐요.`) + startGuide() +
-      todo([...promos,
+    // 수강료 · 오늘 일정 · 공지가 먼저, 유학 안내는 맨 아래
+    return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${c.name}(${c.grade})의 학원 ${c.academies}곳을 한 화면에서 봐요.`) +
+      todo([
         ['10월 하늘영어학원 수강료', '300,000원 · 오늘까지', '#kid/bills', '<span class="chip crit">D-0</span>'],
-        [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'],
-        ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>']
-      ]) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
+        c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
+        ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
+        ...promos
+      ]) + favCard() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   // 학생
   const c = DATA.child;
   return head(`${ME.name}, 오늘도 힘내요!`, DATA.today) + `
   <div class="grid2 even">
     <section class="card"><div class="card-head"><h2>오늘 학원</h2></div><div class="list">
-      ${c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('')}
+      ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
     </div></section>
     <section class="card"><div class="card-head"><h2>오늘 할 숙제</h2><span class="sub">다 하면 체크!</span></div>${homeworkList()}</section>
-  </div>`;
+  </div>` + favCard() + startGuide();
 }
 
 /* ---------- 영역 첫 화면 (세부 메뉴 고르기) ---------- */
@@ -3715,12 +3923,12 @@ const AREA_INTRO = {
   <section class="card intro partner-intro">
     <div class="p-head"><span class="p-word">인투<b>마케팅</b></span><div><span class="chip info">공식 홍보 파트너</span><h3>인투마케팅</h3><p class="muted small">학원 홍보를 전문으로 하는 마케팅 팀이에요. 블로그 · 디자인 · 영상 · SNS 광고를 맡아요.</p></div></div>
     <div class="prog">${DATA.promoServices.map(x => `<div><span class="ic">${ic(x.icon)}</span><b>${x.name}</b><span>${x.items.slice(0, 2).join(' · ')}</span></div>`).join('')}</div>
-    ${flowSteps([['서비스 골라 의뢰', '필요한 작업 · 원하는 날짜를 적어요'], ['센터가 연결', '센터가 확인하고 인투마케팅 담당자와 이어 드려요'], ['상담 · 견적', '담당자가 연락해 내용과 비용을 정해요'], ['작업 · 시안 확인', '시안이 나오면 "의뢰 현황"에서 확인해요'], ['완료', '결과물을 받고 마무리해요']])}
+    ${flowSteps([['서비스 골라 의뢰', '필요한 작업 · 원하는 날짜를 적어요'], ['센터가 연결', '센터가 확인하고 인투마케팅 담당자와 이어 드려요'], ['상담 · 견적', '담당자가 연락해 내용과 비용을 정해요'], ['작업 · 시안 확인', '시안이 나오면 "내 의뢰"에서 확인해요'], ['완료', '결과물을 받고 마무리해요']])}
     <div class="row-btns"><a class="btn primary" href="#promo/services">의뢰하러 가기</a><a class="btn" href="${MK}" target="_blank" rel="noopener">인투마케팅 사이트 ${ic('ext')}</a></div>
   </section>
-  ${qaList([['강사도 의뢰할 수 있나요?', '네. 강사님도 맡은 반 특강 · 설명회 홍보를 직접 의뢰할 수 있어요. 원장님은 강사님이 무엇을 의뢰했는지 "의뢰 현황"에서 모두 볼 수 있어요.'],
+  ${qaList([['강사도 의뢰할 수 있나요?', '네. 강사님도 맡은 반 특강 · 설명회 홍보를 직접 의뢰할 수 있어요. 원장님은 강사님이 무엇을 의뢰했는지 "내 의뢰"에서 모두 볼 수 있어요.'],
     ['비용은 어떻게 정해져요?', '작업 내용에 따라 달라서, 인투마케팅 담당자가 상담하면서 견적을 안내해요. 견적을 보고 진행 여부를 정하면 돼요.'],
-    ['의뢰를 취소할 수 있나요?', '센터가 연결하기 전(접수 단계)이면 "의뢰 현황"에서 바로 취소할 수 있어요.']])}`
+    ['의뢰를 취소할 수 있나요?', '센터가 연결하기 전(접수 단계)이면 "내 의뢰"에서 바로 취소할 수 있어요.']])}`
 };
 function subTiles(id, a) {
   return `<div class="tiles">${Object.entries(a.subs).map(([sid, s]) => `
@@ -3743,6 +3951,7 @@ function resolve(parts) {
   if (SEEKER && (aid === 'home' || !aid)) return resolve(['jobs']);
   if (aid === 'home' || !aid) return { html: home(), crumbs: [], area: 'home' };
   if (aid === 'guide') return { html: guidePage(), crumbs: [...crumbs, ['전체 메뉴 안내', '#guide']], area: 'guide' };
+  if (aid === 'help' && (ROLE === 'owner' || ROLE === 'teacher')) return { html: helpPage(), crumbs: [...crumbs, ['센터에 문의하기', '#help']], area: 'help' };
   const a = MY[aid];
   if (!a) return { html: notFound(), crumbs, area: '' };
   crumbs.push([a.name, `#${aid}`]);
@@ -3782,6 +3991,9 @@ function renderChrome(area) {
     messages: msgUnread()
   };
   $('#nav').innerHTML = navHtml(area, badge);
+  const si = $('.search input');
+  if (si) si.placeholder = stuPath() ? (innerWidth < 560 ? '학생 · 반 · 메뉴 찾기' : '학생 · 반 · 메뉴 찾기 (예: 이서연, 초등 B반, 청구)') : '메뉴 찾기 (예: 시간표, 메신저)';
+  const hc = $('#helpCard'); if (hc) { hc.hidden = !(ROLE === 'owner' || ROLE === 'teacher') || SEEKER; hc.classList.toggle('on', area === 'help'); }
   bindNav();
   $('#me').innerHTML = `${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
@@ -3809,7 +4021,7 @@ function render() {
     teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
-  const isReal = path === 'members' || path === 'guide' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
+  const isReal = path === 'members' || path === 'guide' || path === 'help' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
     ? '이 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
@@ -3928,6 +4140,10 @@ function bind() {
   // 센터 관리
   on('[data-act="addVideo"]', () => videoDialog(null));
   on('[data-edit-video]', b => videoDialog(CENTER.videos.find(v => v.id === b.dataset.editVideo)));
+  on('[data-inq-cat]', b => b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)));
+  const hf = $('#helpForm'); if (hf) hf.onsubmit = e => { e.preventDefault(); sendInquiry(hf); };
+  on('[data-inq-filter]', b => { inqFilter = b.dataset.inqFilter; render(); });
+  on('[data-answer-inq]', b => answerInquiryDialog(CENTER.inquiries.find(q => q.id === b.dataset.answerInq)));
   on('[data-req-filter]', b => { reqFilter = b.dataset.reqFilter; render(); });
   on('[data-req-step]', b => { const [id, st] = b.dataset.reqStep.split(':'); stepRequest(id, st); });
   on('[data-edit-req]', b => requestDialog(CENTER.requests.find(r => r.id === b.dataset.editReq)));
@@ -3976,7 +4192,7 @@ function bind() {
   on('[data-edit-notice]', b => noticeDialog(REAL.notices.find(n => n.id === b.dataset.editNotice)));
   on('[data-copy-notice]', b => {
     const n = REAL.notices.find(x => x.id === b.dataset.copyNotice);
-    copyText(`[${REAL.academy.name}] "${n.title}" 공지를 학원지원센터 앱 "학원 소식"에 올렸어요. 꼭 확인해 주세요!`, '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요');
+    copyText(`[${REAL.academy.name}] "${n.title}" 공지를 학원지원센터 앱 "공지"에 올렸어요. 꼭 확인해 주세요!`, '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요');
   });
   // 홍보 의뢰 (실제 데이터)
   on('[data-mk-req]', b => promoReqDialog(b.dataset.mkReq));
@@ -3990,6 +4206,10 @@ function bind() {
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
   // 메신저
   on('[data-act="newChat"]', newChatDialog);
+  on('[data-act="editFav"]', favDialog);
+  on('[data-stu-q]', b => { STU_Q = b.dataset.stuQ; render(); });
+  const sq = $('#stuQ');
+  if (sq) { sq.oninput = () => { clearTimeout(sq.t); sq.t = setTimeout(() => { STU_Q = sq.value.trim(); render(); const n = $('#stuQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); }; }
   on('[data-act="hideGuide"]', () => { try { localStorage.setItem(`asc-guide-${ROLE}`, '0'); } catch (e) { /* 이번 화면에서만 숨겨요 */ } render(); toast('안내를 숨겼어요 · "전체 메뉴 안내"에서 다시 띄울 수 있어요'); });
   on('[data-act="showGuide"]', () => { try { localStorage.removeItem(`asc-guide-${ROLE}`); } catch (e) { /* 그대로 */ } });
   on('[data-act="newGroup"]', () => pickFriendsDialog({ group: true }));
@@ -4340,15 +4560,15 @@ async function loadTraining() {
 // 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
 async function loadCenter() {
   const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
-  const [v, r, q, a, pa, ab, mk, aa] = await Promise.all([
+  const [v, r, q, a, pa, ab, mk, aa, iq] = await Promise.all([
     newest('training_videos'), SB.rpc('admin_training_progress'), newest('support_requests'),
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
-    newest('promo_requests'), SB.rpc('list_admin_applications')
+    newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries')
   ]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = Number(x.done) || 0; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
-    partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [] };
+    partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [] };
 }
 // 원장: 우리 공고 + 지원자
 async function loadJobs() {
@@ -4448,7 +4668,7 @@ function onboarding(user) {
     <form class="f-stack" id="makeForm" novalidate>
       <p class="muted">처음이시면 우리 학원을 만들어 주세요. 만들면 강사·학부모 초대 코드가 생겨요.</p>
       <label class="f">학원 이름<input name="aname" value="${esc(PROFILE.academy_name || '')}" maxlength="100" placeholder="예: 하늘영어학원"></label>
-      <label class="f">지역<input name="region" maxlength="100" placeholder="예: 수원 영통구"></label>
+      <div class="f">지역 <span class="muted small">시·도를 고르면 시·군·구가 나와요</span>${regionPicker('region')}</div>
       <p class="msg" id="makeMsg" hidden></p>
       <button class="btn primary">학원 만들기</button>
     </form>
@@ -4465,10 +4685,12 @@ function onboarding(user) {
     <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
   </div></div>`;
   const fail = (id, t) => { const m = $(id); m.textContent = t; m.hidden = false; };
+  bindRegionPickers($('.layout'));
   if (owner) $('#makeForm').onsubmit = async e => {
     e.preventDefault();
     const el = e.target.elements, name = el.aname.value.trim();
     if (!name) return fail('#makeMsg', '학원 이름을 적어 주세요.');
+    if (!el.region.value) return fail('#makeMsg', '지역을 골라 주세요. 채용 공고 · 제휴 연결에 쓰여요.');
     const { error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null });
     if (error) return fail('#makeMsg', joinError(error));
     location.reload();
@@ -4518,7 +4740,7 @@ async function boot() {
       // 학원 없이 센터 관리만 하는 관리자
       ROLE = 'admin'; MY = { center: CENTER_AREA, messages: MESSAGES_AREA };
       const nm = esc(PROFILE.name || user.user_metadata?.full_name || PROFILE.username || (user.email || '관리자').split('@')[0]);
-      ME = { name: nm, av: nm[0], label: '센터 관리자', color: 'var(--navy-700)' };
+      ME = { name: nm, av: nm[0], label: '센터 관리자', color: 'var(--r-admin)' };
       DATA.today = todayText();
       await loadSeen(); render(); return;
     }

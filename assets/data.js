@@ -1,28 +1,31 @@
 // 시안용 예시 데이터 — 나중에 Supabase 테이블로 옮길 구조 그대로 둡니다
 const DATA = {
-  today: '2026년 10월 25일 (일)',
+  today: '', // app.js가 실제 오늘 날짜로 채워요
   academy: { name: '하늘영어학원', short: '하', area: '수원 영통구', students: 53 },
 
   users: {
-    owner: { name: '정수민', label: '원장', av: '정', color: 'var(--blue-600)' },
-    teacher: { name: '김민지', label: '강사', av: '김', color: '#17a06b' },
-    parent: { name: '김은정', label: '학부모', av: '김', color: '#c98a12' },
-    student: { name: '이서연', label: '학생 · 초5', av: '서', color: '#7c85ff' }
+    owner: { name: '정수민', label: '원장', av: '정', color: 'var(--r-owner)' },
+    teacher: { name: '김민지', label: '강사', av: '김', color: 'var(--r-teacher)' },
+    parent: { name: '김은정', label: '학부모', av: '김', color: 'var(--r-parent)' },
+    student: { name: '이서연', label: '학생 · 초5', av: '서', color: 'var(--r-student)' }
   },
 
   /* ---------- 행정 지원 ---------- */
+  // 반별 오늘 출결 예시 — app.js가 오늘 요일에 수업이 있는 반만 남겨요(시각은 시간표에서)
   attendance: [
-    { cls: '초등 A반', time: '15:00', total: 12, present: 12, absent: 0 },
-    { cls: '초등 B반', time: '17:00', total: 14, present: 12, absent: 1 },
-    { cls: '중등 기초반', time: '18:30', total: 15, present: 14, absent: 1 },
-    { cls: '고등 심화반', time: '20:00', total: 12, present: 10, absent: 0 }
+    { cls: '초등 A반', total: 12, present: 12, absent: 0 },
+    { cls: '초등 B반', total: 14, present: 12, absent: 1 },
+    { cls: '중등 기초반', total: 15, present: 14, absent: 1 },
+    { cls: '고등 심화반', total: 12, present: 10, absent: 0 }
   ],
-  billing: { month: '10월', total: 48, paid: 42, unpaidAmount: 196 },
+  billing: { month: '10월', total: 48 }, // 납부 · 미납 수와 미납 금액은 아래 unpaid 목록으로 계산해요
   unpaid: [
     { name: '최지호', cls: '중등 기초반', amount: 32, days: 12 },
     { name: '한서윤', cls: '초등 B반', amount: 30, days: 8 },
     { name: '오준서', cls: '고등 심화반', amount: 38, days: 5 },
-    { name: '김도하', cls: '초등 A반', amount: 30, days: 3 }
+    { name: '김도하', cls: '초등 A반', amount: 30, days: 3 },
+    { name: '윤채아', cls: '고등 심화반', amount: 38, days: 2 },
+    { name: '박시우', cls: '초등 A반', amount: 30, days: 1 }
   ],
   finance: { income: 1480, expense: 960, items: [['강사 급여', 620], ['임대료', 220], ['교재비', 95], ['공과금·기타', 25]] },
   paperwork: [
@@ -98,13 +101,16 @@ const DATA = {
   marketingUrl: 'https://intomarketing.co.kr',
   /* ---------- 일정 · 시간표 (예시: 날짜는 app.js가 이번 달로 맞춰요) ---------- */
   timetable: [
-    { id: 'tt1', class_name: '초등 A반', weekday: 1, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '정하윤' },
+    { id: 'tt1', class_name: '초등 A반', weekday: 1, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '김민지' },
     { id: 'tt2', class_name: '초등 B반', weekday: 1, start_time: '16:30', end_time: '18:00', subject: '리딩', room: '2강의실', teacher_name: '김민지', note: '단어 시험' },
-    { id: 'tt3', class_name: '중등 기초반', weekday: 2, start_time: '18:00', end_time: '19:30', subject: '문법', room: '1강의실', teacher_name: '이도현' },
+    { id: 'tt3', class_name: '중등 기초반', weekday: 2, start_time: '18:00', end_time: '19:30', subject: '문법', room: '1강의실', teacher_name: '정하윤' },
+    { id: 'tt8', class_name: '고등 심화반', weekday: 2, start_time: '20:00', end_time: '21:30', subject: '수능 독해', room: '3강의실', teacher_name: '이도현' },
     { id: 'tt4', class_name: '초등 B반', weekday: 3, start_time: '16:30', end_time: '18:00', subject: '라이팅', room: '2강의실', teacher_name: '김민지' },
-    { id: 'tt5', class_name: '초등 A반', weekday: 4, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '정하윤' },
-    { id: 'tt6', class_name: '중등 기초반', weekday: 4, start_time: '18:00', end_time: '19:30', subject: '독해', room: '1강의실', teacher_name: '이도현', note: '교재 3단원' },
-    { id: 'tt7', class_name: '초등 B반', weekday: 5, start_time: '16:30', end_time: '18:00', subject: '스피킹', room: '2강의실', teacher_name: '김민지' }
+    { id: 'tt5', class_name: '초등 A반', weekday: 4, start_time: '15:00', end_time: '16:20', subject: '파닉스', room: '1강의실', teacher_name: '김민지' },
+    { id: 'tt6', class_name: '중등 기초반', weekday: 4, start_time: '18:00', end_time: '19:30', subject: '독해', room: '1강의실', teacher_name: '정하윤', note: '교재 3단원' },
+    { id: 'tt9', class_name: '고등 심화반', weekday: 4, start_time: '20:00', end_time: '21:30', subject: '어법 · 어휘', room: '3강의실', teacher_name: '이도현' },
+    { id: 'tt7', class_name: '초등 B반', weekday: 5, start_time: '16:30', end_time: '18:00', subject: '스피킹', room: '2강의실', teacher_name: '김민지' },
+    { id: 'tt10', class_name: '고등 심화반', weekday: 6, start_time: '10:00', end_time: '12:00', subject: '모의고사 풀이', room: '3강의실', teacher_name: '이도현' }
   ],
   events: [
     { id: 'ev1', d: 3, kind: '시험', title: '월말 평가', target_class: null, start_time: '16:00', detail: '시험지 반별 출력 · 결과는 다음 날 학부모 공지' },
@@ -174,11 +180,14 @@ const DATA = {
   /* ---------- 학부모 · 학생 화면 ---------- */
   child: {
     name: '이서연', grade: '초5', cls: '초등 B반', academies: 3,
-    today: [
-      { time: '15:00', what: '한빛태권도', where: '같은 건물 2층' },
-      { time: '17:00', what: '하늘영어학원 · 초등 B반', where: '단어시험 있음' },
-      { time: '19:00', what: '바른수학학원', where: '숙제 확인' }
+    // 요일마다 다니는 학원 (0 일 ~ 6 토) — app.js가 오늘 요일 것만 "오늘 일정"으로 보여 줘요
+    week: [
+      { days: [1, 2, 3, 4, 5], time: '15:00', what: '한빛태권도', where: '같은 건물 2층' },
+      { days: [1, 3, 5], time: '16:30', what: '하늘영어학원 · 초등 B반', where: '단어시험 있음' },
+      { days: [2, 4], time: '19:00', what: '바른수학학원', where: '숙제 확인' },
+      { days: [6], time: '11:00', what: '바른수학학원 · 주말 보충', where: '선택 수업' }
     ],
+    today: [],
     homework: [
       { what: 'Unit 7 단어 20개 외우기', acad: '하늘영어학원', done: true },
       { what: '수학 익힘책 42–45쪽', acad: '바른수학학원', done: false },
