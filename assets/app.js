@@ -2180,6 +2180,7 @@ function realPromoRequestsPage() {
   <a class="hint" href="${MK}" target="_blank" rel="noopener">${ic('megaphone')}<span>작업 사례와 가격은 인투마케팅 사이트에서 볼 수 있어요</span><b>인투마케팅 →</b></a>`;
 }
 function promoReqDialog(service) {
+  if (REAL && !svcGuard('promo')) return;
   formDialog({
     title: `${service} 의뢰`, table: 'promo_requests', extra: { service }, okText: ROLE === 'teacher' ? '원장님께 결재 올리기' : '의뢰하기',
     doneText: ROLE === 'teacher' ? '의뢰를 올렸어요 · 원장님이 승인하면 센터로 넘어가요' : '의뢰했어요 · 센터가 인투마케팅에 연결해 드려요',
@@ -2586,6 +2587,7 @@ function realHirePage() {
 }
 
 function jobDialog(j) {
+  if (REAL && !j && !svcGuard('teachers')) return;
   formDialog({
     title: j ? '채용 공고 고치기' : '새 채용 공고', table: 'job_posts', row: j, after: loadJobs, okText: j ? '저장' : '올리기',
     label: r => `${r.title} 공고를`, doneText: '센터 채용 게시판에 공고를 올렸어요',
@@ -2682,6 +2684,7 @@ function realMyPartnersPage() {
 }
 
 function partnerApplyDialog(p) {
+  if (REAL && !svcGuard('mou')) return;
   formDialog({
     title: `${p.name} 제휴 신청`, table: 'partner_applications', extra: { partner_id: p.id, partner_name: p.name }, after: loadPartnerApps, okText: ROLE === 'teacher' ? '원장님께 올리기' : '신청하기',
     label: () => '제휴 신청을', doneText: ROLE === 'teacher' ? `${p.name} 신청을 올렸어요 · 원장님이 승인하면 센터로 넘어가요` : `${p.name} 제휴를 신청했어요 · 센터가 연락드려요`,
@@ -2738,6 +2741,7 @@ function abroadOwnerPage() {
 
 function promoDialog(pr) {
   if (!REAL) return toast('예시 계정에서는 저장되지 않아요');
+  if (!pr && !svcGuard('mou')) return;
   formDialog({
     title: pr ? '유학 안내 고치기' : '학부모에게 유학 프로그램 안내', table: 'abroad_promos', row: pr, after: loadAbroad, okText: pr ? '저장' : '안내하기',
     label: r => `${r.title} 안내를`, doneText: '학부모 앱에 안내를 올렸어요',
@@ -2797,6 +2801,7 @@ function parentAbroadPage() {
 
 function abroadApplyDialog(promo) {
   if (!REAL) return toast('예시 계정에서는 저장되지 않아요');
+  if (!svcGuard('mou')) return;
   formDialog({
     title: promo ? `${promo.title} 상담 신청` : '유학 상담 신청', table: 'abroad_requests', extra: { promo_id: promo ? promo.id : null }, after: loadAbroad, okText: '신청하기',
     label: () => '상담 신청을', doneText: ROLE === 'teacher' ? '상담 신청을 올렸어요 · 원장님이 확인하고 센터로 넘겨요' : '상담을 신청했어요 · 원장님이 확인하고 연락드려요',
@@ -3114,7 +3119,9 @@ async function loadMyInquiries() {
 function helpPage() {
   if (INQS === null) { loadMyInquiries().then(() => { if (location.hash === '#help') render(); }); }
   const list = INQS || [];
-  return head('센터에 문의하기', '사용하다 막히는 곳, 오류, 바라는 기능을 학원지원센터 담당 매니저에게 보내요. 학원 이름과 역할이 함께 전달돼요. 평일 9:30~18:30, 보통 하루 안에 답해 드려요.') + `
+  return head('센터에 문의하기', '사용하다 막히는 곳, 오류, 바라는 기능을 학원지원센터 담당 매니저에게 보내요. 학원 이름과 역할이 함께 전달돼요. 평일 9:30~18:30, 보통 하루 안에 답해 드려요.') + (ROLE === 'owner' ? `
+  <a class="card svc-mini" href="#services"><div class="card-head"><h2>우리 학원 이용 분야</h2><span class="sub">눌러서 보기 · 더 신청하기 →</span></div>
+    <div class="needs">${Object.keys(SVC_AREAS).map(a => `<span class="chip ${SVC_STATE[svcOf(a)][0]}">${SVC_AREAS[a]} · ${SVC_STATE[svcOf(a)][1]}</span>`).join('')}</div></a>` : '') + `
   <section class="card">
     <form id="helpForm" class="help-form" novalidate>
       <div class="f">무엇에 대한 문의인가요? *
@@ -3195,7 +3202,7 @@ function centerRequestsPage() {
       return `
       <div class="li">
         <span class="av" style="background:${r.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${esc(r.academy_name[0])}</span>
-        <div><div class="t"><span class="nm-link" data-edit-req="${r.id}" role="button" tabindex="0">${esc(r.academy_name)}</span> <span class="muted small">${esc(r.region || '')}</span></div>
+        <div><div class="t"><span class="nm-link" data-edit-req="${r.id}" role="button" tabindex="0">${esc(r.academy_name)}</span> <span class="muted small">${esc(r.region || '')}</span>${r.academy_id ? ' <a class="chip good" href="#center/academies">가입 학원과 이어짐</a>' : ''}</div>
           <div class="d">${esc(r.owner_name)} 원장님 · <a href="tel:${esc(r.phone)}" style="color:var(--blue-600)">${esc(r.phone)}</a> · ${md(r.created_at.slice(0, 10))} 신청</div>
           <div class="needs">${(r.needs || []).map(n => `<span class="chip info">${esc(n)}</span>`).join('')}</div>
           ${r.memo ? `<div class="d">"${esc(r.memo)}"</div>` : ''}
@@ -3393,6 +3400,10 @@ const centerTodo = () => {
   if (ab) items.push([`유학 상담 연결 요청 ${ab}건`, '인투유학 상담사 연결', '#center/abroad', '<span class="chip warn">연결 필요</span>']);
   const mk = CENTER.promoReqs.filter(r => r.status === 'new');
   if (mk.length) items.push([`새 홍보 의뢰 ${mk.length}건`, mk.slice(0, 3).map(r => `${esc(r.academy_name || '학원')} · ${esc(r.service)}`).join(' / '), '#center/promo', '<span class="chip crit">새 의뢰</span>']);
+  const tk = CENTER.tasks.filter(t => t.status === 'new');
+  if (tk.length) items.push([`학원이 맡긴 일 ${tk.length}건`, tk.slice(0, 3).map(t => `${esc(t.academy_name || '학원')} · ${esc(t.kind)}`).join(' / '), '#center/tasks', '<span class="chip crit">새로 맡김</span>']);
+  const cs = CENTER.academies.filter(a => Object.values(a.services).some(x => x.status === 'consulting'));
+  if (cs.length) items.push([`분야 상담 중인 학원 ${cs.length}곳`, '상담이 끝나면 "이용 중"으로 바꿔 주세요', '#center/academies', '<span class="chip warn">상담 중</span>']);
   const adm = CENTER.adminApps.filter(a => a.status === 'pending');
   if (adm.length) items.push([`관리자 신청 ${adm.length}건`, adm.slice(0, 3).map(a => esc(a.name || a.email.split('@')[0])).join(' · '), '#center/admins', '<span class="chip crit">수락 필요</span>']);
   const noUrl = CENTER.videos.filter(v => v.published && !v.video_url).length;
@@ -3401,12 +3412,248 @@ const centerTodo = () => {
   return items;
 };
 
+/* ================= 분야별 이용 (academy_services) =================
+   원생 · 출결 · 일정 · 메신저 같은 기본 프로그램은 누구나 쓰고, 센터가 직접 해 주는 지원(SVC_GATE 화면)만 분야가 "이용 중"일 때 열려요.
+   분야가 꺼져 있으면 그 화면 대신 신청 안내(svcLockPage)가 보이고, DB도 같은 기준으로 막아요. */
+const SVC_AREAS = { admin: '행정 지원', teachers: '강사 관리', members: '학생·학부모 관리', mou: '제휴(MOU)', promo: '홍보 지원' };
+const SVC_STATE = { active: ['good', '이용 중'], consulting: ['warn', '상담 중'], ended: ['mute', '이용 끝남'], none: ['mute', '신청 전'] };
+const SVC_INFO = {
+  admin: ['서류 · 교육청 행정을 센터에 맡기기 (대신 작성 · 제출 도움)', '교습비 변경 신고 · 원천세 · 사업장현황신고 자료 정리', '쓰던 엑셀 명단 · 장부 옮기기', '미납 안내 대신 보내기'],
+  teachers: ['본부 강사 교육 영상 · 리플렉션 · 이수 관리', '센터 채용 게시판에 공고 올리기 · 지원자 관리', '채용 대행 · 신입 강사 OT · 우리 학원 맞춤 교육'],
+  members: ['원생 · 학부모 명단 옮기기', '신규 상담 응대 교육 · 상담 스크립트', '학부모 설명회 준비 · 재원생 만족도 조사'],
+  mou: ['인투유학 캠프 · 조기유학 · 어학연수 · 해외 진학 연결', '학부모 유학 상담 신청 받기 · 유학 설명회', '교재 · 카드 결제 · 보험 같은 운영 제휴'],
+  promo: ['블로그 · 디자인 · 영상 · SNS 광고 의뢰', '인투마케팅 담당자 연결 · 학원 정보 자동 전달', '시안 확인 · 진행 상황 보기']
+};
+// 분야가 켜져 있어야 열리는 화면 (역할 → 경로 → 분야)
+const SVC_GATE = {
+  owner: { 'admin/center': 'admin', 'teachers/training': 'teachers', 'teachers/hire': 'teachers', 'teachers/center': 'teachers', 'members/center': 'members', 'mou/abroad': 'mou', 'mou/mine': 'mou', 'promo/requests': 'promo' },
+  teacher: { learn: 'teachers', 'mou/abroad': 'mou', 'mou/mine': 'mou', 'promo/requests': 'promo' }
+};
+const svcOf = area => !REAL ? 'active' : (REAL.services || {})[area] || 'none';
+const svcOn = area => svcOf(area) === 'active';
+const svcGateOf = path => (SVC_GATE[ROLE] || {})[path];
+const svcChip = area => { const [c, l] = SVC_STATE[svcOf(area)]; return `<span class="chip ${c}">${l}</span>`; };
+async function loadServices() {
+  const { data } = await SB.from('academy_services').select('area, status, started_at').eq('academy_id', REAL.academy.id);
+  REAL.services = Object.fromEntries((data || []).map(s => [s.area, s.status]));
+  REAL.serviceSince = Object.fromEntries((data || []).map(s => [s.area, s.started_at]));
+}
+// 신청 · 의뢰 버튼 앞에서: 분야가 꺼져 있으면 저장 대신 신청 안내
+function svcGuard(area) {
+  if (svcOn(area)) return true;
+  if (ROLE === 'owner') svcRequestDialog([area]);
+  else toast(`${SVC_AREAS[area]}는 원장님이 센터에 신청하면 쓸 수 있어요`);
+  return false;
+}
+function svcLockPage(area, title) {
+  const st = svcOf(area), owner = ROLE === 'owner';
+  const msg = st === 'consulting'
+    ? '신청이 접수됐어요. 센터 담당 매니저가 연락드리고, 이용이 시작되면 이 화면이 저절로 열려요.'
+    : owner ? `우리 학원은 아직 ${SVC_AREAS[area]}를 이용하지 않아요. 원생 · 출결 · 일정 같은 기본 기능은 지금도 그대로 쓸 수 있고, 센터가 직접 해 주는 지원은 신청하면 열려요.`
+      : `${SVC_AREAS[area]}는 원장님이 센터에 신청하면 쓸 수 있어요. 필요하면 원장님께 말씀해 주세요.`;
+  return head(title, '') + `
+  <section class="card svc-lock">
+    <div class="card-head"><h2>${SVC_AREAS[area]}</h2>${svcChip(area)}</div>
+    <p class="muted">${msg}</p>
+    <h3 class="svc-sub">신청하면 이런 걸 해 드려요</h3>
+    <ul class="svc-list">${SVC_INFO[area].map(t => `<li>${ic('check')}<span>${t}</span></li>`).join('')}</ul>
+    ${owner ? `<div class="row-btns">${st === 'consulting' ? '' : `<button class="btn primary" data-svc-req="${area}">이 분야 신청하기</button>`}<button class="btn" data-act="svcClaim">첫 화면에서 신청했어요 · 접수 번호로 잇기</button><a class="btn" href="#services">이용 중인 분야 보기</a></div>` : ''}
+  </section>`;
+}
+// 원장: 우리 학원이 이용하는 센터 지원 분야 한눈에
+function svcOverviewPage() {
+  const ids = Object.keys(SVC_AREAS), off = ids.filter(a => !svcOn(a) && svcOf(a) !== 'consulting');
+  return head('이용 중인 센터 지원', '분야마다 센터가 직접 해 주는 지원이에요. 필요한 분야만 골라 신청하면 돼요. 원생 · 출결 · 일정 · 메신저 같은 기본 기능은 분야와 상관없이 그대로 써요.',
+    off.length ? `<button class="btn primary" data-svc-req="${off.join(',')}">분야 더 신청하기</button>` : '') + `
+  <div class="svc-grid">${ids.map(a => { const st = svcOf(a), since = REAL && REAL.serviceSince && REAL.serviceSince[a]; return `
+    <section class="card svc-card ${st}">
+      <div class="card-head"><h2>${SVC_AREAS[a]}</h2>${svcChip(a)}</div>
+      <ul class="svc-list">${SVC_INFO[a].map(t => `<li>${ic('check')}<span>${t}</span></li>`).join('')}</ul>
+      <div class="row-btns">${st === 'active' ? `<a class="btn sm" href="#${a}">열기</a>${since ? `<span class="muted small">${md(since)}부터 이용 중</span>` : ''}`
+        : st === 'consulting' ? '<span class="muted small">센터 담당 매니저가 연락드릴게요</span>' : `<button class="btn sm primary" data-svc-req="${a}">신청하기</button>`}</div>
+    </section>`; }).join('')}</div>
+  <a class="hint" href="#" data-act="svcClaim">${ic('doc')}<span>첫 화면에서 지원을 신청하고 받은 접수 번호가 있나요?</span><b>접수 번호로 잇기 →</b></a>`;
+}
+const SVC_WHEN = ['평일 오전', '평일 오후', '평일 저녁', '언제든 괜찮아요'];
+function svcRequestDialog(pre = []) {
+  if (!REAL) return toast('예시 계정에서는 신청할 수 없어요');
+  const d = dialogEl(), ids = Object.keys(SVC_AREAS).filter(a => !svcOn(a));
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="svcForm" novalidate>
+    <h2>센터 지원 신청</h2>
+    <p class="muted small">고른 분야만 신청돼요. 학원 이름 · 지역 · 원장님 이름은 저절로 함께 가요.</p>
+    <div class="f">신청할 분야 *<div class="picks svc-picks">${ids.map(a => `<label><input type="checkbox" name="area" value="${a}" ${pre.includes(a) ? 'checked' : ''}><span>${SVC_AREAS[a]}${svcOf(a) === 'consulting' ? ' (상담 중)' : ''}</span></label>`).join('')}</div></div>
+    <label class="f">연락 받을 전화번호 *<input name="phone" type="tel" maxlength="30" placeholder="010-0000-0000"></label>
+    <div class="f">연락 받기 좋은 시간<div class="pick-chips">${SVC_WHEN.map((w, i) => `<button type="button" class="${i === 3 ? 'on' : ''}" data-svc-when="${w}">${w}</button>`).join('')}</div></div>
+    <label class="f">하고 싶은 말<textarea name="memo" rows="3" maxlength="2000" placeholder="예: 교육청 서류가 제일 급해요. 원생은 80명쯤이에요."></textarea></label>
+    <p class="msg" id="svcMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="svcCancel">취소</button><button class="btn primary">신청하기</button></div>
+  </form>`;
+  d.showModal();
+  $('#svcCancel').onclick = () => d.close();
+  d.querySelectorAll('[data-svc-when]').forEach(b => b.onclick = () => d.querySelectorAll('[data-svc-when]').forEach(x => x.classList.toggle('on', x === b)));
+  $('#svcForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, m = $('#svcMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    const areas = [...d.querySelectorAll('[name=area]:checked')].map(x => x.value);
+    if (!areas.length) return fail('신청할 분야를 하나 이상 골라 주세요.');
+    if (!phoneOk(el.phone.value)) return fail('전화번호를 010-0000-0000처럼 적어 주세요.');
+    const when = (d.querySelector('[data-svc-when].on') || {}).dataset?.svcWhen || null;
+    const { data, error } = await SB.rpc('request_academy_services', { p_academy: REAL.academy.id, p_areas: areas, p_phone: el.phone.value.trim(), p_contact_time: when, p_memo: el.memo.value });
+    if (error) return fail((error.message || '').includes('bad_phone') ? '전화번호를 다시 확인해 주세요.' : '보내지 못했어요. 잠시 후 다시 시도해 주세요.');
+    d.close(); await loadServices(); render(); toast(`신청했어요 · 접수 번호 ${data} · 담당 매니저가 연락드릴게요`);
+  };
+}
+const phoneOk = v => /^0\d{8,10}$/.test(String(v || '').replace(/\D/g, ''));
+function svcClaimDialog() {
+  if (!REAL) return toast('예시 계정에서는 이을 수 없어요');
+  const d = dialogEl();
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="claimForm" novalidate>
+    <h2>접수 번호로 잇기</h2>
+    <p class="muted small">첫 화면 "지원받기"에서 신청한 뒤 받은 접수 번호(영어 · 숫자 8자리)를 넣으면, 그때 고른 분야가 우리 학원과 이어져요.</p>
+    <label class="f">접수 번호<input name="no" maxlength="8" placeholder="예: 4D8A914C" autocapitalize="characters" style="text-transform:uppercase"></label>
+    <p class="msg" id="claimMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="claimCancel">취소</button><button class="btn primary">잇기</button></div>
+  </form>`;
+  d.showModal();
+  $('#claimCancel').onclick = () => d.close();
+  $('#claimForm').onsubmit = async e => {
+    e.preventDefault();
+    const no = e.target.elements.no.value.trim(), m = $('#claimMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (!/^[0-9a-zA-Z]{8}$/.test(no)) return fail('접수 번호 8자리를 넣어 주세요.');
+    const { data, error } = await SB.rpc('claim_support_request', { p_academy: REAL.academy.id, p_no: no });
+    if (error) return fail((error.message || '').includes('already_linked') ? '이미 다른 학원과 이어진 신청이에요.' : '접수 번호를 찾을 수 없어요. 다시 확인해 주세요.');
+    d.close(); await loadServices(); render();
+    toast(data && data.length ? `${data.map(a => SVC_AREAS[a]).join(' · ')} 신청이 우리 학원과 이어졌어요` : '신청이 우리 학원과 이어졌어요');
+  };
+}
+
+/* ---------- 센터에 맡기기 (center_tasks): 이용 중인 분야의 일을 센터에 맡기고 진행을 봐요 ---------- */
+const TASK_KINDS = {
+  admin: [['교육청 서류 대신 작성', '학원 정보로 서식을 채워 드리고, 원장님 확인 뒤 제출을 도와요'], ['교습비 변경 신고 도움', '바뀐 수강료로 신고서를 만들어 드려요'],
+    ['원천세 · 사업장현황신고 자료 정리', '수납 · 지출 · 강사 급여를 신고용으로 정리해요'], ['엑셀 명단 · 장부 옮기기', '쓰던 파일을 보내 주시면 프로그램에 옮겨 드려요'], ['미납 안내 대신 보내기', '미납 가정에 안내 문자를 보내 드려요']],
+  teachers: [['강사 채용 대행', '공고 작성 · 홍보 · 지원자 추리기까지 맡아요'], ['신입 강사 OT', '새로 온 강사에게 학원 운영 · 수업 기본을 알려 드려요'], ['우리 학원 맞춤 강사 교육', '학원에 필요한 주제로 교육을 짜 드려요']],
+  members: [['원생 · 학부모 명단 옮기기', '쓰던 명단을 보내 주시면 원생 명단에 옮기고 앱 초대까지 도와요'], ['신규 상담 응대 교육', '문의 → 등록으로 잇는 상담 스크립트와 연습'],
+    ['학부모 설명회 준비', '발표 자료 · 안내문 · 진행 순서를 함께 준비해요'], ['재원생 만족도 조사', '학부모 설문을 만들어 보내고 결과를 정리해 드려요']]
+};
+const TASK_STATE = { new: ['warn', '접수'], working: ['info', '진행 중'], done: ['good', '완료'], closed: ['mute', '마무리'] };
+const tasksData = () => REAL ? REAL.tasks : DEMO_TASKS;
+const DEMO_TASKS = [
+  { id: 'dt1', area: 'admin', kind: '교육청 서류 대신 작성', detail: '강사 채용 통보 (김민지 선생님)', status: 'working', admin_memo: '서식 채움 · 10/28까지 확인 부탁드려요', created_at: `${TODAY}T09:00:00`, updated_at: `${TODAY}T10:00:00` },
+  { id: 'dt2', area: 'members', kind: '학부모 설명회 준비', detail: '11월 겨울방학 특강 설명회', status: 'new', created_at: `${TODAY}T08:00:00`, updated_at: `${TODAY}T08:00:00` }
+];
+const taskOpen = area => tasksData().filter(t => (!area || t.area === area) && (t.status === 'new' || t.status === 'working')).length;
+const loadTasks = () => loadRows('center_tasks', 'created_at', false).then(() => { REAL.tasks = REAL.center_tasks; });
+const taskSub = area => ({ name: '센터에 맡기기', icon: 'star', desc: { admin: '서류 대신 작성 · 신고 자료 · 장부 옮기기', teachers: '채용 대행 · 신입 OT · 맞춤 교육', members: '명단 옮기기 · 상담 교육 · 설명회 준비' }[area],
+  stat: () => { const n = taskOpen(area); return n ? `진행 중 ${n}건` : '맡길 일 고르기'; }, render: () => centerTaskPage(area) });
+function centerTaskPage(area) {
+  const list = tasksData().filter(t => t.area === area);
+  return head('센터에 맡기기', `${SVC_AREAS[area]}에서 손이 많이 가는 일을 센터 담당 매니저에게 맡겨요. 맡기면 진행 상황과 센터 메모가 여기에 보여요.`) + `
+  <div class="task-kinds">${TASK_KINDS[area].map(([k, d]) => `
+    <button class="task-kind" data-task-new="${area}:${esc(k)}"><b>${k}</b><small>${d}</small><span class="go">맡기기 →</span></button>`).join('')}
+    <button class="task-kind" data-task-new="${area}:"><b>그 밖의 일</b><small>목록에 없는 일도 적어 주시면 센터가 확인해요</small><span class="go">맡기기 →</span></button></div>
+  <h2 class="sec-title">맡긴 일 ${list.length}건</h2>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(t => { const [c, l] = TASK_STATE[t.status] || TASK_STATE.new; return `
+    <div class="li"><span class="av" style="background:var(--blue-50);color:var(--blue-600)">${ic('star')}</span>
+      <div><div class="t">${esc(t.kind)} <span class="muted small">${md(t.created_at.slice(0, 10))} 맡김${t.due ? ` · ${md(t.due)}까지` : ''}</span></div>
+        ${t.detail ? `<div class="d pre">${esc(t.detail)}</div>` : ''}
+        ${t.admin_memo ? `<div class="inq-ans"><b>센터 메모</b><p>${esc(t.admin_memo)}</p></div>` : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span>${t.status === 'new' && REAL ? `<button class="btn sm" data-task-edit="${t.id}">고치기</button>` : ''}</div></div>`; }).join('')}</div></section>`
+    : '<p class="muted">아직 맡긴 일이 없어요. 위에서 골라 맡겨 보세요.</p>'}`;
+}
+function taskDialog(area, kind, row) {
+  if (!REAL) return toast('예시 계정에서는 맡길 수 없어요');
+  if (!row && !svcGuard(area)) return;
+  formDialog({
+    title: row ? '맡긴 일 고치기' : '센터에 맡기기', table: 'center_tasks', row, extra: { area }, after: loadTasks, okText: row ? '저장' : '맡기기',
+    label: r => `${r.kind} 일을`, doneText: '센터에 맡겼어요 · 담당 매니저가 확인하고 연락드릴게요',
+    fields: [
+      ['kind', '맡길 일', { required: true, max: 60, value: kind || '', chips: TASK_KINDS[area].map(x => x[0]) }],
+      ['detail', '자세한 내용', { type: 'area', rows: 4, max: 2000, placeholder: '예: 11월부터 수강료가 바뀌어요. 초등 25만 → 27만 원.' }],
+      ['due', '언제까지', { type: 'date' }]
+    ]
+  });
+}
+
+/* ---------- 센터 관리: 학원 · 이용 분야, 맡긴 일 ---------- */
+function centerAcademiesPage() {
+  const list = CENTER.academies;
+  return head('학원 · 이용 분야', '가입한 학원마다 이용할 센터 지원 분야를 정해요. "이용 중"인 분야만 그 학원 원장 · 강사 화면에서 열려요. 신청이 오면 "상담 중"으로 들어와요.') + `
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(a => `
+    <div class="li"><span class="av" style="background:var(--navy-700)">${esc((a.name || '?')[0])}</span>
+      <div><div class="t"><span class="nm-link" data-svc-edit="${a.id}" role="button" tabindex="0">${esc(a.name)}</span> <span class="muted small">${esc(a.region || '')} · ${md(a.created_at.slice(0, 10))} 가입</span></div>
+        <div class="d">원장 ${esc(a.owners || '-')} · 강사 ${a.teachers}명 · 원생 ${a.students}명</div>
+        <div class="needs">${Object.keys(SVC_AREAS).map(k => { const st = (a.services[k] || {}).status || 'none', [c] = SVC_STATE[st]; return `<span class="chip ${st === 'none' ? 'mute' : c}" title="${SVC_STATE[st][1]}">${SVC_AREAS[k]} · ${SVC_STATE[st][1]}</span>`; }).join('')}</div></div>
+      <div class="r"><button class="btn sm" data-svc-edit="${a.id}">분야 정하기</button></div></div>`).join('')}</div></section>`
+    : `<section class="card empty"><span class="tile-ic">${ic('home')}</span><h2>아직 가입한 학원이 없어요</h2></section>`}`;
+}
+function svcEditDialog(a) {
+  const d = dialogEl();
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="svcEdit" novalidate>
+    <h2>${esc(a.name)} 이용 분야</h2>
+    <p class="muted small">"이용 중"이면 그 분야의 센터 지원 화면이 열리고, 나머지는 신청 안내가 보여요.</p>
+    ${Object.keys(SVC_AREAS).map(k => { const st = (a.services[k] || {}).status || ''; return `
+    <label class="f">${SVC_AREAS[k]}<select name="${k}"><option value="" ${!st ? 'selected' : ''}>신청 전</option>${['consulting', 'active', 'ended'].map(s => `<option value="${s}" ${st === s ? 'selected' : ''}>${SVC_STATE[s][1]}</option>`).join('')}</select></label>`; }).join('')}
+    <p class="msg" id="svcEditMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="svcEditCancel">취소</button><button class="btn primary">저장</button></div>
+  </form>`;
+  d.showModal();
+  $('#svcEditCancel').onclick = () => d.close();
+  $('#svcEdit').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements;
+    const changed = Object.keys(SVC_AREAS).filter(k => el[k].value !== ((a.services[k] || {}).status || ''));
+    for (const k of changed) {
+      const { error } = await SB.rpc('set_academy_service', { p_academy: a.id, p_area: k, p_status: el[k].value || null });
+      if (error) { const m = $('#svcEditMsg'); m.textContent = '저장하지 못했어요.'; m.hidden = false; return; }
+    }
+    d.close(); await loadCenter(); render(); toast(changed.length ? `${esc(a.name)} 이용 분야를 바꿨어요` : '바뀐 게 없어요');
+  };
+}
+const TASK_NEXT = { new: ['working', '진행 중으로'], working: ['done', '완료로'], done: ['new', '다시 열기'], closed: ['new', '다시 열기'] };
+let taskFilter = 'open';
+function centerTasksPage() {
+  const all = CENTER.tasks, open = t => t.status === 'new' || t.status === 'working';
+  const list = all.filter(t => taskFilter === 'all' || (taskFilter === 'open' ? open(t) : t.status === taskFilter));
+  return head('맡긴 일', '학원이 "센터에 맡기기"로 보낸 일이에요. 진행하면서 상태와 센터 메모를 바꾸면 원장님 화면에 바로 보여요.') + `
+  <div class="filters">${[['open', '처리할 일'], ['done', '완료'], ['all', '전체']].map(([k, l]) =>
+    `<button class="${k === taskFilter ? 'on' : ''}" data-task-filter="${k}">${l} ${k === 'all' ? all.length : k === 'open' ? all.filter(open).length : all.filter(t => t.status === k).length}</button>`).join('')}</div>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(t => { const [c, l] = TASK_STATE[t.status] || TASK_STATE.new, [next, nl] = TASK_NEXT[t.status] || TASK_NEXT.new; return `
+    <div class="li"><span class="av" style="background:var(--navy-700)">${esc((t.academy_name || '?')[0])}</span>
+      <div><div class="t"><span class="nm-link" data-task-memo="${t.id}" role="button" tabindex="0">${esc(t.kind)}</span> <span class="chip info">${SVC_AREAS[t.area]}</span> <span class="muted small">${esc(t.academy_name || '학원')}${t.requester_name ? ` · ${esc(t.requester_name)} 원장님` : ''} · ${md(t.created_at.slice(0, 10))}${t.due ? ` · ${md(t.due)}까지` : ''}</span></div>
+        ${t.detail ? `<div class="d pre">${esc(t.detail)}</div>` : ''}
+        ${t.admin_memo ? `<div class="d"><b>센터 메모</b> ${esc(t.admin_memo)}</div>` : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span><button class="btn sm ${next === 'done' ? 'primary' : ''}" data-task-step="${t.id}:${next}">${nl}</button></div></div>`; }).join('')}</div></section>`
+    : `<section class="card empty"><span class="tile-ic">${ic('star')}</span><h2>여기에 해당하는 일이 없어요</h2></section>`}`;
+}
+function taskMemoDialog(t) {
+  formDialog({
+    title: `${t.academy_name || '학원'} · ${t.kind}`, table: 'center_tasks', row: t, academy: false, noDelete: true, after: loadCenter,
+    label: () => '맡긴 일을',
+    fields: [
+      ['status', '상태', { type: 'select', required: true, options: Object.entries(TASK_STATE).map(([k, [, l]]) => [k, l]) }],
+      ['admin_memo', '센터 메모 (원장님께 보여요)', { type: 'area', rows: 3, max: 1000, placeholder: '예: 서식 채움 · 10/28까지 확인 부탁드려요' }]
+    ]
+  });
+}
+async function stepTask(id, status) {
+  const t = CENTER.tasks.find(x => x.id === id), before = t.status;
+  t.status = status; render();
+  const { error } = await SB.from('center_tasks').update({ status }).eq('id', id);
+  if (error) { t.status = before; render(); toast('저장하지 못했어요'); return; }
+  toast(`${t.kind} → ${TASK_STATE[status][1]}`);
+}
+
 const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 홍보 의뢰 · 관리자',
-  stat: () => `새 신청 ${CENTER.inquiries.filter(r => r.status === 'new').length + CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
+  stat: () => `새 신청 ${CENTER.inquiries.filter(r => r.status === 'new').length + CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length + CENTER.tasks.filter(t => t.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
   subs: {
     videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 이수 현황', stat: () => `영상 ${CENTER.videos.length}개 · 이수 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}건`,
       render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
-    requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
+    requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면 · 프로그램에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
+    academies: { name: '학원 · 이용 분야', icon: 'home', desc: '학원마다 이용할 지원 분야 켜고 끄기', stat: () => `학원 ${CENTER.academies.length}곳 · 상담 중 ${CENTER.academies.reduce((n, a) => n + Object.values(a.services).filter(x => x.status === 'consulting').length, 0)}건`, render: centerAcademiesPage },
+    tasks: { name: '맡긴 일', icon: 'star', desc: '학원이 "센터에 맡기기"로 보낸 일 처리', stat: () => `새로 맡긴 일 ${CENTER.tasks.filter(t => t.status === 'new').length}건`, render: centerTasksPage },
     inquiries: { name: '문의', icon: 'help', desc: '가입 전 문의 · 프로그램 쓰는 분 문의에 답하기', stat: () => `새 문의 ${CENTER.inquiries.filter(r => r.status === 'new').length}건`, render: centerInquiriesPage },
     partners: { name: '제휴 신청', icon: 'handshake', desc: '원장님이 신청한 제휴 연결', stat: () => `새 신청 ${CENTER.partnerApps.filter(a => a.status === 'new').length}건`, render: centerPartnersPage },
     abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
@@ -3455,13 +3702,15 @@ const AREAS = {
           return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
         approvals: { name: '결재', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvData().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
-        paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage }
+        paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage },
+        center: taskSub('admin')
       } },
     teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · ${applicantStat()}`,
       subs: {
         staff: { name: '우리 학원 강사', icon: 'users', desc: '담당 반과 교육 이수 현황', stat: () => `${DATA.staff.length}명`, render: staffPage },
         training: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 · 나와 강사 리플렉션', stat: () => `영상 ${DATA.training.length}개`, render: trainingPage, detail: id => trainingDetail(id, 'teachers/training') },
-        hire: { name: '강사 채용', icon: 'brief', desc: '공고 올리기와 지원자 관리', stat: applicantStat, render: hirePage }
+        hire: { name: '강사 채용', icon: 'brief', desc: '공고 올리기와 지원자 관리', stat: applicantStat, render: hirePage },
+        center: taskSub('teachers')
       } },
     members: { name: '학생·학부모 관리', icon: 'users', desc: '상담·등록부터 원생 명단, 공지까지', stat: () => `새 문의 ${DATA.leads.filter(l => l.stage === 'inquiry').length}건`,
       subs: {
@@ -3471,7 +3720,8 @@ const AREAS = {
         todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
         reports: REPORT_AREA,
         notices: { name: '공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
-          detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
+          detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title },
+        center: taskSub('members')
       } },
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
@@ -3573,6 +3823,9 @@ const NEWS = {
     'mou/abroad': () => REAL.abroad.requests.map(r => r.created_at),
     'mou/mine': () => REAL.partnerApps.map(r => r.updated_at),
     'promo/requests': () => REAL.promoReqs.map(r => r.requested_by === USER.id ? r.updated_at : r.created_at),
+    'admin/center': () => REAL.tasks.filter(t => t.area === 'admin' && t.status !== 'new').map(t => t.updated_at),
+    'teachers/center': () => REAL.tasks.filter(t => t.area === 'teachers' && t.status !== 'new').map(t => t.updated_at),
+    'members/center': () => REAL.tasks.filter(t => t.area === 'members' && t.status !== 'new').map(t => t.updated_at),
     schedule: () => notMine(REAL.events, 'created_by'),
     library: () => notMine(REAL.library, 'uploaded_by')
   },
@@ -3604,7 +3857,8 @@ const NEWS = {
     'center/partners': () => CENTER.partnerApps.map(r => r.created_at),
     'center/abroad': () => CENTER.abroad.map(r => r.updated_at),
     'center/promo': () => CENTER.promoReqs.map(r => r.created_at),
-    'center/admins': () => CENTER.adminApps.filter(a => a.status === 'pending').map(a => a.created_at)
+    'center/admins': () => CENTER.adminApps.filter(a => a.status === 'pending').map(a => a.created_at),
+    'center/tasks': () => CENTER.tasks.map(t => t.created_at)
   }
 };
 // 예시 계정: 처음 들어오면 몇 곳에 점이 보이고, 열어 보면 사라져요
@@ -3827,7 +4081,7 @@ const tile = (id, a) => `
       <span class="tile-ic">${ic(a.icon)}</span>
       <b>${a.name}${ndot(id)}</b>
       <span class="d">${a.desc}</span>
-      <span class="stat-line">${a.stat()}</span>
+      <span class="stat-line">${svcLocked(id) ? svcChip(svcLocked(id)) : a.stat()}${ROLE === 'owner' && SVC_AREAS[id] && !svcOn(id) ? ` ${svcChip(id)}` : ''}</span>
       <span class="go">열기 →</span>
     </a>`;
 // 홈 타일도 왼쪽 메뉴와 같은 묶음으로 (메뉴가 적으면 한 줄로)
@@ -3909,6 +4163,12 @@ function todo(items) {
   </div></section>`;
 }
 
+// 원장 홈: 아직 이용하지 않는 분야가 있으면 한 줄 안내
+function svcHint() {
+  const on = Object.keys(SVC_AREAS).filter(svcOn), cs = Object.keys(SVC_AREAS).filter(a => svcOf(a) === 'consulting');
+  if (on.length === 5) return '';
+  return `<a class="hint" href="#services">${ic('star')}<span>센터 지원 ${on.length ? `${on.map(a => SVC_AREAS[a]).join(' · ')} 이용 중` : '아직 이용 중인 분야가 없어요'}${cs.length ? ` · ${cs.map(a => SVC_AREAS[a]).join(' · ')} 상담 중` : ''}</span><b>분야 보기 · 신청 →</b></a>`;
+}
 function home() {
   if (ROLE === 'admin') {
     return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · 학원지원센터 본부 화면이에요.`) + todo(centerTodo()) + favCard() +
@@ -3924,7 +4184,7 @@ function home() {
         [`새 문의 ${urgent}건에 전화하기`, '네이버 플레이스 · 전단지', '#members/leads', '<span class="chip crit">오늘</span>'],
         ['설명회 전단지 시안 확인', '인투마케팅 · 디자인 지원', '#promo/requests', '<span class="chip warn">확인 필요</span>'],
         [`김민지 강사 교육 미이수 ${DATA.training.filter(t => t.status['김민지'] !== 'done').length}건`, '센터 교육 영상 · 가장 빠른 마감 10/31', '#teachers/training', '<span class="chip mute">알림 보내기</span>']
-      ]) + favCard() + startGuide() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
+      ]) + favCard() + startGuide() + svcHint() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
   }
   if (ROLE === 'teacher') {
     const left = DATA.training.filter(t => t.status[ME.name] !== 'done');
@@ -3996,7 +4256,7 @@ const AREA_INTRO = {
   promo: () => `
   <h2 class="sec-title">홍보 지원은 이렇게 써요</h2>
   <section class="card intro partner-intro">
-    <div class="p-head"><span class="p-word">인투<b>마케팅</b></span><div><span class="chip info">공식 홍보 파트너</span><h3>인투마케팅</h3><p class="muted small">학원 홍보를 전문으로 하는 마케팅 팀이에요. 블로그 · 디자인 · 영상 · SNS 광고를 맡아요.</p></div></div>
+    <div class="p-head"><img src="assets/brand/intomarketing-mark.png" alt="인투마케팅" class="p-logo"><div><span class="chip info">공식 홍보 파트너</span><h3>인투마케팅</h3><p class="muted small">학원 홍보를 전문으로 하는 마케팅 팀이에요. 블로그 · 디자인 · 영상 · SNS 광고를 맡아요.</p></div></div>
     <div class="prog">${DATA.promoServices.map(x => `<div><span class="ic">${ic(x.icon)}</span><b>${x.name}</b><span>${x.items.slice(0, 2).join(' · ')}</span></div>`).join('')}</div>
     ${flowSteps([['서비스 골라 의뢰', '필요한 작업 · 원하는 날짜를 적어요'], ['센터가 연결', '센터가 확인하고 인투마케팅 담당자와 이어 드려요'], ['상담 · 견적', '담당자가 연락해 내용과 비용을 정해요'], ['작업 · 시안 확인', '시안이 나오면 "내 의뢰"에서 확인해요'], ['완료', '결과물을 받고 마무리해요']])}
     <div class="row-btns"><a class="btn primary" href="#promo/services">의뢰하러 가기</a><a class="btn" href="${MK}" target="_blank" rel="noopener">인투마케팅 사이트 ${ic('ext')}</a></div>
@@ -4011,11 +4271,13 @@ function subTiles(id, a) {
       <span class="tile-ic">${ic(s.icon)}</span>
       <b>${s.name}${ndot(`${id}/${sid}`)}</b>
       <span class="d">${s.desc}</span>
-      <span class="stat-line">${s.stat()}</span>
+      <span class="stat-line">${svcLocked(`${id}/${sid}`) ? svcChip(svcLocked(`${id}/${sid}`)) : s.stat()}</span>
       <span class="go">열기 →</span>
     </a>`).join('')}</div>`;
 }
 
+// 이 화면이 분야가 꺼져서 잠겨 있으면 그 분야 id
+const svcLocked = path => { const g = svcGateOf(path); return g && !svcOn(g) ? g : null; };
 const trainingTitle = id => { const t = DATA.training.find(x => x.id === id); return t ? t.rawTitle || t.title : ''; };
 const notFound = () => head('페이지를 찾을 수 없어요', '') + '<a class="btn" href="#home">홈으로</a>';
 
@@ -4027,10 +4289,14 @@ function resolve(parts) {
   if (aid === 'home' || !aid) return { html: home(), crumbs: [], area: 'home' };
   if (aid === 'guide') return { html: guidePage(), crumbs: [...crumbs, ['전체 메뉴 안내', '#guide']], area: 'guide' };
   if (aid === 'help' && (ROLE === 'owner' || ROLE === 'teacher')) return { html: helpPage(), crumbs: [...crumbs, ['센터에 문의하기', '#help']], area: 'help' };
+  if (aid === 'services' && ROLE === 'owner') return { html: svcOverviewPage(), crumbs: [...crumbs, ['이용 중인 센터 지원', '#services']], area: 'services' };
   const a = MY[aid];
   if (!a) return { html: notFound(), crumbs, area: '' };
   crumbs.push([a.name, `#${aid}`]);
   if (!a.subs) {
+    // 분야가 꺼져 있으면 신청 안내 (강사 교육처럼 센터가 해 주는 화면만)
+    const g = svcGateOf(aid);
+    if (g && !svcOn(g)) return { html: svcLockPage(g, a.name), crumbs, area: aid };
     // 하위 메뉴가 없는 영역: #영역 → #영역/항목
     if (sid && a.detail) {
       crumbs.push([(a.title || trainingTitle)(sid) || '', '']);
@@ -4042,6 +4308,8 @@ function resolve(parts) {
   const s = a.subs[sid];
   if (!s) return { html: notFound(), crumbs, area: aid };
   crumbs.push([s.name, `#${aid}/${sid}`]);
+  const g = svcGateOf(`${aid}/${sid}`);
+  if (g && !svcOn(g)) return { html: svcLockPage(g, s.name), crumbs, area: aid };
   if (item && s.detail) {
     crumbs.push([(s.title || trainingTitle)(item) || '', '']);
     return { html: s.detail(item), crumbs, area: aid };
@@ -4092,7 +4360,7 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}" data-up>${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav></div>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center'],
+    owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services'],
     teacher: ['home', 'attend', 'students', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
@@ -4200,6 +4468,15 @@ function bind() {
     await loadPartnerApps(); render(); toast('신청을 취소했어요');
   });
   on('[data-act="addPromo"]', () => promoDialog(null));
+  // 분야별 이용 · 센터에 맡기기
+  on('[data-svc-req]', b => svcRequestDialog(b.dataset.svcReq.split(',')));
+  on('[data-act="svcClaim"]', (b, e) => { e.preventDefault(); svcClaimDialog(); });
+  on('[data-task-new]', b => { const [area, ...k] = b.dataset.taskNew.split(':'); taskDialog(area, k.join(':')); });
+  on('[data-task-edit]', b => taskDialog(null, null, REAL.tasks.find(t => t.id === b.dataset.taskEdit)));
+  on('[data-svc-edit]', b => svcEditDialog(CENTER.academies.find(a => a.id === b.dataset.svcEdit)));
+  on('[data-task-filter]', b => { taskFilter = b.dataset.taskFilter; render(); });
+  on('[data-task-step]', b => { const [id, st] = b.dataset.taskStep.split(':'); stepTask(id, st); });
+  on('[data-task-memo]', b => taskMemoDialog(CENTER.tasks.find(t => t.id === b.dataset.taskMemo)));
   on('[data-t-classes]', b => teacherClassesDialog(((REAL && REAL.teacherClasses) || []).find(t => t.user_id === b.dataset.tClasses) || {}));
   on('[data-mk-decide]', b => { const [id, ok] = b.dataset.mkDecide.split(':'); decidePromoDialog(REAL.promoReqs.find(r => r.id === id), ok === '1'); });
   on('[data-pa-decide]', b => { const [id, ok] = b.dataset.paDecide.split(':'); decidePartnerDialog(REAL.partnerApps.find(a => a.id === id), ok === '1'); });
@@ -4640,15 +4917,16 @@ async function loadTraining() {
 // 센터 관리자: 모든 영상 · 리플렉션 수 · 지원 신청 · 제휴 신청 · 유학 연결 요청 · 관리자 명단
 async function loadCenter() {
   const newest = t => SB.from(t).select('*').order('created_at', { ascending: false });
-  const [v, r, q, a, pa, ab, mk, aa, iq] = await Promise.all([
+  const [v, r, q, a, pa, ab, mk, aa, iq, ac, tk] = await Promise.all([
     newest('training_videos'), SB.rpc('admin_training_progress'), newest('support_requests'),
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
-    newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries')
+    newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries'), SB.rpc('admin_academies'), newest('center_tasks')
   ]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = Number(x.done) || 0; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
-    partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [] };
+    partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [],
+    academies: ac.data || [], tasks: tk.data || [] };
 }
 // 원장: 우리 공고 + 지원자
 async function loadJobs() {
@@ -4828,14 +5106,15 @@ async function boot() {
     useProfile();
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, plans: [], invoices: [], expenses: [], incomes: [], paperwork: [],
-      jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
+      jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] }, services: {}, serviceSince: {}, tasks: [],
       approvals: [], reports: [], library: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
+    await loadServices();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans()]);
     if (ROLE === 'owner') await Promise.all([loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
-      loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
+      loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks()]);
     if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses()]);
-    if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
+    if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   } else await loadSeen();
