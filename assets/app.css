@@ -308,3 +308,13 @@ a.player:hover .play { transform: scale(1.06); }
 .admin-add input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .admin-add input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
 @media (max-width: 700px) { .admin-add { grid-template-columns: 1fr; } }
+
+/* 센터 관리자 신청 */
+.admin-apply-link { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.admin-apply-link b { color: var(--blue-600); }
+.admin-apply-link .icon { width: 15px; height: 15px; }
+.side-foot .admin-apply-link { color: rgba(255,255,255,.6); margin: 10px 4px 0; }
+.side-foot .admin-apply-link b { color: #fff; }
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.past { margin-top: 12px; }
+.past summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
