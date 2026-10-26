@@ -937,14 +937,23 @@ function shrinkPhoto(file) {
     img.src = url;
   });
 }
+// 학원마다 한 달 10장 (센터 관리자는 제한 없음 · DB start_photo_read가 막아요)
+const PHOTO_LIMIT = 10;
+const photoLeft = async () => {
+  if (!REAL) return PHOTO_LIMIT - 1;
+  const { data, error } = await SB.rpc('photo_read_left', { p_academy: REAL.academy.id });
+  return error ? undefined : data;
+};
+const leftText = n => n === null ? '센터 관리자라 장수 제한이 없어요' : n === undefined ? '' : `이번 달 ${PHOTO_LIMIT}장 중 <b>${n}장</b> 남았어요${n ? '' : ' · 다음 달 1일에 다시 채워져요'}`;
 const PHOTO_ERR = {
   no_key: '사진 읽기가 아직 준비 중이에요. 센터가 설정을 마치면 바로 쓸 수 있어요. 지금은 직접 넣거나 엑셀로 올려 주세요.',
   owner_only: '사진으로 올리기는 원장님만 쓸 수 있어요.', too_big: '사진이 너무 커요. 조금 멀리서 다시 찍어 주세요.',
-  busy: '지금 사진을 읽는 사람이 많아요. 잠시 후 다시 눌러 주세요.', refused: '이 사진은 읽을 수 없어요. 시간표 · 수강료표만 보이게 다시 찍어 주세요.'
+  busy: '지금 사진을 읽는 사람이 많아요. 잠시 후 다시 눌러 주세요.',
+  photo_limit: `이번 달 사진 ${PHOTO_LIMIT}장을 모두 썼어요. 다음 달 1일에 다시 채워져요. 지금은 직접 넣거나 엑셀로 올려 주세요.`, refused: '이 사진은 읽을 수 없어요. 시간표 · 수강료표만 보이게 다시 찍어 주세요.'
 };
 async function readPhoto(kind, b64) {
-  if (!REAL) { await new Promise(r => setTimeout(r, 1200)); return { rows: PHOTO_IMPORTS[kind].sample, note: '예시 계정이라 예시 결과를 보여 드려요.', demo: true }; }
-  const { data, error } = await SB.functions.invoke('read-photo', { body: { kind, image: b64, media_type: 'image/jpeg' } });
+  if (!REAL) { await new Promise(r => setTimeout(r, 1200)); return { rows: PHOTO_IMPORTS[kind].sample, note: '예시 계정이라 예시 결과를 보여 드려요.', demo: true, left: PHOTO_LIMIT - 1 }; }
+  const { data, error } = await SB.functions.invoke('read-photo', { body: { kind, image: b64, media_type: 'image/jpeg', academy_id: REAL.academy.id } });
   if (error) { let code = ''; try { code = (await error.context.json()).error; } catch (e) { /* 연결 오류 */ } throw new Error(code || 'network'); }
   return data;
 }
@@ -953,8 +962,8 @@ function photoImportDialog(kind) {
   const toRow = x => Array.isArray(x)
     ? Object.fromEntries([...cfg.cols.map(([k], i) => [k, x[i] ?? '']), ['unsure', !!x[cfg.cols.length]]])
     : { ...x, start_time: x.start_time ? String(x.start_time).slice(0, 5) : '', end_time: x.end_time ? String(x.end_time).slice(0, 5) : '' };
-  let rows = [], photo = null, note = '';
-  const start = msg => {
+  let rows = [], photo = null, note = '', left;
+  const start = async msg => {
     d.innerHTML = `
     <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
       <h2>${cfg.title}</h2>
@@ -962,11 +971,14 @@ function photoImportDialog(kind) {
       <div class="ph-drop">
         <label class="btn primary file-btn">${ic('plus')}사진 고르기 · 찍기<input type="file" id="phFile" accept="image/*"></label>
         <span class="muted small">JPG · PNG · 휴대폰 사진 · 화면 캡처</span>
+        <span class="small" id="phLeft">${leftText(left)}</span>
       </div>
       <p class="msg" id="dlgMsg" ${msg ? '' : 'hidden'}>${msg || ''}</p>
       <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div>
     </form>`;
     $('#dlgCancel').onclick = () => d.close();
+    if (left === undefined) photoLeft().then(n => { left = n; const el = $('#phLeft'); if (el) el.innerHTML = leftText(n); if (n === 0) $('#phFile').disabled = true; });
+    else if (left === 0) $('#phFile').disabled = true;
     $('#phFile').onchange = async e => {
       const f = e.target.files[0];
       if (!f) return;
@@ -975,10 +987,10 @@ function photoImportDialog(kind) {
       reading();
       try {
         const res = await readPhoto(kind, photo.b64);
-        rows = (res.rows || []).map(toRow); note = res.note || '';
+        rows = (res.rows || []).map(toRow); note = res.note || ''; if (res.left !== undefined) left = res.left;
         if (!rows.length) return start(note || '사진에서 읽을 줄을 찾지 못했어요. 더 밝고 가깝게 찍어 주세요.');
         review();
-      } catch (err) { start(PHOTO_ERR[err.message] || '사진을 읽지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.'); }
+      } catch (err) { if (err.message === 'photo_limit') left = 0; start(PHOTO_ERR[err.message] || '사진을 읽지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요. (못 읽은 사진은 장수에서 빠지지 않아요)'); }
     };
   };
   const reading = () => {
@@ -1002,6 +1014,7 @@ function photoImportDialog(kind) {
         ${rows.some(r => r.unsure) ? '<p class="small" style="margin:4px 0 0"><span class="chip warn">확인 필요</span> 표시는 흐리거나 짐작한 칸이 있는 줄이에요.</p>' : ''}
         ${dupN ? `<p class="small muted" style="margin:4px 0 0">이미 있는 ${dupN}줄은 체크를 꺼 두었어요.</p>` : ''}
         ${note ? `<p class="small muted" style="margin:4px 0 0">${esc(note)}</p>` : ''}
+        ${left !== undefined ? `<p class="small muted" style="margin:4px 0 0">${leftText(left)}</p>` : ''}
       </div></div>
       <div class="ph-rows">${rows.map((r, i) => `
         <div class="ph-row ${r.unsure ? 'unsure' : ''}" data-i="${i}">
