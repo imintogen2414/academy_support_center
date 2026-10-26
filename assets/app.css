@@ -394,3 +394,4 @@ dialog:has(.dlg.wide) { width: min(860px, calc(100vw - 32px)); }
 .qa summary { font-weight: 700; cursor: pointer; font-size: 14px; }
 .qa p { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; }
 @media (max-width: 560px) { .p-head { align-items: flex-start; } .p-head .p-logo, .p-head .p-word { width: 64px; height: 64px; } }
+.li .d.pre { white-space: pre-line; }

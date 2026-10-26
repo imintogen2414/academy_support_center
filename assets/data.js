@@ -96,6 +96,13 @@ const DATA = {
 
   /* ---------- 홍보 지원 (인투마케팅 연결) ---------- */
   marketingUrl: 'https://intomarketing.co.kr',
+  /* ---------- 결재 (강사 → 원장) ---------- */
+  approvals: [
+    { id: 'a1', kind: '물품 구입', title: '초등 B반 화이트보드 마커 12개', amount: 28000, requester_name: '김민지', detail: '검정 6 · 파랑 3 · 빨강 3\n쿠팡 링크로 주문할게요.', want_by: '2026-10-28', status: 'pending', created_at: '2026-10-25T09:00:00Z' },
+    { id: 'a2', kind: '재정 지출', title: '할로윈 특강 간식비', amount: 60000, requester_name: '정하윤', detail: '20명 · 쿠키와 음료', status: 'pending', created_at: '2026-10-24T09:00:00Z' },
+    { id: 'a3', kind: '물품 구입', title: '중등 문법 교재 15권', amount: 210000, requester_name: '이도현', status: 'approved', owner_comment: '이번 주 안에 주문해 주세요.', decided_at: '2026-10-22T09:00:00Z', created_at: '2026-10-21T09:00:00Z' }
+  ],
+
   promoServices: [
     { id: 'blog', name: '블로그 지원', icon: 'doc', desc: '학원 소개·수업 후기·설명회 포스팅을 전문 작가가 써 드려요.', items: ['네이버 블로그 정기 포스팅', '지역 키워드 상위 노출', '설명회·특강 홍보 글'] },
     { id: 'design', name: '디자인 지원', icon: 'page', desc: '전단지·현수막·카드뉴스까지 학원 이미지에 맞춰 만들어요.', items: ['전단지 · 현수막 · 배너', 'SNS 카드뉴스', '학원 로고 · 간판 시안'] },

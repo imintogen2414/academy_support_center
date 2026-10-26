@@ -686,6 +686,8 @@ function realOwnerTodo() {
   if (left) items.push([`오늘 출결 ${left}명 입력 전`, '강사님이 수업 중에 입력해도 돼요', '#admin/attend', '<span class="chip warn">오늘</span>']);
   const urgent = DATA.leads.filter(l => l.urgent);
   if (urgent.length) items.push([`급한 문의 ${urgent.length}건에 연락하기`, urgent.slice(0, 3).map(l => esc(l.name)).join(' · '), '#members/leads', '<span class="chip crit">오늘</span>']);
+  const apv = REAL.approvals.filter(a => a.status === 'pending');
+  if (apv.length) items.push([`강사 결재 ${apv.length}건 확인하기`, apv.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">결재 대기</span>']);
   const fresh = REAL.applicants.filter(a => a.status === 'applied');
   if (fresh.length) items.push([`새 강사 지원자 ${fresh.length}명`, fresh.slice(0, 3).map(a => esc(a.name)).join(' · '), '#teachers/hire', '<span class="chip info">지원</span>']);
   const ab = REAL.abroad.requests.filter(r => r.status === 'new');
@@ -698,6 +700,93 @@ function realOwnerTodo() {
   if (waiting.length && REAL.students.length) items.push([`앱 가입한 가족 ${waiting.length}명 아이와 연결하기`, waiting.slice(0, 3).map(f => esc(f.name)).join(' · '), '#members/students', '<span class="chip info">앱 연결</span>']);
   if (!items.length) items.push(['오늘 급하게 챙길 일은 없어요', '서류 마감 · 미납 · 출결 · 급한 문의를 살펴봤어요', '#admin', '<span class="chip good">여유</span>']);
   return items;
+}
+
+/* ================= 결재: 강사 → 원장 (Supabase approvals) =================
+   강사가 물품 · 재정 지출을 올리면 원장이 승인 · 반려. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요. */
+const APV_KINDS = ['물품 구입', '재정 지출', '기타'];
+const APV_STATE = { pending: ['warn', '결재 대기'], approved: ['good', '승인'], rejected: ['crit', '반려'] };
+const APV_EXP = { '물품 구입': '교재비', '재정 지출': '기타', '기타': '기타' };
+const apvData = () => REAL ? REAL.approvals : ROLE === 'teacher' ? DATA.approvals.filter(a => a.requester_name === ME.name) : DATA.approvals;
+let apvFilter = 'pending';
+const apvRow = (a, owner) => {
+  const [c, l] = APV_STATE[a.status];
+  return `
+    <div class="li">
+      <span class="av" style="background:${a.status === 'pending' ? 'var(--warn)' : a.status === 'approved' ? 'var(--good)' : 'var(--crit)'}">${ic(a.kind === '재정 지출' ? 'card' : 'doc')}</span>
+      <div><div class="t">${owner || a.status !== 'pending' ? esc(a.title) : `<span class="nm-link" data-edit-apv="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>`} <span class="chip mute">${esc(a.kind)}</span></div>
+        <div class="d">${owner ? `${esc(a.requester_name || '강사')} · ` : ''}${md(a.created_at.slice(0, 10))} 올림${a.want_by ? ` · ${md(a.want_by)}까지 필요` : ''}${a.amount != null ? ` · <b>${won(a.amount)}</b>` : ''}</div>
+        ${a.detail ? `<div class="d pre">${esc(a.detail)}</div>` : ''}
+        ${a.owner_comment ? `<div class="d"><b>원장 의견</b> ${esc(a.owner_comment)}</div>` : ''}
+        ${a.expense_id ? '<div class="d">재정 지출에 넣었어요</div>' : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span>${owner && a.status === 'pending' ? `<span class="btns"><button class="btn sm" data-apv="${a.id}:0">반려</button><button class="btn sm primary" data-apv="${a.id}:1">승인</button></span>`
+        : !owner && a.status === 'pending' ? `<button class="btn sm" data-cancel-apv="${a.id}">취소</button>` : a.decided_at ? `<span class="time">${md(a.decided_at.slice(0, 10))} 결재</span>` : ''}</div>
+    </div>`;
+};
+// 원장: 결재함
+function approvalsOwnerPage() {
+  const all = apvData(), list = all.filter(a => apvFilter === 'all' || a.status === apvFilter);
+  const n = k => all.filter(a => a.status === k).length;
+  return head('결재함', '강사님이 올린 물품 구입 · 재정 지출 결재예요. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요.') + `
+  <div class="stats">
+    <div class="stat ${n('pending') ? 'crit' : ''}"><span>결재 대기</span><b class="num">${n('pending')}건</b></div>
+    <div class="stat"><span>대기 금액</span><b class="num">${won(sum(all.filter(a => a.status === 'pending'), a => a.amount || 0))}</b></div>
+    <div class="stat good"><span>이번 달 승인</span><b class="num">${all.filter(a => a.status === 'approved' && (a.decided_at || '').startsWith(TODAY.slice(0, 7))).length}건</b></div>
+  </div>
+  <div class="filters">${[['pending', `결재 대기 ${n('pending')}`], ['approved', '승인'], ['rejected', '반려'], ['all', '전체']].map(([k, l]) => `<button class="${apvFilter === k ? 'on' : ''}" data-apv-filter="${k}">${l}</button>`).join('')}</div>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(a => apvRow(a, true)).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>${apvFilter === 'pending' ? '기다리는 결재가 없어요' : '아직 없어요'}</h2>
+    <p class="muted">강사님이 "결재 요청"에서 올리면 여기에 바로 나와요.</p></section>`}`;
+}
+// 강사: 결재 요청
+function approvalsTeacherPage() {
+  const all = apvData();
+  const add = `<button class="btn primary" data-act="newApv">${ic('plus')}결재 올리기</button>`;
+  return head('결재 요청', '수업에 필요한 물품이나 비용을 원장님께 결재받아요. 기다리는 동안에는 제목을 눌러 고치거나 취소할 수 있어요.', add) + (all.length ? `
+  <section class="card"><div class="list stack">${all.map(a => apvRow(a, false)).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>아직 올린 결재가 없어요</h2>
+    <p class="muted">교재 · 수업 준비물 · 행사 비용처럼 원장님 확인이 필요한 걸 올려 주세요. 승인 · 반려되면 여기서 바로 보여요.</p>${add}</section>`);
+}
+function approvalDialog(a) {
+  if (!REAL) { toast('예시 계정에서는 올릴 수 없어요'); return; }
+  formDialog({
+    title: a ? '결재 고치기' : '결재 올리기', table: 'approvals', row: a, after: loadApprovals, okText: a ? '저장' : '올리기',
+    label: r => `${r.title} 결재를`, doneText: '결재를 올렸어요 · 원장님이 확인하면 알려 드려요',
+    fields: [
+      ['kind', '종류', { type: 'select', required: true, options: APV_KINDS, value: '물품 구입', half: true }],
+      ['amount', '금액(원)', { type: 'number', placeholder: '예: 45000', half: true }],
+      ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 초등 B반 화이트보드 마커 12개' }],
+      ['detail', '자세한 내용', { type: 'area', max: 2000, rows: 4, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
+      ['want_by', '언제까지 필요해요?', { type: 'date' }]
+    ]
+  });
+}
+// 원장: 승인 · 반려 창
+function decideDialog(a, ok) {
+  const d = dialogEl();
+  const canExp = ok && a.amount > 0;
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="apvForm" novalidate>
+    <h2>${ok ? '결재 승인' : '결재 반려'}</h2>
+    <p class="muted small" style="margin:0">${esc(a.requester_name || '강사')} · ${esc(a.title)}${a.amount != null ? ` · ${won(a.amount)}` : ''}</p>
+    <label class="f">${ok ? '전할 말 (선택)' : '반려 이유'}<textarea name="comment" rows="3" maxlength="500" placeholder="${ok ? '예: 다음 주 월요일까지 구입해 주세요. 영수증은 꼭 챙겨 주세요.' : '예: 이번 달 예산을 넘어서 다음 달에 다시 올려 주세요.'}"></textarea></label>
+    ${canExp ? `<label class="chk-line"><input type="checkbox" name="toExp" checked><span>재정에 지출로 바로 넣기</span></label>
+    <label class="f">지출 항목<select name="cat">${EXP_CATS.map(c => `<option ${c === APV_EXP[a.kind] ? 'selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn ${ok ? 'primary' : 'danger'}">${ok ? '승인' : '반려'}</button></div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#apvForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, comment = el.comment.value.trim();
+    if (!ok && !comment) { const m = $('#dlgMsg'); m.textContent = '반려 이유를 적어 주세요.'; m.hidden = false; return; }
+    const cat = canExp && el.toExp.checked ? el.cat.value : null;
+    const { error } = await SB.rpc('decide_approval', { p_id: a.id, p_ok: ok, p_comment: comment || null, p_category: cat });
+    if (error) { const m = $('#dlgMsg'); m.textContent = /not_pending/.test(error.message) ? '이미 결재한 건이에요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; m.hidden = false; return; }
+    d.close(); await Promise.all([loadApprovals(), cat ? loadExpenses() : null]); render();
+    toast(ok ? `승인했어요${cat ? ' · 재정 지출에 넣었어요' : ''}` : '반려했어요');
+  };
 }
 
 /* ================= 원장 · 강사 관리 ================= */
@@ -2005,6 +2094,7 @@ const AREAS = {
           const m = TODAY.slice(0, 7), t = finTotals(ledger().filter(e => e.day.startsWith(m)));
           return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
+        approvals: { name: '결재함', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvData().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
         paper: { name: '서류·행정', icon: 'doc', desc: '교육청·세무서·공단 신고 서류', stat: () => `작성 필요 ${(REAL ? REAL.paperwork : DATA.paperwork).filter(p => p.status === 'todo').length}건`, render: paperPage }
       } },
     teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · ${applicantStat()}`,
@@ -2040,6 +2130,7 @@ const AREAS = {
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
     jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
+    approvals: { name: '결재 요청', icon: 'check', desc: '물품 · 비용을 원장님께 결재받기', stat: () => { const n = apvData().filter(a => a.status === 'pending').length; return n ? `결재 대기 ${n}건` : `올린 결재 ${apvData().length}건`; }, render: approvalsTeacherPage },
     promo: null // 아래에서 원장 홍보 지원을 같이 써요
   },
   parent: {
@@ -2116,6 +2207,8 @@ function home() {
     const left = DATA.training.filter(t => t.status[ME.name] !== 'done');
     return head(`${ME.name} 선생님, 안녕하세요`, `${DATA.today} · ${DATA.academy.name} 초등 A·B반`) +
       todo(left.slice(0, 2).map(t => [t.title, `센터 교육 영상 · ${t.len}`, `#learn/${t.id}`, `<span class="chip warn">마감 ${t.due}</span>`])
+        .concat(apvData().filter(a => a.status !== 'pending' && a.decided_at && dday(a.decided_at.slice(0, 10)) >= -3).slice(0, 2)
+          .map(a => [`결재 ${APV_STATE[a.status][1]}: ${esc(a.title)}`, a.owner_comment ? esc(a.owner_comment) : '원장님이 결재했어요', '#approvals', `<span class="chip ${APV_STATE[a.status][0]}">${APV_STATE[a.status][1]}</span>`]))
         .concat([['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : '초등 B반 17:00 · 수업 중에 입력해 주세요', '#attend', '<span class="chip info">오늘</span>']])) +
       `<h2 class="sec-title">바로 가기</h2>` + tiles();
   }
@@ -2266,7 +2359,7 @@ function render() {
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
     owner: ['home', 'admin', 'teachers', 'members', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'learn', 'jobs', 'promo', 'center'], parent: ['home', 'kid', 'news', 'abroad', 'center'], student: ['home', 'attend', 'news', 'center'], admin: ['home', 'center']
+    teacher: ['home', 'attend', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'news', 'abroad', 'center'], student: ['home', 'attend', 'news', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -2438,6 +2531,21 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 결재
+  on('[data-act="newApv"]', () => approvalDialog(null));
+  on('[data-edit-apv]', b => approvalDialog(REAL.approvals.find(a => a.id === b.dataset.editApv)));
+  on('[data-apv-filter]', b => { apvFilter = b.dataset.apvFilter; render(); });
+  on('[data-apv]', b => {
+    const [id, ok] = b.dataset.apv.split(':'), a = apvData().find(x => x.id === id);
+    if (!REAL) { a.status = ok === '1' ? 'approved' : 'rejected'; a.decided_at = new Date().toISOString(); render(); toast(ok === '1' ? '승인했어요' : '반려했어요'); return; }
+    decideDialog(a, ok === '1');
+  });
+  on('[data-cancel-apv]', async b => {
+    if (!confirm('결재 요청을 취소할까요?')) return;
+    const { error } = await SB.from('approvals').delete().eq('id', b.dataset.cancelApv);
+    if (error) { toast('취소하지 못했어요'); return; }
+    await loadApprovals(); render(); toast('결재 요청을 취소했어요');
+  });
   on('[data-mk-step]', b => { const [id, st] = b.dataset.mkStep.split(':'); stepPromoReq(id, st); });
   on('[data-edit-mk]', b => centerPromoDialog(CENTER.promoReqs.find(r => r.id === b.dataset.editMk)));
   // 학부모·학생 (실제 데이터)
@@ -2632,6 +2740,7 @@ async function loadRows(table, order, ascending = true) {
 const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadIncomes = () => loadRows('incomes', 'day', false);
+const loadApprovals = () => loadRows('approvals', 'created_at', false);
 const loadPaperwork = () => loadRows('paperwork', 'created_at');
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
@@ -2846,9 +2955,9 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
-      family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
-    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining()]);
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
