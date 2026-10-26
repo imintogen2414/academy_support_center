@@ -1,7 +1,8 @@
 // 시안용 예시 데이터 — 나중에 Supabase 테이블로 옮길 구조 그대로 둡니다
 const DATA = {
   today: '', // app.js가 실제 오늘 날짜로 채워요
-  academy: { name: '하늘영어학원', short: '하', area: '수원 영통구', students: 53 },
+  academy: { name: '하늘영어학원', short: '하', area: '수원 영통구', students: 53,
+    pay: { bank: '국민', account: '000000-00-000000 (예시)', holder: '하늘영어학원', note: '아이 이름으로 보내 주세요 · 매달 10일까지' } },
 
   users: {
     owner: { name: '정수민', label: '원장', av: '정', color: 'var(--r-owner)' },
@@ -18,14 +19,15 @@ const DATA = {
     { cls: '중등 기초반', total: 15, present: 14, absent: 1 },
     { cls: '고등 심화반', total: 12, present: 10, absent: 0 }
   ],
-  billing: { month: '10월', total: 48 }, // 납부 · 미납 수와 미납 금액은 아래 unpaid 목록으로 계산해요
+  billing: { month: '10월', total: 53 }, // 원생마다 한 건. 납부 · 미납 수와 미납 금액은 아래 unpaid 목록으로 계산해요 (days 0 = 오늘 마감)
   unpaid: [
     { name: '최지호', cls: '중등 기초반', amount: 32, days: 12 },
     { name: '한서윤', cls: '초등 B반', amount: 30, days: 8 },
     { name: '오준서', cls: '고등 심화반', amount: 38, days: 5 },
     { name: '김도하', cls: '초등 A반', amount: 30, days: 3 },
     { name: '윤채아', cls: '고등 심화반', amount: 38, days: 2 },
-    { name: '박시우', cls: '초등 A반', amount: 30, days: 1 }
+    { name: '박시우', cls: '초등 A반', amount: 30, days: 1 },
+    { name: '이서연', cls: '초등 B반', amount: 30, days: 0 }
   ],
   finance: { income: 1480, expense: 960, items: [['강사 급여', 620], ['임대료', 220], ['교재비', 95], ['공과금·기타', 25]] },
   paperwork: [
@@ -92,8 +94,8 @@ const DATA = {
       { id: 'ap2', program: '유학 설명회', title: '11월 조기유학 · 어학연수 설명회', body: '인투유학 유학 상담사가 학원에 직접 와서 국가별 비용과 준비 과정을 설명해 드려요.', event_date: '2026-11-15', active: true }
     ],
     requests: [
-      { id: 'ar1', promo_id: 'ap1', program: '방학 해외 영어캠프', parent_name: '김은정', phone: '010-****-2481', student_name: '이서연', student_grade: '초5', memo: '처음 보내는 거라 안전이 걱정돼요.', status: 'new', created_at: '2026-10-24' },
-      { id: 'ar2', promo_id: 'ap2', program: '유학 설명회', parent_name: '박상훈', phone: '010-****-7710', student_name: '박하은', student_grade: '중1', memo: null, status: 'forwarded', owner_memo: '설명회 전에 개별 상담 원하심', created_at: '2026-10-21' }
+      { id: 'ar1', promo_id: 'ap1', program: '방학 해외 영어캠프', parent_name: '김은정', phone: '010-0000-2481', student_name: '이서연', student_grade: '초5', memo: '처음 보내는 거라 안전이 걱정돼요.', status: 'new', created_at: '2026-10-24' },
+      { id: 'ar2', promo_id: 'ap2', program: '유학 설명회', parent_name: '박상훈', phone: '010-0000-7710', student_name: '박하은', student_grade: '중1', memo: null, status: 'forwarded', owner_memo: '설명회 전에 개별 상담 원하심', created_at: '2026-10-21' }
     ]
   },
 
@@ -162,14 +164,14 @@ const DATA = {
     { id: 7, name: '송민호', grade: '중3', want: '중등 기초반', src: '전단지', stage: 'inquiry', next: '오늘 전화 필요', urgent: true }
   ],
   students: [
-    { name: '이서연', grade: '초5', cls: '초등 B반', parent: '김은정', phone: '010-****-2481', attend: 98, paid: true },
-    { name: '박하은', grade: '중1', cls: '중등 기초반', parent: '박상훈', phone: '010-****-7710', attend: 100, paid: true },
-    { name: '최지호', grade: '중2', cls: '중등 기초반', parent: '이미영', phone: '010-****-3092', attend: 86, paid: false },
-    { name: '한서윤', grade: '초4', cls: '초등 B반', parent: '한지원', phone: '010-****-5521', attend: 92, paid: false },
-    { name: '오준서', grade: '고1', cls: '고등 심화반', parent: '오세훈', phone: '010-****-1187', attend: 95, paid: false },
-    { name: '김도하', grade: '초2', cls: '초등 A반', parent: '김나래', phone: '010-****-6634', attend: 97, paid: false },
-    { name: '정예린', grade: '고2', cls: '고등 심화반', parent: '정민수', phone: '010-****-9045', attend: 99, paid: true },
-    { name: '임서아', grade: '초6', cls: '초등 B반', parent: '임하나', phone: '010-****-2210', attend: 94, paid: true }
+    { name: '이서연', grade: '초5', cls: '초등 B반', parent: '김은정', phone: '010-0000-2481', attend: 98, paid: false },
+    { name: '박하은', grade: '중1', cls: '중등 기초반', parent: '박상훈', phone: '010-0000-7710', attend: 100, paid: true },
+    { name: '최지호', grade: '중2', cls: '중등 기초반', parent: '이미영', phone: '010-0000-3092', attend: 86, paid: false },
+    { name: '한서윤', grade: '초4', cls: '초등 B반', parent: '한지원', phone: '010-0000-5521', attend: 92, paid: false },
+    { name: '오준서', grade: '고1', cls: '고등 심화반', parent: '오세훈', phone: '010-0000-1187', attend: 95, paid: false },
+    { name: '김도하', grade: '초2', cls: '초등 A반', parent: '김나래', phone: '010-0000-6634', attend: 97, paid: false },
+    { name: '정예린', grade: '고2', cls: '고등 심화반', parent: '정민수', phone: '010-0000-9045', attend: 99, paid: true },
+    { name: '임서아', grade: '초6', cls: '초등 B반', parent: '임하나', phone: '010-0000-2210', attend: 94, paid: true }
   ],
   notices: [
     { title: '11월 학부모 설명회 안내', to: '전체 학부모', at: '10/24', read: 41, total: 53 },
@@ -201,3 +203,30 @@ const DATA = {
     record: { attend: 98, lastTest: 'Unit 6 단어시험 19/20', comment: '리딩 속도가 눈에 띄게 빨라졌어요. 이번 달엔 쓰기 연습을 늘려 볼게요. — 김민지 선생님' }
   }
 };
+
+// 예시 원생: 위에 적은 학생 + 반별 오늘 출결 인원(attendance의 total)만큼 이름을 채워요.
+// 그래서 원생 수 · 담당 반 원생 · 출결 · 수납(미납 목록) 숫자가 어느 화면에서나 서로 맞아요. 연락처는 010-0000-으로 시작하는 가짜 번호예요.
+(() => {
+  const fam = '김이박최정강조윤장임한오서신권황안송류홍', given = ['민준', '서준', '하준', '도윤', '지우', '하윤', '지아', '수아', '예준', '시윤', '주원', '유나', '채원', '지민', '은우', '하린', '윤서', '도현', '다은', '건우', '소율', '시아', '태윤', '나은'];
+  const grades = { '초등 A반': ['초2', '초3'], '초등 B반': ['초4', '초5', '초6'], '중등 기초반': ['중1', '중2'], '고등 심화반': ['고1', '고2'] };
+  const owed = new Set(DATA.unpaid.map(u => u.name)), used = new Set(DATA.students.map(x => x.name));
+  // 미납 목록에만 있는 학생도 명단에 넣어요
+  DATA.unpaid.filter(u => !used.has(u.name)).forEach(u => { DATA.students.push({ name: u.name, grade: grades[u.cls][0], cls: u.cls, attend: 93 }); used.add(u.name); });
+  let k = 0;
+  DATA.attendance.forEach(c => {
+    while (DATA.students.filter(x => x.cls === c.cls).length < c.total) {
+      const nm = fam[k % fam.length] + given[(k * 7) % given.length]; k++;
+      if (used.has(nm)) continue;
+      used.add(nm);
+      DATA.students.push({ name: nm, grade: grades[c.cls][k % grades[c.cls].length], cls: c.cls, attend: 85 + (k * 7) % 15 });
+    }
+  });
+  DATA.students.forEach((x, i) => {
+    x.id = x.id || `st${i + 1}`;
+    x.parent = x.parent || fam[(i * 3 + 5) % fam.length] + ['정희', '미경', '성호', '지현', '수진', '동훈', '은영', '재훈'][i % 8];
+    x.phone = x.phone || `010-0000-${String(3100 + i * 37).slice(-4)}`;
+    x.paid = !owed.has(x.name);
+  });
+  DATA.academy.students = DATA.students.length;
+  DATA.billing.total = DATA.students.length;
+})();

@@ -14,7 +14,7 @@
 <script>
 // 첫 화면(index.html)으로 합쳐졌어요. 예전 주소로 들어와도 같은 곳으로 보내 줍니다.
 const a = new URLSearchParams(location.search).get('area');
-location.replace('index.html' + (a ? '#area/' + a : ''));
+location.replace(a ? '/area/' + a : '/');
 </script>
 </head>
 <body><a href="index.html">학원지원센터로 이동</a></body>

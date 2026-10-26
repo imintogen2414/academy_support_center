@@ -19,10 +19,11 @@
 <meta name="twitter:description" content="행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.">
 <meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=2">
 <meta name="theme-color" content="#070a3d">
-<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://academysupportcenter.vercel.app/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
-<link rel="stylesheet" href="assets/base.css">
-<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="stylesheet" href="/assets/site.css">
 <script>try{var t=localStorage.getItem('asc-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -36,7 +37,7 @@
 <!-- 왼쪽: 지원받기 — 분야 고르기 → 분야 상세 → 지원 신청 → 접수 완료 -->
 <aside class="support">
   <div class="top-row">
-    <a href="index.html" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
+    <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
     <span class="top-r"><button type="button" class="theme-btn" data-theme-toggle aria-label="화면 밝기 바꾸기"></button><span class="tag">지원받기</span></span>
   </div>
   <div id="panel"></div>
@@ -53,7 +54,7 @@
     <!-- 이미 로그인돼 있으면 보여 줌 -->
     <div class="signed" id="signedIn" hidden>
       <span id="signedName"></span>
-      <div class="row"><a class="btn primary sm" href="app.html">프로그램 열기</a><button class="btn sm" type="button" id="signOut">로그아웃</button></div>
+      <div class="row"><a class="btn primary sm" href="/app.html">프로그램 열기</a><button class="btn sm" type="button" id="signOut">로그아웃</button></div>
     </div>
 
     <div class="tabs" role="tablist">
@@ -118,18 +119,18 @@
   </div>
 </main>
 
-<script src="assets/vendor/supabase.js"></script>
-<script src="assets/env.js"></script>
-<script src="assets/supa.js"></script>
-<script src="assets/areas.js"></script>
-<script src="assets/regions.js"></script>
-<script src="assets/theme.js"></script>
+<script src="/assets/vendor/supabase.js"></script>
+<script src="/assets/env.js"></script>
+<script src="/assets/supa.js"></script>
+<script src="/assets/areas.js"></script>
+<script src="/assets/regions.js"></script>
+<script src="/assets/theme.js"></script>
 <script>
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const panel = document.getElementById('panel');
 let applied = null; // 방금 접수한 신청 (접수 완료 화면에 보여줌)
 
-/* ---------- 왼쪽 패널 화면들 (#area/admin, #apply, #done, #ask 같은 해시로 이동) ---------- */
+/* ---------- 왼쪽 패널 화면들 (/area/admin 주소, #apply · #done · #ask 해시로 이동) ---------- */
 // 센터 소개 → 이용 방법 → 지원 분야 → 비용 → 이용 사례 → 자주 묻는 질문 → 운영 정보 순서로 보여 줘요
 function homeView() {
   return `
@@ -148,7 +149,7 @@ function homeView() {
     </ol>
     <div class="label">무엇을 지원받고 싶으세요?</div>
     <div class="glist">${SITE_AREAS.map(a => `
-      <a class="grow" href="#area/${a.id}" style="--ac:${a.accent}"><span class="ic">${sic(a.icon)}</span><span><b>${a.name}</b><small>${a.short}</small></span><span class="go">자세히 ›</span></a>`).join('')}
+      <a class="grow" href="/area/${a.id}" style="--ac:${a.accent}"><span class="ic">${sic(a.icon)}</span><span><b>${a.name}</b><small>${a.short}</small></span><span class="go">자세히 ›</span></a>`).join('')}
     </div>
     <div class="acts"><a class="btn light" href="#apply">지원 신청하기</a><a class="btn outline" href="#ask">먼저 문의하기</a></div>
     ${priceSec()}
@@ -179,8 +180,8 @@ function orgSec() {
   const o = SITE_ORG;
   return `
     <section class="d-sec org">
-      <h3>운영 정보 <span class="ex">예시</span></h3>
-      <dl>${o.rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+      <h3>운영 정보 · 사업자 정보 ${o.ready ? '' : '<span class="ex">예시</span>'}</h3>
+      <dl>${o.rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v || '<span class="muted">오픈 전 입력</span>'}</dd></div>`).join('')}</dl>
       <div class="acts"><a class="btn outline sm" href="tel:${o.tel.replace(/[^0-9]/g, '')}">전화 ${o.tel}</a><a class="btn outline sm" href="mailto:${o.mail}">메일 보내기</a><a class="btn outline sm" href="#ask">문의 남기기</a></div>
     </section>`;
 }
@@ -209,7 +210,7 @@ function areaView(a) {
     : `<a class="btn outline" href="${a.demo}">실제 화면 미리 보기</a>`;
   return `
   <div class="area" style="--ac:${a.accent}">
-    <a class="back" href="#">‹ 전체 지원 분야</a>
+    <a class="back" href="/">‹ 전체 지원 분야</a>
     <div class="d-hero">
       <div class="d-hero-text">
         <div class="d-head"><div class="big-ic">${sic(a.icon)}</div><span class="kick">지원 분야 ${idx}/${SITE_AREAS.length} · ${a.name}</span></div>
@@ -254,7 +255,7 @@ function areaView(a) {
 
     <section class="d-sec">
       <h3>다른 지원 분야</h3>
-      <div class="chips">${SITE_AREAS.filter(x => x !== a).map(x => `<a href="#area/${x.id}" style="--ac:${x.accent}">${sic(x.icon)}${x.name}</a>`).join('')}</div>
+      <div class="chips">${SITE_AREAS.filter(x => x !== a).map(x => `<a href="/area/${x.id}" style="--ac:${x.accent}">${sic(x.icon)}${x.name}</a>`).join('')}</div>
     </section>
 
     <div class="sticky-cta">
@@ -282,7 +283,7 @@ const CONTACT_TIMES = ['오전 (9시~12시)', '오후 (12시~6시)', '저녁 (6�
 
 function applyView(pick) {
   return `
-    <a class="back" href="${pick ? `#area/${pick}` : '#'}">‹ 이전으로</a>
+    <a class="back" href="${pick ? `/area/${pick}` : '/'}">‹ 이전으로</a>
     <h1>지원 신청</h1>
     <p class="lede">남겨 주시면 학원지원센터 담당 매니저가 평일 하루 안에 연락드려요. 비용은 상담 후 학원에 맞춰 견적을 드려요.</p>
     <form class="form" id="applyForm" novalidate>
@@ -311,17 +312,30 @@ function applyView(pick) {
     </form>`;
 }
 
-// 언제 연락드리는지: 평일 9시 30분~오후 4시 30분에 신청하면 오늘 안, 그 밖에는 다음 평일 오전
-function etaText(when) {
-  const now = new Date(), d = new Date(now), m = now.getHours() * 60 + now.getMinutes(), wd = now.getDay();
+// 쉬는 날(공휴일 · 대체 공휴일 · 선거일). 해마다 다음 해 것을 더해 주세요.
+const HOLIDAYS = new Set([
+  '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-02', '2026-05-05', '2026-05-25', '2026-06-03',
+  '2026-08-17', '2026-09-24', '2026-09-25', '2026-09-28', '2026-10-05', '2026-10-09', '2026-12-25',
+  '2027-01-01', '2027-02-08', '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13', '2027-08-16', '2027-09-14',
+  '2027-09-15', '2027-09-16', '2027-10-04', '2027-10-11', '2027-12-27'
+]);
+// 연락 시간대: 이 시각(분)이 지나면 그날은 그 시간대에 연락드리기 어려워서 다음 평일로 넘겨요
+const CONTACT_SLOT = {
+  '오전': { cut: 11 * 60, text: '오전 중' },
+  '오후': { cut: 17 * 60, text: '오후 중' },
+  '저녁': { cut: 20 * 60, text: '저녁 6시 이후' },
+  '아무': { cut: 16 * 60 + 30, today: '오후 6시 전', text: '오전 중' }
+};
+// 언제 연락드리는지: 고른 시간대 기준으로, 주말 · 공휴일은 빼고 가장 빠른 평일
+function etaText(when, now = new Date()) {
+  const slot = CONTACT_SLOT[String(when || '아무').split(' ')[0]] || CONTACT_SLOT['아무'];
+  const ymd = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const workday = x => x.getDay() !== 0 && x.getDay() !== 6 && !HOLIDAYS.has(ymd(x));
   const dayName = x => `${x.getMonth() + 1}월 ${x.getDate()}일(${'일월화수목금토'[x.getDay()]})`;
-  let t;
-  if (wd >= 1 && wd <= 5 && m < 16 * 60 + 30) t = `오늘 ${dayName(now)} 오후 6시 전`;
-  else {
-    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
-    t = `${dayName(d)} 오전 중`;
-  }
-  return when && when !== '아무 때나' ? `${t}, 원하신 ${when.split(' ')[0]} 시간에 맞춰` : t;
+  if (workday(now) && now.getHours() * 60 + now.getMinutes() < slot.cut) return `오늘 ${dayName(now)} ${slot.today || slot.text}`;
+  const d = new Date(now);
+  do d.setDate(d.getDate() + 1); while (!workday(d));
+  return `${dayName(d)} ${slot.text}`;
 }
 function doneView() {
   if (!applied) return homeView();
@@ -338,7 +352,7 @@ function doneView() {
       <div><span>연락처</span><b>${esc(a.phone)}</b></div>
     </div>
     <p class="lede">담당 매니저가 위 연락처로 연락드려요. 급하시면 <a href="tel:${SITE_ORG.tel.replace(/[^0-9]/g, '')}" class="u">${SITE_ORG.tel}</a>로 전화 주시고 접수 번호를 말씀해 주세요.</p>
-    <div class="acts"><a class="btn light" href="#">처음으로</a>${a.kind === 'ask' ? '' : `<button class="btn outline" onclick="setTab('signup')">바로 회원가입하기</button>`}</div>`;
+    <div class="acts"><a class="btn light" href="/">처음으로</a>${a.kind === 'ask' ? '' : `<button class="btn outline" onclick="setTab('signup')">바로 회원가입하기</button>`}</div>`;
 }
 
 // 가입 전 문의 (프로그램을 쓰는 분은 로그인 후 "문의하기"에서 따로 남겨요)
@@ -375,17 +389,31 @@ const fmtPhone = v => {
 };
 const phoneOk = v => /^0\d{8,10}$/.test(v.replace(/[^0-9]/g, ''));
 
+// 분야 상세는 검색에 잡히도록 진짜 주소(/area/admin), 신청 · 문의 · 접수 완료는 해시(#apply, #ask, #done)
+// 예전 주소 #area/admin으로 오면 /area/admin으로 바꿔 줘요
+if (location.hash.startsWith('#area/')) history.replaceState(null, '', '/area/' + location.hash.slice(6));
+// 처음 화면 제목 · 설명 (분야 페이지는 빌드가 머리말을 바꿔 두니 여기 글자로 되돌려요 — <head>와 같게)
+const BASE_TITLE = '학원지원센터 — 원장님은 가르치는 일에만, 나머지는 저희가 지원합니다';
+const BASE_DESC = '행정 지원부터 강사 교육·채용, 제휴(MOU), 홍보, 학생·학부모 관리까지. 학원 운영에 필요한 모든 지원을 한곳에서.';
+const strip = s => String(s).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '');
+function setMeta(title, desc, path) {
+  document.title = title ? `${title} | 학원지원센터` : BASE_TITLE;
+  document.querySelector('meta[name=description]').content = desc || BASE_DESC;
+  document.querySelector('link[rel=canonical]').href = `https://academysupportcenter.vercel.app${path || '/'}`;
+}
 function renderPanel() {
-  const [view, id] = location.hash.slice(1).split('/');
+  const [hv, hid] = location.hash.slice(1).split('/');
+  const pm = location.pathname.match(/^\/area\/([a-z]+)/);
+  const [view, id] = hv ? [hv, hid] : pm ? ['area', pm[1]] : [''];
   const area = SITE_AREAS.find(a => a.id === id);
-  if (view === 'area' && area) panel.innerHTML = areaView(area);
-  else if (view === 'apply') panel.innerHTML = applyView(area ? area.id : null);
-  else if (view === 'done') panel.innerHTML = doneView();
-  else if (view === 'ask') panel.innerHTML = askView();
-  else panel.innerHTML = homeView();
+  if (view === 'area' && area) { panel.innerHTML = areaView(area); setMeta(area.name, `${strip(area.title)} — ${strip(area.lede)}`, `/area/${area.id}`); }
+  else if (view === 'apply') { panel.innerHTML = applyView(area ? area.id : null); setMeta(area ? `${area.name} 지원 신청` : '지원 신청', '', '/'); }
+  else if (view === 'done') { panel.innerHTML = doneView(); setMeta('접수 완료', '', '/'); }
+  else if (view === 'ask') { panel.innerHTML = askView(); setMeta('가입 전 문의', '', '/'); }
+  else { panel.innerHTML = homeView(); setMeta('', '', '/'); }
   document.body.classList.toggle('wide', view === 'area' && !!area);
   document.querySelector('.support').scrollTop = 0;
-  if (window.innerWidth <= 900 && location.hash) document.querySelector('.support').scrollIntoView();
+  if (window.innerWidth <= 900 && (location.hash || pm)) document.querySelector('.support').scrollIntoView();
   bindRegionPickers(panel);
   panel.querySelectorAll('input[type=tel]').forEach(i => i.oninput = () => { i.value = fmtPhone(i.value); i.classList.remove('bad'); });
   panel.querySelectorAll('.picks.quick button').forEach(b => b.onclick = () => {
@@ -456,8 +484,17 @@ function renderPanel() {
   };
 }
 // 아래쪽: 운영 정보 · 파트너 (예시)
-document.getElementById('siteFoot').innerHTML = `<b>${SITE_ORG.name}</b> · 고객센터 ${SITE_ORG.tel} (${SITE_ORG.hours}) · ${SITE_ORG.mail}<br>유학 제휴 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투유학</a> · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이라 운영 정보와 표시된 수치는 예시예요.`;
+document.getElementById('siteFoot').innerHTML = `<b>${SITE_ORG.name}</b> · 고객센터 ${SITE_ORG.tel} (${SITE_ORG.hours}) · ${SITE_ORG.mail}<br>${SITE_ORG.rows.filter(([k, v]) => v && !['고객센터', '이메일'].includes(k)).map(([k, v]) => `${k} ${v}`).join(' · ')}<br>유학 제휴 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투유학</a> · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a>${SITE_ORG.ready ? '' : ' · 시안 화면이라 운영 정보와 표시된 수치는 예시예요.'}`;
 window.addEventListener('hashchange', renderPanel);
+window.addEventListener('popstate', renderPanel);
+// 분야 · 처음 화면 링크는 페이지를 새로 열지 않고 주소만 바꿔요
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href]'), h = a && a.getAttribute('href');
+  if (!h || e.ctrlKey || e.metaKey || e.shiftKey || a.target || !(h === '/' || /^\/area\/[a-z]+$/.test(h))) return;
+  e.preventDefault();
+  if (location.pathname + location.hash !== h) history.pushState(null, '', h);
+  renderPanel();
+});
 renderPanel();
 
 /* ---------- 오른쪽: 로그인 · 회원가입 ---------- */
@@ -472,7 +509,7 @@ function setTab(t) {
 }
 tabs.forEach(b => b.onclick = () => setTab(b.dataset.tab));
 if (new URLSearchParams(location.search).has('signup')) setTab('signup');
-function go(role) { location.href = 'app.html?demo=1&role=' + role; }
+function go(role) { location.href = '/app.html?demo=1&role=' + role; }
 
 function showMsg(el, text, ok) { el.textContent = text; el.classList.toggle('ok', !!ok); el.hidden = false; }
 async function busy(btn, label, fn) { const old = btn.textContent; btn.disabled = true; btn.textContent = label; try { await fn(); } finally { btn.disabled = false; btn.textContent = old; } }
@@ -491,7 +528,7 @@ loginForm.onsubmit = e => {
   busy(loginForm.querySelector('button'), '로그인 중…', async () => {
     const { error } = await SB.auth.signInWithPassword({ email: idToEmail(id), password: pw });
     if (error) return showMsg(loginMsg, authErrorText(error));
-    location.href = 'app.html';
+    location.href = '/app.html';
   });
 };
 
@@ -526,7 +563,7 @@ signupForm.onsubmit = e => {
     });
     if (error) return showMsg(signupMsg, /Database error/i.test(error.message || '') ? '이미 있는 이름 · 아이디 · 전화번호예요! 다시 확인해 주세요.' : authErrorText(error));
     if (!data.session) return showMsg(signupMsg, '가입은 됐는데 바로 로그인할 수 없어요. 센터에 문의해 주세요.');
-    location.href = 'app.html';
+    location.href = '/app.html';
   });
 };
 
