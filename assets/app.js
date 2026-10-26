@@ -64,6 +64,16 @@ const day0 = s => new Date(`${s}T00:00`); // 'YYYY-MM-DD' → 그날 0시 (내 �
 const TODAY = ymd();
 let MONTH = TODAY.slice(0, 7); // 수납·재정에서 보고 있는 달
 const won = n => `${(n || 0).toLocaleString()}원`;
+// 금액 칸: 치는 동안 1,000 단위 쉼표가 저절로 들어가요 (저장할 때는 쉼표를 빼요)
+const comma = v => { const d = String(v ?? '').replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''); return d ? Number(d).toLocaleString('ko-KR') : ''; };
+const numOf = v => { const d = String(v ?? '').replace(/[,\s원]/g, ''); return d === '' ? null : Number(d); };
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (!t.classList || !t.classList.contains('won-in')) return;
+  const right = t.value.length - t.selectionStart, v = comma(t.value);
+  t.value = v;
+  const at = Math.max(0, v.length - right); t.setSelectionRange(at, at);
+});
 const sum = (list, f) => list.reduce((a, x) => a + f(x), 0);
 const md = s => s ? `${+s.slice(5, 7)}/${+s.slice(8, 10)}` : '';
 const dday = s => Math.round((day0(s) - day0(TODAY)) / 864e5);
@@ -113,7 +123,7 @@ function billingPage() {
   <div class="stats">
     <div class="stat"><span>청구</span><b class="num">${b.total}건</b></div>
     <div class="stat"><span>납부 완료</span><b class="num">${b.paid}건</b></div>
-    <div class="stat crit"><span>미납</span><b class="num">${b.unpaidAmount}만 원</b></div>
+    <div class="stat crit"><span>미납</span><b class="num">${won(b.unpaidAmount * 1e4)}</b></div>
   </div>
   <section class="card">
     <div class="card-head"><h2>미납 가정</h2><button class="btn sm primary" data-act="remindAll">전체 납부 안내 보내기</button></div>
@@ -122,7 +132,7 @@ function billingPage() {
         <div class="li">
           <span class="av" style="background:var(--blue-500)">${u.name[0]}</span>
           <div><div class="t">${u.name} <span class="muted small">${u.cls}</span></div><div class="d">${u.days}일 지남</div></div>
-          <div class="r"><b class="num">${u.amount}만 원</b>${u.sent ? '<span class="chip good">안내 보냄</span>' : `<button class="btn sm" data-remind="${i}">안내 보내기</button>`}</div>
+          <div class="r"><b class="num">${won(u.amount * 1e4)}</b>${u.sent ? '<span class="chip good">안내 보냄</span>' : `<button class="btn sm" data-remind="${i}">안내 보내기</button>`}</div>
         </div>`).join('')}
     </div>
   </section>
@@ -135,17 +145,17 @@ function financePage() {
   const max = Math.max(...f.items.map(i => i[1]));
   return head('재정', '10월 1일 – 25일 기준 · 수납과 급여 지급이 자동으로 반영돼요.') + `
   <div class="stats">
-    <div class="stat"><span>수입</span><b class="num">${f.income.toLocaleString()}만 원</b></div>
-    <div class="stat"><span>지출</span><b class="num">${f.expense.toLocaleString()}만 원</b></div>
-    <div class="stat good"><span>남은 금액</span><b class="num">${(f.income - f.expense).toLocaleString()}만 원</b></div>
+    <div class="stat"><span>수입</span><b class="num">${won(f.income * 1e4)}</b></div>
+    <div class="stat"><span>지출</span><b class="num">${won(f.expense * 1e4)}</b></div>
+    <div class="stat good"><span>남은 금액</span><b class="num">${won((f.income - f.expense) * 1e4)}</b></div>
   </div>
   <section class="card">
     <div class="card-head"><h2>지출 항목</h2></div>
     <div class="rows">
-      ${f.items.map(([n, v]) => `<div class="row-bar"><span>${n}</span>${bar(v / max * 100)}<b class="num">${v}만 원</b></div>`).join('')}
+      ${f.items.map(([n, v]) => `<div class="row-bar"><span>${n}</span>${bar(v / max * 100)}<b class="num">${won(v * 1e4)}</b></div>`).join('')}
     </div>
   </section>
-  <a class="hint" href="#mou/mine">${ic('handshake')}<span>교재 공동구매 제휴로 이번 달 교재비 20만 원을 아꼈어요</span><b>내 제휴 →</b></a>`;
+  <a class="hint" href="#mou/mine">${ic('handshake')}<span>교재 공동구매 제휴로 이번 달 교재비 200,000원을 아꼈어요</span><b>내 제휴 →</b></a>`;
 }
 
 function paperPage() {
@@ -249,7 +259,7 @@ function invoiceDialog(i) {
     fields: [
       ['student_id', '학생', { type: 'select', required: true, createOnly: true, options: REAL.students.map(s => [s.id, `${s.name}${s.class_name ? ` · ${s.class_name}` : ''}`]) }],
       ['month', '청구 월', { type: 'month', required: true, createOnly: true, value: MONTH, half: true }], ['title', '항목', { required: true, max: 50, value: '수강료', half: true }],
-      ['amount', '금액(원)', { type: 'number', required: true, placeholder: '예: 300000', half: true }], ['due', '납부 기한', { type: 'date', half: true }],
+      ['amount', '금액', { type: 'won', required: true, placeholder: '예: 300,000', half: true }], ['due', '납부 기한', { type: 'date', half: true }],
       ['paid_at', '납부한 날', { type: 'date', half: true }], ['method', '결제 방법', { type: 'select', options: PAY_METHODS, half: true }],
       ['memo', '메모', { max: 300 }]
     ]
@@ -270,7 +280,7 @@ function billMonthDialog() {
     <h2>${monthLabel(MONTH)} 청구서 만들기</h2>
     <p class="muted small" style="margin:0">반마다 금액을 넣으면 그 반 학생 모두에게 청구가 만들어져요. 같은 달에 같은 항목이 이미 있는 학생은 건너뛰어요. 금액이 다른 학생은 만든 뒤에 이름을 눌러 고치면 돼요.</p>
     <div class="two"><label class="f">항목<input name="title" value="수강료" maxlength="50"></label><label class="f">납부 기한<input name="due" type="date" value="${due}"></label></div>
-    ${groups.map(([cls, ss], n) => `<label class="f">${esc(cls)} <span class="muted small">${ss.length}명 · 비워 두면 건너뛰어요</span><input name="c${n}" type="number" min="0" step="1000" placeholder="금액(원)" value="${last[cls] ?? ''}"></label>`).join('')}
+    ${groups.map(([cls, ss], n) => `<label class="f">${esc(cls)} <span class="muted small">${ss.length}명 · 비워 두면 건너뛰어요</span><span class="won-wrap"><input name="c${n}" class="won-in" inputmode="numeric" autocomplete="off" placeholder="금액" value="${comma(last[cls])}"><i>원</i></span></label>`).join('')}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">만들기</button></div>
   </form>`;
@@ -284,7 +294,7 @@ function billMonthDialog() {
     for (const [n, [, ss]] of groups.entries()) {
       const v = el[`c${n}`].value.trim();
       if (v === '') continue;
-      const amount = Math.round(Number(v));
+      const amount = Math.round(numOf(v));
       if (!(amount >= 0)) return fail('금액은 숫자로 적어 주세요.');
       ss.forEach(s => {
         if (REAL.invoices.some(x => x.student_id === s.id && x.month === MONTH && x.title === title)) skipped++;
@@ -310,12 +320,34 @@ async function payInvoice(id) {
    기간: 오늘 · 최근 7일 · 월별 · 3개월 · 6개월 · 1년. 기간이 길면 달마다, 짧으면 날마다 묶어서 그래프로 보여 줘요. */
 const EXP_CATS = ['강사 급여', '임대료', '교재비', '공과금', '홍보비', '차량·간식', '기타'];
 const INC_CATS = ['교재 판매', '특강', '방학 캠프', '입학금', '기타'];
-const FIN_PERIODS = { day: '오늘', week: '최근 7일', month: '월별', m3: '3개월', m6: '6개월', y1: '1년' };
+const FIN_PERIODS = { day: '오늘', week: '최근 7일', month: '월별', m3: '3개월', m6: '6개월', y1: '1년', custom: '기간 직접 고르기' };
 let FIN = 'month';
+let FIN_FROM = null, FIN_TO = null; // 직접 고른 기간 (시작일부터 최대 1년)
 const addDays = (s, n) => { const d = day0(s); d.setDate(d.getDate() + n); return ymd(d); };
 const monthEnd = m => ymd(new Date(+m.slice(0, 4), +m.slice(5), 0));
 // 기간 → { from, to, buckets: [{ label, from, to }], prev: 바로 앞 같은 길이 기간 }
+const daysBetween = (a, b) => Math.round((day0(b) - day0(a)) / 864e5);
+// 직접 고른 기간: 시작일부터 끝 날까지(최대 1년). 31일 이하면 날마다, 길면 달마다 묶어요
+function customRange() {
+  const from = FIN_FROM || `${TODAY.slice(0, 7)}-01`;
+  let to = FIN_TO || TODAY;
+  if (to < from) to = from;
+  const maxTo = addDays(ymd(new Date(+from.slice(0, 4) + 1, +from.slice(5, 7) - 1, +from.slice(8))), -1);
+  if (to > maxTo) to = maxTo;
+  const n = daysBetween(from, to) + 1;
+  let buckets;
+  if (n <= 31) buckets = [...Array(n)].map((_, i) => { const d = addDays(from, i); return { label: md(d), from: d, to: d }; });
+  else {
+    buckets = [];
+    for (let m = from.slice(0, 7); m <= to.slice(0, 7); m = shiftMonth(m, 1)) {
+      const a = `${m}-01` < from ? from : `${m}-01`, b = monthEnd(m) > to ? to : monthEnd(m);
+      buckets.push({ label: `${m.slice(2, 4)}.${+m.slice(5)}월`, from: a, to: b });
+    }
+  }
+  return { from, to, buckets, prev: [addDays(from, -n), addDays(from, -1)], label: `${from.replaceAll('-', '.')} – ${to.replaceAll('-', '.')} (${n}일)`, prevLabel: `그 전 ${n}일`, maxTo };
+}
 function finRange(p = FIN) {
+  if (p === 'custom') return customRange();
   if (p === 'day') return { from: TODAY, to: TODAY, buckets: [], prev: [addDays(TODAY, -1), addDays(TODAY, -1)], label: '오늘', prevLabel: '어제' };
   if (p === 'week') {
     const from = addDays(TODAY, -6);
@@ -374,7 +406,7 @@ function realFinancePage() {
   const list = all.filter(e => inRange(e, r.from, r.to)).sort((a, b) => b.day.localeCompare(a.day) || (a.kind === b.kind ? 0 : a.kind === 'in' ? -1 : 1));
   const t = finTotals(list), p = finTotals(all.filter(e => inRange(e, ...r.prev)));
   // 못 받은 돈: 이 기간에 걸친 달의 청구 중 아직 납부 확인 안 한 것
-  const months = new Set(FIN === 'month' ? [MONTH] : FIN === 'day' || FIN === 'week' ? [TODAY.slice(0, 7)] : r.buckets.map(b => b.from.slice(0, 7)));
+  const months = new Set(FIN === 'month' ? [MONTH] : FIN === 'day' || FIN === 'week' ? [TODAY.slice(0, 7)] : r.buckets.map(b => b.from.slice(0, 7)).concat(FIN === 'custom' ? [r.from.slice(0, 7), r.to.slice(0, 7)] : []));
   const unpaid = REAL.invoices.filter(i => !i.paid_at && months.has(i.month));
   const rate = t.inc ? Math.round(t.net / t.inc * 100) : null;
   const acts = `<button class="btn" data-act="finXlsx">${ic('doc')}엑셀로 내려받기</button><button class="btn" data-import="expenses">${ic('doc')}지출 엑셀로 올리기</button>
@@ -382,6 +414,8 @@ function realFinancePage() {
   return head('재정', `${r.label} · 매출은 수납·청구에서 "납부 확인"한 금액에 직접 넣은 수입(교재 판매 · 특강 등)을 더한 거예요.`, acts) + `
   <div class="filters">${Object.entries(FIN_PERIODS).map(([k, l]) => `<button class="${FIN === k ? 'on' : ''}" data-fin="${k}">${l}</button>`).join('')}</div>
   ${FIN === 'month' ? monthBar() : ''}
+  ${FIN === 'custom' ? `<div class="range-pick"><label>시작일<input type="date" id="finFrom" value="${r.from}"></label><span>~</span>
+    <label>끝 날<input type="date" id="finTo" value="${r.to}" min="${r.from}" max="${r.maxTo}"></label><span class="muted small">시작일부터 최대 1년까지 볼 수 있어요</span></div>` : ''}
   <div class="stats">
     <div class="stat"><span>매출</span><b class="num">${won(t.inc)}</b><small class="muted">${versus(t.inc, p.inc, r.prevLabel)}</small></div>
     <div class="stat"><span>지출</span><b class="num">${won(t.out)}</b><small class="muted">${versus(t.out, p.out, r.prevLabel)}</small></div>
@@ -427,7 +461,7 @@ function expenseDialog(x) {
     fields: [
       ['day', '날짜', { type: 'date', required: true, value: finDay(), half: true }],
       ['category', '항목', { type: 'select', required: true, options: EXP_CATS, half: true }],
-      ['amount', '금액(원)', { type: 'number', required: true, placeholder: '예: 2000000' }],
+      ['amount', '금액', { type: 'won', required: true, placeholder: '예: 2,000,000' }],
       ['memo', '메모', { max: 200, placeholder: '예: 10월 김민지 강사 급여' }]
     ]
   });
@@ -439,7 +473,7 @@ function incomeDialog(x) {
     fields: [
       ['day', '날짜', { type: 'date', required: true, value: finDay(), half: true }],
       ['category', '항목', { type: 'select', required: true, options: INC_CATS, half: true }],
-      ['amount', '금액(원)', { type: 'number', required: true, placeholder: '예: 150000' }],
+      ['amount', '금액', { type: 'won', required: true, placeholder: '예: 150,000' }],
       ['memo', '메모', { max: 200, placeholder: '예: 겨울 특강 5명' }]
     ]
   });
@@ -841,6 +875,8 @@ const WD = '일월화수목금토';
 const EV_KINDS = ['수업', '시험', '행사', '휴원', '상담', '설명회', '기타'];
 const EV_COLOR = { 수업: 'info', 시험: 'crit', 행사: 'good', 휴원: 'mute', 상담: 'warn', 설명회: 'info', 기타: 'mute' };
 let SCH_VIEW = 'week', SCH_CLASS = null;
+const mondayOf = d => { const x = day0(d); return addDays(d, -((x.getDay() + 6) % 7)); };
+let SCH_WEEK = null; // 주간 시간표에서 보고 있는 주의 월요일
 const isStaff = () => ROLE === 'owner' || ROLE === 'teacher';
 const hm = t => t ? t.slice(0, 5) : '';
 const schData = () => REAL ? { tt: REAL.timetable, ev: REAL.events } : { tt: DATA.timetable, ev: DATA.events };
@@ -879,14 +915,26 @@ function weekView(tt, staff) {
   <section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>아직 시간표가 없어요</h2>
     <p class="muted">${ROLE === 'owner' ? '반마다 요일 · 시간을 넣으면 강사 · 학부모 · 학생 모두에게 같은 시간표가 보여요.' : '원장님이 시간표를 넣으면 여기에 보여요.'}</p>
     ${ROLE === 'owner' ? `<button class="btn primary" data-act="addTT">시간표 추가</button>` : ''}</section>`;
-  const today = day0(TODAY).getDay();
-  const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d));
+  const mon = SCH_WEEK || mondayOf(TODAY), sun = addDays(mon, 6), dateOf = d => addDays(mon, (d + 6) % 7);
+  const evs = schData().ev.filter(e => classOk(e.target_class) && e.day <= sun && (e.end_day || e.day) >= mon);
+  const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d) || evs.some(e => evOn(e, dateOf(d))));
+  const thisWeek = mon === mondayOf(TODAY), wk = Math.round(daysBetween(mondayOf(TODAY), mon) / 7);
   return `
+  <div class="week-bar">
+    <button class="btn sm" data-sch-week="-1" aria-label="지난주">‹</button>
+    <b>${+mon.slice(5, 7)}월 ${+mon.slice(8)}일 – ${+sun.slice(5, 7)}월 ${+sun.slice(8)}일</b>
+    <span class="chip ${thisWeek ? 'info' : 'mute'}">${thisWeek ? '이번 주' : wk > 0 ? `${wk}주 뒤` : `${-wk}주 전`}</span>
+    <button class="btn sm" data-sch-week="1" aria-label="다음 주">›</button>
+    ${thisWeek ? '' : '<button class="btn sm" data-sch-week="0">이번 주로</button>'}
+    <label class="wk-pick">날짜로 고르기<input type="date" id="schWeekPick" value="${mon}"></label>
+  </div>
   <div class="tt" style="--d:${days.length}">${days.map(d => {
+    const date = dateOf(d), isToday = date === TODAY, dayEv = evs.filter(e => evOn(e, date)), off = dayEv.some(e => e.kind === '휴원');
     const blks = list.filter(t => +t.weekday === d).sort((a, b) => a.start_time.localeCompare(b.start_time));
     return `
-    <section class="tt-day ${d === today ? 'today' : ''}">
-      <h3>${WD[d]}${d === today ? ' <span class="chip info">오늘</span>' : ''}</h3>
+    <section class="tt-day ${isToday ? 'today' : ''} ${off ? 'off' : ''}">
+      <h3>${WD[d]} <span class="dt">${+date.slice(5, 7)}/${+date.slice(8)}</span>${isToday ? ' <span class="chip info">오늘</span>' : ''}</h3>
+      ${dayEv.map(e => `<span class="chip ${EV_COLOR[e.kind]} tt-ev">${esc(e.kind)} · ${esc(e.title)}</span>`).join('')}
       ${blks.length ? blks.map(t => `
       <${ROLE === 'owner' ? `button type="button" data-edit-tt="${t.id}"` : 'div'} class="tt-blk">
         <span class="tm num">${hm(t.start_time)}–${hm(t.end_time)}</span>
@@ -1524,7 +1572,7 @@ function approvalDialog(a) {
     label: r => `${r.title} 결재를`, doneText: '결재를 올렸어요 · 원장님이 확인하면 알려 드려요',
     fields: [
       ['kind', '종류', { type: 'select', required: true, options: APV_KINDS, value: '물품 구입', half: true }],
-      ['amount', '금액(원)', { type: 'number', placeholder: '예: 45000', half: true }],
+      ['amount', '금액', { type: 'won', placeholder: '예: 45,000', half: true }],
       ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 초등 B반 화이트보드 마커 12개' }],
       ['detail', '자세한 내용', { type: 'area', max: 2000, rows: 4, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
       ['want_by', '언제까지 필요해요?', { type: 'date' }]
@@ -1734,14 +1782,14 @@ function myPartnersPage() {
   <div class="stats">
     <div class="stat"><span>이용 · 신청</span><b class="num">${mine.length}곳</b></div>
     <div class="stat"><span>유학 제휴</span><b class="num">${mine.filter(p => p.cat === '유학').length}곳</b></div>
-    <div class="stat good"><span>이번 달 아낀 비용</span><b class="num">${saved}만 원</b></div>
+    <div class="stat good"><span>이번 달 아낀 비용</span><b class="num">${won(saved * 1e4)}</b></div>
   </div>
   <section class="card"><div class="list">
     ${mine.map(p => `
       <div class="li">
         <span class="av" style="background:var(--blue-600)">${ic('handshake')}</span>
         <div><div class="t">${p.name} <span class="muted small">${p.cat}</span></div><div class="d">${p.benefit}</div></div>
-        <div class="r"><span class="chip ${P_STATE[p.status][0]}">${P_STATE[p.status][1]}</span>${p.saved ? `<span class="time">${p.saved}만 원 절감</span>` : p.note ? `<span class="time">${p.note}</span>` : ''}</div>
+        <div class="r"><span class="chip ${P_STATE[p.status][0]}">${P_STATE[p.status][1]}</span>${p.saved ? `<span class="time">${won(p.saved * 1e4)} 절감</span>` : p.note ? `<span class="time">${p.note}</span>` : ''}</div>
       </div>`).join('')}
   </div></section>
   <a class="hint" href="#mou/partners">${ic('plus')}<span>다른 제휴처도 둘러보세요</span><b>제휴처 둘러보기 →</b></a>`;
@@ -1966,6 +2014,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       ? `<select name="${k}"><option value="">${o.blank || '선택 안 함'}</option>${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<option value="${esc(ov)}" ${v === ov ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
       : o.type === 'area'
       ? `<textarea name="${k}" rows="${o.rows || 5}" ${o.max ? `maxlength="${o.max}"` : ''} placeholder="${o.placeholder || ''}">${esc(v ?? '')}</textarea>`
+      : o.type === 'won'
+      ? `<span class="won-wrap"><input name="${k}" class="won-in" inputmode="numeric" autocomplete="off" value="${comma(v)}" placeholder="${o.placeholder || ''}"><i>원</i></span>`
       : `<input name="${k}" type="${o.type || 'text'}" value="${esc(v ?? '')}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.type === 'number' ? 'min="0" inputmode="numeric"' : ''} placeholder="${o.placeholder || ''}">`;
     const lbl = `<label class="f">${lab}${o.required ? ' *' : ''}${ctl}</label>`;
     // chips: 예시를 눌러 바로 채우기 (직접 적어도 돼요)
@@ -2000,8 +2050,9 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       const v = el.namedItem(k).value.trim();
       if (o.required && !v) return fail(`${lab}을(를) ${o.type === 'select' ? '골라' : '적어'} 주세요.`);
       if (o.type === 'number' && v !== '' && !(Number(v) >= 0)) return fail(`${lab}은(는) 0 이상의 숫자로 적어 주세요.`);
+      if (o.type === 'won' && v !== '' && !(numOf(v) >= 0)) return fail(`${lab}은(는) 숫자로 적어 주세요.`);
       if (o.url && v && !/^https:\/\/\S+$/.test(v)) return fail(`${lab}은(는) https:// 로 시작하는 주소로 넣어 주세요.`);
-      data[k] = v === '' ? null : o.type === 'number' ? Math.round(Number(v)) : v;
+      data[k] = v === '' ? null : o.type === 'number' ? Math.round(Number(v)) : o.type === 'won' ? Math.round(numOf(v)) : v;
     }
     const bad = check && check(data);
     if (bad) return fail(bad);
@@ -2423,7 +2474,7 @@ function kidBillsPage() {
       <div class="li">
         <span class="av" style="background:var(--navy-700)">${b.acad[0]}</span>
         <div><div class="t">${b.acad}</div><div class="d">${b.month} 수강료</div></div>
-        <div class="r"><b class="num">${b.amount}만 원</b>${b.paid ? '<span class="chip good">납부 완료</span>' : `<button class="btn sm primary" data-pay="${i}">결제하기</button>`}</div>
+        <div class="r"><b class="num">${won(b.amount * 1e4)}</b>${b.paid ? '<span class="chip good">납부 완료</span>' : `<button class="btn sm primary" data-pay="${i}">결제하기</button>`}</div>
       </div>`).join('')}
   </div></section>`;
 }
@@ -2872,7 +2923,7 @@ const AREAS = {
         attend: { name: '출결 관리', icon: 'attend', desc: '반별 출석 체크와 결석 확인', stat: attendStat, render: attendPage },
         billing: { name: '수납·청구', icon: 'card', desc: '청구서 만들기와 미납 안내', stat: () => REAL ? `${+MONTH.slice(5)}월 미납 ${REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).length}건` : `미납 ${DATA.unpaid.filter(u => !u.sent).length}건`, render: billingPage },
         finance: { name: '재정', icon: 'chart', desc: '기간별 매출 · 지출 · 순이익', stat: () => {
-          if (!REAL) return `이번 달 +${DATA.finance.income - DATA.finance.expense}만 원`;
+          if (!REAL) return `이번 달 +${won((DATA.finance.income - DATA.finance.expense) * 1e4)}`;
           const m = TODAY.slice(0, 7), t = finTotals(ledger().filter(e => e.day.startsWith(m)));
           return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
@@ -3140,7 +3191,7 @@ function home() {
       .map(p => [esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']);
     return head(`${ME.name} 님, 안녕하세요`, `${DATA.today} · ${c.name}(${c.grade})의 학원 ${c.academies}곳을 한 화면에서 봐요.`) +
       todo([...promos,
-        ['10월 하늘영어학원 수강료', '30만 원 · 오늘까지', '#kid/bills', '<span class="chip crit">D-0</span>'],
+        ['10월 하늘영어학원 수강료', '300,000원 · 오늘까지', '#kid/bills', '<span class="chip crit">D-0</span>'],
         [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>']
       ]) + `<h2 class="sec-title">바로 가기</h2>` + tiles();
@@ -3320,6 +3371,9 @@ function bind() {
   on('[data-act="addIncome"]', () => incomeDialog(null));
   on('[data-act="finXlsx"]', finXlsx);
   on('[data-fin]', b => { FIN = b.dataset.fin; render(); });
+  const ff = $('#finFrom'), ft = $('#finTo');
+  if (ff) ff.onchange = () => { if (!ff.value) return; FIN_FROM = ff.value; const r = customRange(); FIN_TO = r.to; render(); };
+  if (ft) ft.onchange = () => { if (!ft.value) return; FIN_TO = ft.value; const r = customRange(); if (r.to !== ft.value) toast('최대 1년까지 볼 수 있어서 끝 날을 맞췄어요'); FIN_TO = r.to; render(); };
   on('[data-ledger]', (b, e) => {
     e.preventDefault();
     const [src, id] = b.dataset.ledger.split(':');
@@ -3527,6 +3581,9 @@ function bind() {
   };
   // 일정 · 시간표
   on('[data-sch-view]', b => { SCH_VIEW = b.dataset.schView; render(); });
+  on('[data-sch-week]', b => { const n = +b.dataset.schWeek; SCH_WEEK = n ? addDays(SCH_WEEK || mondayOf(TODAY), n * 7) : null; render(); });
+  const wp = $('#schWeekPick');
+  if (wp) wp.onchange = () => { if (wp.value) { SCH_WEEK = mondayOf(wp.value); render(); } };
   on('[data-sch-class]', b => { SCH_CLASS = b.dataset.schClass; render(); });
   on('[data-act="addTT"]', () => REAL ? ttDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
   on('[data-act="addEv"]', () => REAL ? evDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));

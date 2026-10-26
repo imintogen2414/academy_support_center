@@ -247,16 +247,18 @@ textarea:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0
 .code-card p { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
 
 /* 원생 추가·수정 창 */
-dialog { border: 0; border-radius: 20px; padding: 0; width: min(520px, calc(100vw - 32px)); box-shadow: 0 30px 80px rgba(7,10,61,.35); }
+dialog { border: 0; border-radius: 20px; padding: 0; width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 30px 80px rgba(7,10,61,.35); }
 dialog::backdrop { background: rgba(7,10,61,.45); }
-.dlg { display: grid; gap: 12px; padding: 24px; }
+.dlg { display: grid; gap: 12px; padding: 24px 24px 0; }
 .dlg h2 { margin: 0 0 4px; font-size: 20px; }
 .dlg .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 520px) { .dlg .two { grid-template-columns: 1fr; } }
 .dlg .f, .picker .f { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
 .dlg input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .dlg input:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0 4px var(--blue-50); }
-.dlg .acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.dlg .acts { display: flex; gap: 8px; align-items: center; margin: 4px -24px 0; padding: 14px 24px 20px; position: sticky; bottom: 0; background: var(--surface); border-radius: 0 0 20px 20px; z-index: 2; }
+/* 화면이 낮으면 칸 사이를 좁혀서 한 번에 보이게 */
+@media (max-height: 760px) { .dlg { gap: 9px; padding-top: 18px; } .dlg h2 { font-size: 18px; } .dlg input, .dlg select, .dlg textarea { padding-top: 8px !important; padding-bottom: 8px !important; } .dlg .acts { padding-top: 10px; padding-bottom: 14px; } }
 .btn.danger { color: var(--crit); border-color: var(--crit-soft); }
 
 /* 입력 창: 선택 상자 · 체크 */
@@ -569,3 +571,25 @@ button.tt-blk:hover { background: var(--blue-100); }
 .bell-pop a .icon { width: 18px; height: 18px; color: var(--blue-600); }
 .bell-pop a .ndot { margin-left: auto; vertical-align: 0; }
 .bell-pop p { margin: 0; padding: 0 6px 4px; }
+
+/* 금액 칸: 쉼표 + 오른쪽 "원" */
+.won-wrap { position: relative; display: block; }
+.won-wrap input { width: 100%; padding-right: 34px !important; text-align: right; font-variant-numeric: tabular-nums; }
+.won-wrap i { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 13px; color: var(--muted); pointer-events: none; }
+
+/* 재정: 기간 직접 고르기 */
+.range-pick { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 14px; background: var(--surface); border-radius: 14px; padding: 12px 14px; }
+.range-pick label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.range-pick input { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; color: var(--ink); }
+.range-pick > span:not(.muted) { padding-bottom: 9px; }
+.range-pick .muted { flex-basis: 100%; }
+
+/* 주간 시간표: 주 고르기 */
+.week-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.week-bar b { font-size: 15px; }
+.week-bar .wk-pick { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.week-bar .wk-pick input { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; font: inherit; color: var(--ink); background: var(--surface); }
+.tt-day .dt { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.tt-day .tt-ev { display: block; margin-bottom: 6px; white-space: normal; }
+.tt-day.off .tt-blk { opacity: .45; }
+@media (max-width: 640px) { .week-bar .wk-pick { margin-left: 0; } }
