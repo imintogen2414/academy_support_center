@@ -239,24 +239,27 @@ function realAttendPage() {
 }
 
 /* ---------- 학원에 와야만 되는 출석 (QR · 출석 번호) ----------
-   원장 · 강사가 입구 태블릿 · 모니터에서 "입구 출석 화면"(#kiosk)을 켜 두면 20초마다 바뀌는 QR이 보여요.
+   원장 · 강사가 입구 태블릿 · 모니터에서 "입구 출석 화면"(#kiosk)을 열면 오늘 하루만 쓰는 QR이 보여요(날마다 바뀜, 인쇄해서 붙여도 돼요).
    학생 · 학부모가 휴대폰 카메라로 찍으면 /app#checkin/토큰 → qr_check_in이 출석(수업 시작 10분 뒤면 지각).
    휴대폰이 없는 학생은 같은 화면에서 출석 번호(학부모 · 본인 휴대폰 뒤 4자리)를 눌러요(kiosk_find · kiosk_check_in). */
-const KIOSK = { token: '', recent: [], code: '', pick: null, timers: [], lock: null };
+const KIOSK = { token: '', shown: '', recent: [], code: '', pick: null, timers: [], lock: null };
 const ATT_METHOD = { qr: 'QR', kiosk: '출석 번호', staff: '선생님' };
 const qrSvg = text => { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); };
-const checkinUrl = t => `${location.origin}${DEMO ? '/demo/student' : '/app'}#checkin/${t}`;
+// QR 주소는 늘 정식 주소로: Vercel 미리보기 주소는 Vercel 로그인으로 막혀 있어서 학생 휴대폰에서 안 열려요
+const SITE_URL = 'https://academysupportcenter.vercel.app';
+const checkinUrl = t => `${/\.vercel\.app$/.test(location.hostname) ? SITE_URL : location.origin}${DEMO ? '/demo/student' : '/app'}#checkin/${t}`;
+const kioskDay = () => new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', weekday: 'short' });
 function kioskStop() { KIOSK.timers.forEach(clearInterval); KIOSK.timers = []; if (KIOSK.lock) { KIOSK.lock.release().catch(() => {}); KIOSK.lock = null; } document.body.classList.remove('kiosk-on'); }
 function kioskPage() {
   return `
   <div class="kiosk">
-    <div class="k-top"><b>${esc(REAL ? REAL.academy.name : DATA.academy.name)} 출석</b><span class="k-clock" id="kClock"></span><button class="btn sm" data-kiosk-exit>닫기</button></div>
+    <div class="k-top"><b>${esc(REAL ? REAL.academy.name : DATA.academy.name)} 출석</b><span class="k-clock" id="kClock"></span><button class="btn sm" data-kiosk-print>QR 인쇄</button><button class="btn sm" data-kiosk-exit>닫기</button></div>
     <div class="k-main">
       <section class="k-qr">
         <div class="k-code-img" id="kQr"><span class="spin"></span></div>
-        <div class="k-bar"><i id="kBar"></i></div>
+        <div class="k-day" id="kDay">${kioskDay()} 출석 QR</div>
         <h2>휴대폰 카메라로 QR을 찍어 주세요</h2>
-        <p>학생 · 학부모 계정으로 로그인돼 있으면 바로 출석돼요. QR은 20초마다 바뀌어서 사진으로 찍어 가도 출석이 안 돼요.</p>
+        <p>학생 · 학부모 계정으로 로그인돼 있으면 바로 출석돼요. QR은 오늘 하루만 쓰고 내일이면 새 QR로 바뀌어요.<span class="k-tip"> 화면을 계속 켜 두기 어려우면 "QR 인쇄"로 뽑아서 입구에 붙여 두세요.</span></p>
       </section>
       <section class="k-pad">
         <h3>휴대폰이 없어요</h3>
@@ -275,9 +278,11 @@ async function kioskTick() {
     const { data, error } = await SB.rpc('checkin_qr', { p_academy: REAL.academy.id });
     if (error || !data) { const el = $('#kQr'); if (el) el.innerHTML = '<p class="muted">QR을 만들지 못했어요. 인터넷 연결을 확인해 주세요.</p>'; return; }
     KIOSK.token = data;
-  } else KIOSK.token = `demo.${Math.floor(Date.now() / 20000)}.demo`;
+  } else KIOSK.token = `demo.${Math.floor((Date.now() + 9 * 3600000) / 86400000) - 10957}.demo`;
+  if (KIOSK.shown === KIOSK.token) return; // 같은 날이면 그대로
+  KIOSK.shown = KIOSK.token;
   const el = $('#kQr'); if (el) el.innerHTML = qrSvg(checkinUrl(KIOSK.token));
-  const bar = $('#kBar'); if (bar) { bar.style.transition = 'none'; bar.style.width = '100%'; requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = 'width 20s linear'; bar.style.width = '0%'; })); }
+  const day = $('#kDay'); if (day) day.textContent = `${kioskDay()} 출석 QR`;
 }
 async function kioskLoadRecent() {
   if (!REAL) return;
@@ -285,12 +290,13 @@ async function kioskLoadRecent() {
   KIOSK.recent = data || []; const el = $('#kRecent'); if (el) el.innerHTML = kioskRecent();
 }
 function bindKiosk() {
-  kioskStop(); document.body.classList.add('kiosk-on');
+  kioskStop(); document.body.classList.add('kiosk-on'); KIOSK.shown = '';
   kioskTick(); kioskLoadRecent();
   const clock = () => { const el = $('#kClock'); if (el) el.textContent = new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }); };
   clock();
-  KIOSK.timers.push(setInterval(kioskTick, 20000), setInterval(kioskLoadRecent, 8000), setInterval(clock, 15000));
+  KIOSK.timers.push(setInterval(kioskTick, 5 * 60000), setInterval(kioskLoadRecent, 8000), setInterval(clock, 15000));
   if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { KIOSK.lock = l; }, () => {});
+  on('[data-kiosk-print]', () => window.print());
   on('[data-kiosk-exit]', () => { kioskStop(); location.hash = ROLE === 'owner' ? '#admin/attend' : '#attend'; });
   const digits = () => { const el = $('#kDigits'); if (el) el.innerHTML = [0, 1, 2, 3].map(i => `<span>${KIOSK.code[i] || ''}</span>`).join(''); };
   const pickEl = () => $('#kPick');
@@ -325,7 +331,7 @@ function bindKiosk() {
 // QR을 찍고 들어온 학생 · 학부모: #checkin/토큰
 let CHECKIN = null; // { token, state: 'busy'|'ok'|'err', list, err }
 const CHECKIN_ERR = {
-  qr_expired: 'QR이 바뀌었어요. 입구 화면의 새 QR을 다시 찍어 주세요.',
+  qr_expired: '지난 날짜의 QR이에요. 오늘 입구에 있는 QR을 다시 찍어 주세요.',
   bad_qr: '우리 학원 출석 QR이 아니에요. 입구 화면의 QR을 다시 찍어 주세요.',
   not_family: 'QR 출석은 학생 · 학부모 계정으로 해요. 원장님 · 강사님은 출결 화면에서 넣어 주세요.',
   not_linked: '아직 원생과 연결되지 않았어요. 원장님께 앱 연결을 요청해 주세요.',
@@ -6704,7 +6710,7 @@ async function boot() {
     if (!SB) { location.replace('/'); return; }
     const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
     if (params.has('code')) history.replaceState(null, '', '/app' + location.hash);
-    // 로그인 전에 출석 QR을 찍었으면 로그인 뒤 다시 출석으로 (QR은 1분 안에만 받아서, 늦으면 "다시 찍어 주세요")
+    // 로그인 전에 출석 QR을 찍었으면 로그인 뒤 다시 출석으로 (QR은 그날만 받아서, 날짜가 지나면 "다시 찍어 주세요")
     if (!data.session) { if (location.hash.startsWith('#checkin/')) { try { sessionStorage.setItem('asc-next', location.hash); } catch (e) { /* 그냥 로그인 */ } location.replace('/#login'); } else location.replace('/'); return; }
     const user = USER = data.session.user;
     const [{ data: p }, { data: admin }] = await Promise.all([

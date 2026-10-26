@@ -34,7 +34,7 @@
 - 예시 원생은 `data.js` 끝에서 반별 출결 인원(`attendance.total`)만큼 채워요 — 원생 수 · 강사 담당 반 원생 · 출결 · 수납 숫자가 서로 맞아요. 예시 연락처는 `010-0000-`으로 시작하는 가짜 번호.
 - 시간 칸(`formDialog`의 `type: 'time'`): 지역 고르기처럼 오전/오후 · 시 · 분(5분 단위) 드롭다운(`clockPicker` · `bindClockPickers`, 값은 hidden 칸에 "16:00"). 시간표 추가는 요일을 여러 개 고르면 요일마다 한 줄씩(`type: 'multi'` + `expand`), 시작을 바꾸면 끝이 수업 길이만큼 따라와요(`timePickers` · `setClock`).
 - 가로 스크롤 없애기: 표(`.table .tr`)는 좁은 화면에서 두 칸 카드로, 칸반(`.board`)은 줄바꿈, 입력 창은 옆으로 안 밀려요(`dialog` overflow-x hidden). 넓은 서류 편집도 줄마다 카드(`sheetEditor`).
-- 학원에 와야만 되는 출석(`#kiosk` 입구 출석 화면, 원장 · 강사): 출결 화면 "입구 출석 화면 열기" → 메뉴 없는 전체 화면(`kioskPage` · `bindKiosk`, 화면 꺼짐 방지)에 20초마다 바뀌는 QR(`checkin_qr`, 서명은 `private.checkin_keys`, 그리기는 `assets/vendor/qrcode.js` = npm `qrcode-generator`를 빌드가 복사). 학생 · 학부모가 휴대폰 카메라로 찍으면 `/app#checkin/토큰` → `qr_check_in`(약 1분 안의 QR만, 연결된 아이 모두 출석, 로그인 전이면 sessionStorage `asc-next`로 로그인 뒤 돌아옴). 휴대폰이 없으면 같은 화면에서 출석 번호(학부모 · 본인 휴대폰 뒤 4자리, `kiosk_find` · `kiosk_check_in`). 수업 시작 10분이 지나면 지각(`private.do_checkin`, 시간표 기준). `attendance.method`(qr · kiosk · staff) · `checked_at`이 남고 출결 화면에 "QR 15:02" 표시. 아래 "방금 출석"은 `kiosk_recent`.
+- 학원에 와야만 되는 출석(`#kiosk` 입구 출석 화면, 원장 · 강사): 출결 화면 "입구 출석 화면 열기" → 메뉴 없는 전체 화면(`kioskPage` · `bindKiosk`, 화면 꺼짐 방지)에 한국 날짜마다 하나인 오늘 QR(`checkin_qr`, "QR 인쇄"로 뽑아 붙여도 돼요(`@media print`), 서명은 `private.checkin_keys`, 그리기는 `assets/vendor/qrcode.js` = npm `qrcode-generator`를 빌드가 복사). 학생 · 학부모가 휴대폰 카메라로 찍으면 `/app#checkin/토큰` → `qr_check_in`(오늘 QR만, QR 주소는 늘 정식 주소 `SITE_URL` — Vercel 미리보기 주소는 Vercel 로그인으로 잠겨 있어서, 연결된 아이 모두 출석, 로그인 전이면 sessionStorage `asc-next`로 로그인 뒤 돌아옴). 휴대폰이 없으면 같은 화면에서 출석 번호(학부모 · 본인 휴대폰 뒤 4자리, `kiosk_find` · `kiosk_check_in`). 수업 시작 10분이 지나면 지각(`private.do_checkin`, 시간표 기준). `attendance.method`(qr · kiosk · staff) · `checked_at`이 남고 출결 화면에 "QR 15:02" 표시. 아래 "방금 출석"은 `kiosk_recent`.
 - 오늘 할 일: 반 전체 · 학생 한 명 · "학생 여러 명 골라서"(`todoPicker`, 반 이름을 누르면 그 반 모두).
 - 상담·등록: 학년(선택) · 생년월일(`birth`, 선택) · 학생 본인 연락처(`phone`, 성인 · 고등학생) · 학부모는 선택. 등록하면 트리거가 원생으로 함께 옮겨요. 강사도 메뉴 `#leads`(삭제는 원장만).
 - 현장 결제(`onsitePayDialog`): 원장이 상담에서 "등록"으로 옮기면 그 자리에서 받은 수강료 · 교재비 · 기타를 "납부 완료" 청구로 바로 남기고 영수증(`printReceipt`, 인쇄 · PDF)을 뽑아요. 수납 화면 "현장에서 받기", 납부 완료 줄의 "영수증"도 같아요. 학생 고르기의 "명단에 없는 사람 · 직접 적기"로 웹을 안 쓰는 사람도 이름만 적어 받아요(`invoices.student_id` 없이 `student_name`, "원생 명단에도 넣기" 선택).
@@ -136,6 +136,7 @@
 21. ~~첫 화면 다시 디자인: 밝게 · 노트북 · 휴대폰 그림 · 필요한 만큼 움직임~~ (완료)
 22. ~~사진으로 시간표 · 수강료 올리기 · 학생도 유학 · 남색 구간 · 첫 화면 다크 모드 · 강사 교육 목록 깨짐~~ (완료 · `ANTHROPIC_API_KEY` 비밀 값을 넣으면 실제로 읽어요)
 23. ~~QR · 출석 번호로 학원에서만 출석 · 채팅 읽음 바로 · 채팅 프로필 보기 · 친구 추가~~ (완료)
+24. ~~출석 QR 하루 단위 · QR 인쇄 · QR 주소를 정식 주소로~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
