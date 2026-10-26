@@ -612,38 +612,146 @@ function nextDue(dd, month = null) {
   if (x < t) x = month == null ? new Date(t.getFullYear(), t.getMonth() + 1, dd) : new Date(t.getFullYear() + 1, month, dd);
   return ymd(x);
 }
-// 학원이 자주 내는 서류 (지역 교육청마다 서식·기한이 다를 수 있어요)
+// 학원이 자주 내는 서류 (지역 교육청마다 서식·기한이 다를 수 있어요) — [이름, 내는 곳, 마감, 설명, 반복]
 const PAPER_PRESETS = () => [
-  ['원천세 신고·납부', '세무서', nextDue(10), '강사 급여에서 뗀 세금을 다음 달 10일까지 신고하고 내요.'],
-  ['4대보험 취득·상실 신고', '4대보험 공단', nextDue(15), '강사가 새로 오거나 그만두면 다음 달 15일까지 신고해요.'],
-  ['강사 채용·해임 통보', '교육청', null, '강사를 새로 뽑거나 내보내면 교육청에 알려요. 기한은 관할 교육청에 확인해 주세요.'],
-  ['교습비 변경 신고', '교육청', null, '교습비(수강료)를 바꾸려면 미리 교육청에 신고해요.'],
-  ['사업장현황신고', '세무서', nextDue(10, 1), '면세사업자인 학원은 매년 2월 10일까지 지난해 수입을 신고해요.']
+  ['원천세 신고·납부', '세무서', nextDue(10), '강사 급여에서 뗀 세금을 다음 달 10일까지 신고하고 내요.', 'monthly'],
+  ['4대보험 취득·상실 신고', '4대보험 공단', nextDue(15), '강사가 새로 오거나 그만두면 다음 달 15일까지 신고해요.', 'none'],
+  ['강사 채용·해임 통보', '교육청', null, '강사를 새로 뽑거나 내보내면 교육청에 알려요. 기한은 관할 교육청에 확인해 주세요.', 'none'],
+  ['교습비 변경 신고', '교육청', null, '교습비(수강료)를 바꾸려면 미리 교육청에 신고해요.', 'none'],
+  ['사업장현황신고', '세무서', nextDue(10, 1), '면세사업자인 학원은 매년 2월 10일까지 지난해 수입을 신고해요.', 'yearly']
 ];
+const REPEAT_LABEL = { none: '', monthly: '매달', yearly: '매년' };
 const PAPER_NEXT = { todo: ['doing', '준비 시작'], doing: ['done', '제출 완료'], done: ['todo', '되돌리기'] };
+const PAPER_LINKS = [['홈택스', 'https://www.hometax.go.kr', '원천세 · 사업장현황신고'], ['4대사회보험 정보연계센터', 'https://www.4insure.or.kr', '4대보험 취득 · 상실 신고']];
+const WHT = 0.033; // 강사(사업소득) 원천징수: 소득세 3% + 지방소득세 0.3%
+const ymOf = d => d.slice(0, 7);
+const nextMonthDay = (m, dd) => `${shiftMonth(m, 1)}-${String(dd).padStart(2, '0')}`;
+
+// 학원 데이터에서 챙길 서류를 저절로 찾아요 — [auto_key, 이름, 내는 곳, 마감, 설명]
+function paperSuggestions() {
+  const have = new Set(REAL.paperwork.map(p => p.auto_key).filter(Boolean)), out = [];
+  const cur = TODAY.slice(0, 7), last = shiftMonth(cur, -1);
+  // 1) 강사 급여 → 다음 달 10일 원천세 (예상 세액까지)
+  [last, cur].forEach(m => {
+    const pay = sum(REAL.expenses.filter(x => x.category === '강사 급여' && ymOf(x.day) === m), x => x.amount);
+    if (pay > 0) out.push([`wht:${m}`, `${+m.slice(5)}월분 원천세 신고·납부`, '세무서', nextMonthDay(m, 10),
+      `${+m.slice(5)}월 강사 급여 ${won(pay)} · 예상 세액 ${won(Math.round(pay * WHT / 10) * 10)}(3.3%) · "원천세 계산표"를 내려받아 홈택스에서 신고해요.`]);
+  });
+  // 2) 새로 합류한 강사 → 채용 통보 · (근로계약이면) 4대보험 취득
+  REAL.members.filter(x => x.role === 'teacher' && dday(x.joined_at.slice(0, 10)) >= -60).forEach(x => {
+    const d = x.joined_at.slice(0, 10);
+    out.push([`hire:${x.name}:${d}`, `강사 채용 통보 · ${x.name}`, '교육청', null, `${md(d)}에 합류한 강사예요. 관할 교육청에 채용 사실을 알려요. "강사 명단"을 내려받아 쓰세요.`]);
+    out.push([`ins:${x.name}:${d}`, `4대보험 취득 신고 · ${x.name}`, '4대보험 공단', nextMonthDay(ymOf(d), 15), '근로계약을 맺은 강사라면 다음 달 15일까지 신고해요. 프리랜서(3.3%)라면 넘겨도 돼요.']);
+  });
+  // 3) 반 수강료가 지난달과 달라졌으면 → 교습비 변경 신고
+  const fee = m => { const o = {}; REAL.invoices.filter(i => i.month === m && i.title === '수강료').forEach(i => { o[i.class_name || '반 미지정'] = i.amount; }); return o; };
+  const a = fee(last), b = fee(cur);
+  Object.keys(b).filter(c => a[c] != null && a[c] !== b[c]).forEach(c => out.push([`fee:${c}:${cur}`, `교습비 변경 신고 · ${c}`, '교육청', null,
+    `${c} 수강료가 ${won(a[c])} → ${won(b[c])}로 바뀌었어요. 교습비를 바꿀 땐 교육청에 미리 신고해요. "교습비 표"를 내려받아 쓰세요.`]));
+  // 4) 1월 1일 ~ 2월 10일: 지난해 수입으로 사업장현황신고
+  const y = +TODAY.slice(0, 4) - 1;
+  if (TODAY <= `${y + 1}-02-10`) {
+    const inc = sum(ledger().filter(e => e.kind === 'in' && e.day.startsWith(String(y))), e => e.amount);
+    out.push([`biz:${y}`, `${y}년 사업장현황신고`, '세무서', `${y + 1}-02-10`, `${y}년 수입 ${won(inc)} · "사업장현황 수입 요약"을 내려받아 홈택스에서 신고해요.`]);
+  }
+  // 같은 마감의 같은 서류가 이미 목록에 있으면(예: 직접 넣은 원천세) 빼요
+  const same = (t, due) => due && REAL.paperwork.some(p => p.due === due && ['원천세', '사업장현황'].some(w => t.includes(w) && p.title.includes(w)));
+  return out.filter(([k, t, , due]) => !have.has(k) && !same(t, due));
+}
+
+// 서류 바로 만들기: 학원 데이터로 엑셀을 채워 내려받아요
+const PAPER_DOCS = [
+  ['roster', '원생 명부', '이름 · 학년 · 반 · 학부모 연락처', 'users'],
+  ['attend', '출석부', '보고 있는 달의 날짜별 출결', 'attend'],
+  ['fees', '수강료 납부 내역', '보고 있는 달 청구 · 납부', 'card'],
+  ['feeTable', '교습비 표', '반별 수강료 (교습비 게시 · 변경 신고용)', 'chart'],
+  ['staff', '강사 명단', '이름 · 합류일 (채용 통보용)', 'grad'],
+  ['wht', '원천세 계산표', '보고 있는 달 강사 급여 3.3%', 'doc'],
+  ['biz', '사업장현황 수입 요약', '지난해 월별 수입 · 지출', 'chart']
+];
+async function makePaperDoc(kind) {
+  const acad = REAL.academy.name, m = MONTH, y = +TODAY.slice(0, 4) - 1;
+  const title = (t, extra = '') => [[`${acad} ${t}${extra}`], [`만든 날 ${TODAY}`], []];
+  let rows, file, widths;
+  if (kind === 'roster') {
+    rows = [...title('원생 명부'), ['번호', '이름', '학년', '반', '학부모', '학부모 연락처', '등록일', '메모'],
+      ...REAL.students.map((s, i) => [String(i + 1), s.name, s.grade || '', s.class_name || '', s.parent_name || '', s.parent_phone || '', (s.created_at || '').slice(0, 10), s.memo || ''])];
+    file = 'student_roster.xlsx'; widths = [6, 12, 8, 14, 12, 16, 12, 24];
+  } else if (kind === 'attend') {
+    const { data } = await SB.from('attendance').select('student_id, day, status').eq('academy_id', REAL.academy.id).gte('day', `${m}-01`).lte('day', monthEnd(m));
+    const n = +monthEnd(m).slice(8), map = {}, L = { present: '출', late: '지', absent: '결', early: '조' };
+    (data || []).forEach(a => { map[`${a.student_id}:${+a.day.slice(8)}`] = a.status; });
+    rows = [...title('출석부', ` (${monthLabel(m)})`), ['이름', '반', ...[...Array(n)].map((_, i) => String(i + 1)), '출석', '지각', '결석', '조퇴'],
+      ...REAL.students.map(s => { const st = [...Array(n)].map((_, i) => map[`${s.id}:${i + 1}`]); const c = k => String(st.filter(x => x === k).length);
+        return [s.name, s.class_name || '', ...st.map(x => x ? L[x] : ''), c('present'), c('late'), c('absent'), c('early')]; })];
+    file = `attendance_${m}.xlsx`; widths = [10, 12, ...Array(n).fill(4), 6, 6, 6, 6];
+  } else if (kind === 'fees') {
+    const list = REAL.invoices.filter(i => i.month === m);
+    rows = [...title('수강료 납부 내역', ` (${monthLabel(m)})`), ['학생', '반', '항목', '금액(원)', '납부 기한', '납부일', '결제 방법'],
+      ...list.map(i => [i.student_name, i.class_name || '', i.title, String(i.amount), i.due || '', i.paid_at || '미납', i.method || '']),
+      [], ['', '', '청구 합계', String(sum(list, i => i.amount))], ['', '', '납부 합계', String(sum(list.filter(i => i.paid_at), i => i.amount))]];
+    file = `tuition_${m}.xlsx`; widths = [12, 12, 10, 12, 12, 12, 10];
+  } else if (kind === 'feeTable') {
+    const o = {}; [...REAL.invoices].filter(i => i.title === '수강료').sort((a, b) => a.month.localeCompare(b.month)).forEach(i => { o[i.class_name || '반 미지정'] = [i.amount, i.month]; });
+    const cnt = c => REAL.students.filter(s => (s.class_name || '반 미지정') === c).length;
+    rows = [...title('교습비 표'), ['반', '월 교습비(원)', '기준 달', '학생 수'], ...Object.entries(o).map(([c, [a, mm]]) => [c, String(a), mm, String(cnt(c))])];
+    file = 'tuition_table.xlsx'; widths = [16, 14, 10, 8];
+  } else if (kind === 'staff') {
+    rows = [...title('강사 명단'), ['번호', '이름', '합류일'], ...REAL.members.filter(x => x.role === 'teacher').map((x, i) => [String(i + 1), x.name, x.joined_at.slice(0, 10)])];
+    file = 'teachers.xlsx'; widths = [6, 14, 12];
+  } else if (kind === 'wht') {
+    const list = REAL.expenses.filter(x => x.category === '강사 급여' && ymOf(x.day) === m);
+    const r = (a, p) => String(Math.floor(a * p / 10) * 10);
+    rows = [...title('원천세 계산표', ` (${monthLabel(m)} 지급분)`), ['지급일', '내용', '지급액(원)', '소득세 3%', '지방소득세 0.3%', '원천징수 합계', '실지급액'],
+      ...list.map(x => [x.day, x.memo || '', String(x.amount), r(x.amount, 0.03), r(x.amount, 0.003), String(+r(x.amount, 0.03) + +r(x.amount, 0.003)), String(x.amount - +r(x.amount, 0.03) - +r(x.amount, 0.003))]),
+      [], ['', '합계', String(sum(list, x => x.amount)), String(sum(list, x => +r(x.amount, 0.03))), String(sum(list, x => +r(x.amount, 0.003))), String(sum(list, x => +r(x.amount, 0.03) + +r(x.amount, 0.003)))],
+      [], ['* 프리랜서 강사(사업소득) 3.3% 기준이에요. 근로계약 강사는 간이세액표로 따로 계산해요. 신고 · 납부 기한은 다음 달 10일.']];
+    file = `withholding_${m}.xlsx`; widths = [12, 24, 12, 12, 14, 14, 12];
+  } else if (kind === 'biz') {
+    const all = ledger();
+    rows = [...title(`${y}년 사업장현황 수입 요약`), ['월', '수강료 수납(원)', '기타 수입(원)', '수입 합계(원)', '지출 합계(원)'],
+      ...[...Array(12)].map((_, i) => { const mm = `${y}-${String(i + 1).padStart(2, '0')}`, e = all.filter(x => x.day.startsWith(mm));
+        const a = sum(e.filter(x => x.src === 'inv'), x => x.amount), b = sum(e.filter(x => x.src === 'inc'), x => x.amount);
+        return [`${i + 1}월`, String(a), String(b), String(a + b), String(sum(e.filter(x => x.kind === 'out'), x => x.amount))]; }),
+      [], ['합계', ...[e => e.src === 'inv', e => e.src === 'inc', e => e.kind === 'in', e => e.kind === 'out'].map(f => String(sum(all.filter(x => x.day.startsWith(String(y)) && f(x)), x => x.amount)))],
+      [], ['* 수강료는 "납부 확인"한 날 기준이에요. 신고 기한은 이듬해 2월 10일.']];
+    file = `business_report_${y}.xlsx`; widths = [8, 16, 14, 14, 14];
+  }
+  downloadXlsx(file, rows, widths);
+  toast('내려받았어요 · 신고한 뒤 아래 목록에서 "제출 완료"를 눌러 주세요');
+}
+
 function realPaperPage() {
   const list = [...REAL.paperwork].sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.due || '9999').localeCompare(b.due || '9999'));
-  const acts = `<button class="btn primary" data-act="addPaper">${ic('plus')}서류 추가</button>`;
-  if (!list.length) return head('서류·행정', '교육청·세무서·공단에 낼 서류를 마감 순서로 챙겨요.') + `
-  <section class="card empty">
-    <span class="tile-ic">${ic('doc')}</span>
-    <h2>챙길 서류를 넣어 주세요</h2>
-    <p class="muted">원천세 · 4대보험 · 교육청 신고처럼 학원이 자주 내는 서류를 한 번에 넣을 수 있어요. 마감일은 넣은 뒤에 고칠 수 있어요.</p>
-    <span class="btns"><button class="btn primary" data-act="presetPaper">자주 내는 서류 넣기</button>${acts.replace('btn primary', 'btn')}</span>
-  </section>`;
-  return head('서류·행정', '마감이 가까운 순서예요. 제목을 누르면 고칠 수 있어요.', acts) + `
-  <section class="card"><div class="list stack">
+  const sug = paperSuggestions();
+  const acts = `<button class="btn" data-act="presetPaper">자주 내는 서류 넣기</button><button class="btn primary" data-act="addPaper">${ic('plus')}서류 추가</button>`;
+  return head('서류·행정', '학원 데이터로 챙길 서류를 저절로 찾아 주고, 명부 · 출석부 · 원천세 계산표 같은 서류는 바로 만들어 내려받을 수 있어요. 직접 넣는 것도 그대로 돼요.', acts) + `
+  ${sug.length ? `<section class="card auto-sug">
+    <div class="card-head"><div><h2>${ic('star')} 자동으로 찾은 서류 ${sug.length}건</h2><span class="sub">강사 급여 · 새 강사 · 수강료 변경 · 연간 신고를 살펴봤어요</span></div><button class="btn sm primary" data-act="addAllSug">모두 넣기</button></div>
+    <div class="list">${sug.map(([k, t, org, due, memo]) => `
+      <div class="li"><span class="av" style="background:var(--blue-50);color:var(--blue-600)">${ic('doc')}</span>
+        <div><div class="t">${esc(t)} <span class="muted small">${esc(org)}</span></div><div class="d">${esc(memo)}</div></div>
+        <div class="r">${due ? `<span class="time">마감 ${md(due)}</span>` : ''}<button class="btn sm" data-add-sug="${esc(k)}">목록에 넣기</button></div></div>`).join('')}</div>
+  </section>` : ''}
+  <h2 class="sec-title">서류 바로 만들기</h2>
+  <div class="sec-row">${monthBar()}<span class="muted small">출석부 · 납부 내역 · 원천세 계산표는 보고 있는 달로 만들어요</span></div>
+  <div class="doc-grid">${PAPER_DOCS.map(([k, t, dsc, icn]) => `
+    <button class="doc-tile" data-make-doc="${k}"><span class="tile-ic">${ic(icn)}</span><b>${t}</b><span>${dsc}</span><small>엑셀 내려받기 ↓</small></button>`).join('')}</div>
+  <h2 class="sec-title">챙길 서류 ${list.filter(p => p.status !== 'done').length}건</h2>
+  ${list.length ? `<section class="card"><div class="list stack">
     ${list.map(p => {
       const [c, l] = STEP_CHIP[p.status], [next, nl] = PAPER_NEXT[p.status];
       return `
       <div class="li">
         <span class="av" style="background:${p.status === 'done' ? 'var(--good)' : 'var(--navy-700)'}">${ic('doc')}</span>
-        <div><div class="t"><span class="nm-link" data-edit-paper="${p.id}" role="button" tabindex="0">${esc(p.title)}</span> <span class="muted small">${esc(p.org || '')}</span></div><div class="d">${esc(p.memo || '')}</div></div>
+        <div><div class="t"><span class="nm-link" data-edit-paper="${p.id}" role="button" tabindex="0">${esc(p.title)}</span> <span class="muted small">${esc(p.org || '')}</span>${p.repeat !== 'none' ? ` <span class="chip info">${REPEAT_LABEL[p.repeat]} 반복</span>` : ''}${p.auto_key ? ' <span class="chip mute">자동</span>' : ''}</div><div class="d">${esc(p.memo || '')}</div></div>
         <div class="r"><span class="btns"><span class="chip ${c}">${l}</span>${p.status !== 'done' ? ddChip(p.due) : ''}</span>${p.due ? `<span class="time">마감 ${md(p.due)}</span>` : ''}<button class="btn sm ${next === 'done' ? 'primary' : ''}" data-paper-step="${p.id}:${next}">${nl}</button></div>
       </div>`;
     }).join('')}
-  </div></section>
-  <p class="muted small">기한과 서식은 지역 교육청·기관마다 다를 수 있어요. 헷갈리면 센터 담당 매니저에게 물어보세요.</p>`;
+  </div></section>` : `<section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>챙길 서류를 넣어 주세요</h2>
+    <p class="muted">"자주 내는 서류 넣기"를 누르면 원천세 · 4대보험 · 교육청 신고처럼 학원이 자주 내는 서류가 한 번에 들어가요. 매달 · 매년 돌아오는 서류는 제출 완료하면 다음 회차가 저절로 생겨요.</p></section>`}
+  <div class="link-row">${PAPER_LINKS.map(([n, u, d]) => `<a class="hint" href="${u}" target="_blank" rel="noopener">${ic('ext')}<span>${n} · ${d}</span><b>바로가기 →</b></a>`).join('')}</div>
+  <p class="muted small">기한과 서식은 지역 교육청 · 기관마다 다를 수 있어요. 세액은 참고용이에요. 헷갈리면 센터 담당 매니저에게 물어보세요.</p>`;
 }
 
 function paperDialog(p) {
@@ -653,7 +761,8 @@ function paperDialog(p) {
     fields: [
       ['title', '서류 이름', { required: true, max: 100, placeholder: '예: 교습비 변경 신고' }],
       ['org', '내는 곳', { max: 50, placeholder: '예: 교육청', half: true }], ['due', '마감일', { type: 'date', half: true }],
-      ['status', '상태', { type: 'select', required: true, value: 'todo', options: Object.entries(STEP_CHIP).map(([k, [, l]]) => [k, l]) }],
+      ['status', '상태', { type: 'select', required: true, value: 'todo', options: Object.entries(STEP_CHIP).map(([k, [, l]]) => [k, l]), half: true }],
+      ['repeat', '반복', { type: 'select', required: true, value: 'none', options: [['none', '한 번만'], ['monthly', '매달 (제출하면 다음 달 것이 생겨요)'], ['yearly', '매년']], half: true }],
       ['memo', '메모', { max: 500 }]
     ]
   });
@@ -661,17 +770,35 @@ function paperDialog(p) {
 
 async function addPaperPresets() {
   const have = new Set(REAL.paperwork.map(p => p.title));
-  const rows = PAPER_PRESETS().filter(([t]) => !have.has(t)).map(([title, org, due, memo]) => ({ academy_id: REAL.academy.id, title, org, due, memo }));
+  const rows = PAPER_PRESETS().filter(([t]) => !have.has(t)).map(([title, org, due, memo, repeat]) => ({ academy_id: REAL.academy.id, title, org, due, memo, repeat }));
+  if (!rows.length) { toast('자주 내는 서류는 이미 다 넣었어요'); return; }
   const { error } = await SB.from('paperwork').insert(rows);
   if (error) { toast('넣지 못했어요. 잠시 후 다시 시도해 주세요.'); return; }
   await loadPaperwork(); render(); toast(`서류 ${rows.length}건을 넣었어요`);
 }
+async function addSuggestions(keys) {
+  const rows = paperSuggestions().filter(([k]) => keys.includes(k)).map(([auto_key, title, org, due, memo]) => ({ academy_id: REAL.academy.id, auto_key, title, org, due, memo }));
+  if (!rows.length) return;
+  const { error } = await SB.from('paperwork').insert(rows);
+  if (error) { toast('넣지 못했어요. 잠시 후 다시 시도해 주세요.'); return; }
+  await loadPaperwork(); render(); toast(`서류 ${rows.length}건을 챙길 목록에 넣었어요`);
+}
 
+// 반복 서류는 "제출 완료"하면 다음 회차를 저절로 만들어요
 async function stepPaper(id, status) {
   const p = REAL.paperwork.find(x => x.id === id), before = p.status;
   p.status = status; render();
   const { error } = await SB.from('paperwork').update({ status }).eq('id', id);
   if (error) { p.status = before; render(); toast('저장하지 못했어요'); return; }
+  if (status === 'done' && p.repeat !== 'none' && p.due) {
+    const d = day0(p.due), nx = p.repeat === 'monthly' ? new Date(d.getFullYear(), d.getMonth() + 1, d.getDate()) : new Date(d.getFullYear() + 1, d.getMonth(), d.getDate());
+    const due = ymd(nx);
+    if (!REAL.paperwork.some(x => x.title === p.title && x.due === due)) {
+      await SB.from('paperwork').insert({ academy_id: REAL.academy.id, title: p.title, org: p.org, due, memo: p.memo, repeat: p.repeat });
+      await loadPaperwork(); render();
+      toast(`제출 완료 · 다음 회차(${md(due)} 마감)를 만들어 뒀어요`); return;
+    }
+  }
   toast(status === 'done' ? `${p.title} 제출 완료로 표시했어요` : '상태를 바꿨어요');
 }
 
@@ -680,6 +807,8 @@ function realOwnerTodo() {
   const items = [];
   REAL.paperwork.filter(p => p.status !== 'done' && p.due && dday(p.due) <= 14).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3)
     .forEach(p => items.push([`${esc(p.title)} 제출`, `${esc(p.org || '서류·행정')} · 마감 ${md(p.due)}`, '#admin/paper', ddChip(p.due)]));
+  const sug = paperSuggestions();
+  if (sug.length) items.push([`자동으로 찾은 서류 ${sug.length}건 확인하기`, sug.slice(0, 2).map(x => esc(x[1])).join(' · '), '#admin/paper', '<span class="chip info">자동</span>']);
   const late = REAL.invoices.filter(i => !i.paid_at && i.due && i.due < TODAY);
   if (late.length) items.push([`기한 지난 미납 ${late.length}건 안내하기`, `합계 ${won(sum(late, i => i.amount))}`, '#admin/billing', '<span class="chip crit">미납</span>']);
   const left = REAL.attend.day === TODAY && day0(TODAY).getDay() !== 0 ? REAL.students.filter(s => !REAL.attend.map[s.id]).length : 0;
@@ -2611,7 +2740,7 @@ const AREAS = {
           return `${+m.slice(5)}월 순이익 ${signWon(t.net)}`;
         }, render: financePage },
         approvals: { name: '결재함', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvData().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
-        paper: { name: '서류·행정', icon: 'doc', desc: '교육청·세무서·공단 신고 서류', stat: () => `작성 필요 ${(REAL ? REAL.paperwork : DATA.paperwork).filter(p => p.status === 'todo').length}건`, render: paperPage }
+        paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage }
       } },
     teachers: { name: '강사 관리', icon: 'grad', desc: '센터 강사 교육과 채용까지', stat: () => `교육 미이수 ${DATA.training.reduce((a, t) => a + Object.values(t.status).filter(s => s !== 'done').length, 0)}건 · ${applicantStat()}`,
       subs: {
@@ -2946,6 +3075,9 @@ function bind() {
   });
   on('[data-act="addPaper"]', () => paperDialog(null));
   on('[data-act="presetPaper"]', addPaperPresets);
+  on('[data-add-sug]', b => addSuggestions([b.dataset.addSug]));
+  on('[data-act="addAllSug"]', () => addSuggestions(paperSuggestions().map(x => x[0])));
+  on('[data-make-doc]', b => REAL ? makePaperDoc(b.dataset.makeDoc) : toast('예시 계정에서는 만들 수 없어요'));
   on('[data-edit-paper]', b => paperDialog(REAL.paperwork.find(p => p.id === b.dataset.editPaper)));
   on('[data-paper-step]', b => { const [id, s] = b.dataset.paperStep.split(':'); stepPaper(id, s); });
   // 수납 (데모)
