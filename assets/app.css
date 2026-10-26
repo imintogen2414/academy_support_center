@@ -338,3 +338,26 @@ dialog:has(.dlg.wide) { width: min(860px, calc(100vw - 32px)); }
 .imp-table tr.err td { background: #fff4f4; }
 .imp-table tr.dup td { color: var(--muted); }
 .imp-table small { color: var(--muted); }
+
+/* 재정: 기간별 매출 · 지출 그래프 */
+.stat small { font-size: 12px; }
+.num.neg { color: var(--crit); }
+.legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-left: 6px; }
+.sw.in, .fc-bars .in { background: #3b46f1; }
+.sw.out, .fc-bars .out, .pbar.out span { background: #f08c3a; }
+.card:has(> .fchart) { margin-bottom: 16px; }
+.fchart { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; height: 180px; align-items: end; border-bottom: 1px solid var(--line); padding-top: 8px; }
+.fc-col { position: relative; height: 100%; display: grid; grid-template-rows: 1fr 18px; outline: none; border-radius: 6px; }
+.fc-col:hover, .fc-col:focus { background: var(--sunk); }
+.fc-bars { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; padding: 0 2px; }
+.fc-bars span { flex: 1; max-width: 18px; min-height: 0; border-radius: 4px 4px 0 0; }
+.fc-col small { font-size: 11px; color: var(--muted); text-align: center; white-space: nowrap; line-height: 18px; }
+.fc-col:hover::after, .fc-col:focus::after { content: attr(data-tip); white-space: pre; position: absolute; bottom: calc(100% - 20px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 10px; z-index: 3; pointer-events: none; }
+.fc-col:first-child:hover::after, .fc-col:first-child:focus::after { left: 0; transform: none; }
+.fc-col:last-child:hover::after, .fc-col:last-child:focus::after { left: auto; right: 0; transform: none; }
+.ftable { margin-top: 14px; display: grid; font-size: 13px; }
+.ftable .tr { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; min-width: 0; font-size: inherit; padding: 7px 0; border-top: 1px solid var(--line); }
+.ftable .tr > :not(:first-child) { text-align: right; }
+.ftable .th { color: var(--muted); font-weight: 600; border-top: 0; }
+@media (max-width: 560px) { .fchart { height: 140px; } .ftable { font-size: 12px; } }
