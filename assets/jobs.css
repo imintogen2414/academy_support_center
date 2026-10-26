@@ -1,0 +1,75 @@
+/* 강사 채용 게시판 (첫 화면 /jobs · 프로그램 #jobs 공통) — 색은 base.css 토큰 */
+.jb-bar { display: grid; gap: 10px; margin-bottom: 12px; }
+.jb-search { display: flex; align-items: center; gap: 10px; border: 2px solid var(--blue-600); border-radius: 14px; padding: 0 14px; background: var(--surface); }
+.jb-search svg { width: 20px; height: 20px; color: var(--blue-600); flex: none; }
+.jb-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 13px 0; font-size: 15px; color: var(--ink); }
+.jb-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.jb-filters select { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight: 600; min-width: 0; }
+.jb-count { font-size: 14px; color: var(--muted); margin: 4px 2px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.jb-count b { color: var(--blue-600); }
+.jb-note { font-size: 12.5px; }
+.jb-reset { border: 0; background: none; color: var(--blue-600); font-weight: 700; font-size: 13px; padding: 0; text-decoration: underline; }
+.jb-list { display: grid; border-top: 2px solid var(--ink); }
+.jb-card { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; padding: 18px 4px; border-bottom: 1px solid var(--line); }
+.jb-card:hover { background: var(--sunk); }
+.jb-main { display: grid; gap: 5px; min-width: 0; }
+.jb-acad { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.jb-acad i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--blue-600); background: var(--blue-50); border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+.jb-title { font-size: 17px; font-weight: 800; letter-spacing: -.3px; color: var(--ink); line-height: 1.4; }
+.jb-title:hover { color: var(--blue-600); text-decoration: underline; }
+.jb-new { font-style: normal; font-size: 10.5px; font-weight: 800; color: #fff; background: var(--crit); border-radius: 4px; padding: 1px 5px; vertical-align: 3px; }
+.jb-tags { display: flex; flex-wrap: wrap; gap: 0; font-size: 13px; color: var(--muted); }
+.jb-tags span + span::before { content: ""; display: inline-block; width: 1px; height: 10px; background: var(--line); margin: 0 8px; vertical-align: -1px; }
+.jb-sub { font-size: 12.5px; color: var(--muted); }
+.jb-side { display: grid; gap: 6px; align-content: center; justify-items: end; text-align: right; }
+.jb-pay { font-size: 14.5px; color: var(--ink); }
+.jb-dd { font-size: 13px; font-weight: 700; color: var(--muted); }
+.jb-dd small { font-weight: 500; }
+.jb-dd.soon, .jb-dd.big { color: var(--crit); }
+.jb-empty { padding: 30px 8px; text-align: center; color: var(--muted); margin: 0; }
+.jb-muted { color: var(--muted); }
+@media (max-width: 640px) {
+  .jb-card { grid-template-columns: 1fr; gap: 8px; }
+  .jb-side { justify-items: start; text-align: left; grid-auto-flow: column; justify-content: space-between; align-items: center; }
+}
+/* 탭 */
+.jb-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.jb-tabs button { border: 0; background: none; padding: 10px 14px; font-weight: 700; font-size: 15px; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.jb-tabs button b { color: var(--blue-600); }
+.jb-tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--blue-600); }
+/* 상세 */
+.jb-detail { display: grid; gap: 18px; }
+.jb-dhead { display: grid; gap: 6px; padding-bottom: 18px; border-bottom: 2px solid var(--ink); }
+.jb-dhead h2 { margin: 0; font-size: 24px; letter-spacing: -.6px; line-height: 1.35; }
+.jb-dcta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.jb-dd.big { font-size: 15px; }
+.jb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.jb-grid dl { margin: 0; padding: 16px 18px; border-radius: 14px; background: var(--sunk); display: grid; gap: 8px; align-content: start; }
+.jb-grid h3 { margin: 0 0 2px; font-size: 14px; }
+.jb-grid dl div { display: grid; grid-template-columns: 76px 1fr; gap: 10px; font-size: 14px; }
+.jb-grid dt { color: var(--muted); }
+.jb-grid dd { margin: 0; font-weight: 600; }
+.jb-sec { display: grid; gap: 8px; }
+.jb-sec h3 { margin: 0; font-size: 16px; }
+.jb-sec p { margin: 0; font-size: 14.5px; line-height: 1.7; white-space: pre-line; }
+.jb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-chips span { font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; background: var(--blue-50); color: var(--blue-600); }
+.jb-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; counter-reset: js; }
+.jb-steps li { counter-increment: js; font-size: 13.5px; font-weight: 700; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.jb-steps li::before { content: counter(js) ". "; color: var(--blue-600); }
+.jb-acadbox { padding: 18px; border-radius: 16px; border: 1px solid var(--line); }
+.jb-acad-head { display: flex; align-items: center; gap: 12px; }
+.jb-acad-head > div { display: grid; flex: 1; min-width: 0; }
+.jb-acad-head small { color: var(--muted); font-size: 12.5px; }
+.jb-logo { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--navy-700); color: #fff; font-weight: 800; flex: none; }
+.jb-link { font-size: 13px; font-weight: 700; color: var(--blue-600); }
+.jb-others { display: grid; gap: 6px; font-size: 14px; }
+.jb-others a { color: var(--blue-600); font-weight: 600; }
+.jb-others small { color: var(--muted); margin-left: 6px; }
+@media (max-width: 640px) { .jb-grid { grid-template-columns: 1fr; } .jb-dhead h2 { font-size: 20px; } }
+/* 가입한 학원 */
+.jb-acads { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.jb-acad-card { display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); }
+.jb-acad-card p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.jb-pill { justify-self: start; border: 1px solid var(--blue-600); color: var(--blue-600); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 700; }
+.jb-pill.off { border-color: var(--line); color: var(--muted); }
