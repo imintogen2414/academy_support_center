@@ -225,7 +225,13 @@ textarea:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0
 .picker .or::before, .picker .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
 /* 원생 명단 (실제 데이터) */
-.tr.sv { grid-template-columns: 1.1fr 1fr 1.6fr 1.4fr 70px; }
+.tr.sv { grid-template-columns: 1.1fr 1fr 1.6fr 1.4fr 150px; }
+/* 휴대폰: 원생 명단은 옆으로 밀지 않고 두 칸씩 쌓아요 (메모는 숨김) */
+@media (max-width: 560px) {
+  .tr.sv { min-width: 0; grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  .tr.sv.th, .tr.sv > span:nth-child(4) { display: none; }
+  .tr.sv > .btns { justify-content: flex-start; }
+}
 .empty { text-align: center; display: grid; justify-items: center; gap: 6px; padding: 40px 24px; }
 .empty h2 { margin: 6px 0 0; font-size: 19px; }
 .empty p { margin: 0 0 10px; max-width: 420px; }
