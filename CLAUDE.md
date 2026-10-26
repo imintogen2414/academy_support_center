@@ -13,6 +13,8 @@
   - 학생·학부모 관리: 상담·등록, 원생 명단, 학부모 공지, 학부모·학생 앱
   - 제휴(MOU): 원장이 직접 맺는 게 아니라 센터가 미리 맺어 둔 제휴처에 신청만 하면 연결. 중심은 유학 제휴(인투유학 https://intoabroad.com): 방학 영어캠프, 조기유학, 어학연수, 해외 대학 진학, 유학 설명회. 교재·결제·보험은 "그 밖의 제휴"로 뒤에 둔다.
   - 홍보 지원: 인투마케팅(https://intomarketing.co.kr)에 연결. 블로그·디자인·영상·SNS 광고
+- 메뉴 묶음: `app.js`의 `NAV_GROUPS`(역할별 묶음 이름 · 설명 · 메뉴들). 왼쪽 메뉴(접고 펴기, 접은 묶음은 localStorage `asc-nav`) · 홈 타일 · 전체 메뉴 안내(`#guide`)가 같은 묶음을 써요. 새 메뉴를 만들면 여기에 넣기.
+- 처음 쓰는 분: 홈 맨 위 "처음이세요? 이렇게 시작해요"(`startSteps` — 역할별 단계, 실제 데이터로 저절로 체크, 다 하거나 숨기면 사라짐). 위쪽 검색창은 메뉴 찾기(`searchMenus` + 비슷한 말 `SEARCH_WORDS`).
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
 - 디자인: 남색·파란 계열(진한 남색 배경, 세로 빛줄기, 반투명 카드, 밝은 파란 버튼). 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
 - 정적 HTML + 작은 빌드 단계 + Supabase. 화면을 React로 다시 짤 때가 오면 Next.js로 옮긴다.
@@ -28,10 +30,11 @@
 - 테이블(`supabase/migrations/`에 SQL 보관, 모두 RLS):
   - `support_requests`: 학원 → 센터 지원 신청. 누구나 넣기만 가능, 읽기는 대시보드에서만.
   - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
-  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 쓰기, 원장·강사 읽기).
+  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`, 나머지는 `join_academy(코드)`.
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).
   - `leads`: 상담·등록(문의→상담→체험수업→등록). 원장·강사 읽기·쓰기, 원장만 삭제. "등록"으로 옮기면 트리거가 `students`에 자동 추가.
+  - 수강료 미리 정하기: `tuition_plans`(이름 · 한 달 금액 · 주로 쓰는 반, 원장 쓰기 · 원장·강사 읽기). 수납·청구 화면 위 "정해 둔 수강료"에서 만들고 "학생에게 붙이기"(반 전체 한 번에). "이 달 청구서 만들기"는 수강료가 붙은 학생을 그 금액으로 저절로 만들어요. 강사 메뉴에도 "원생 명단"(`#students`).
   - 행정 지원: `attendance`(학생·날짜마다 출석/지각/결석/조퇴, 원장·강사 읽기, 쓰기는 `mark_attendance(학생들, 날짜, 상태|null)` RPC만), `invoices`(수납·청구, 금액은 원 단위, 학생 이름·반은 트리거가 채움), `expenses`(지출), `incomes`(수납 밖의 수입: 교재 판매·특강 등), `paperwork`(서류 마감, `repeat` 매달·매년이면 제출 완료할 때 다음 회차를 화면이 만들어요, `auto_key`는 자동으로 찾아 준 서류 표시). 돈·서류는 원장만.
   - 서류 자동 처리(`#admin/paper`): `paperSuggestions()`가 강사 급여 → 원천세(3.3% 예상 세액), 새 강사 → 채용 통보 · 4대보험, 반 수강료 변경 → 교습비 변경 신고, 1월~2월 10일 → 사업장현황신고를 찾아 줘요. `makePaperDoc()`로 원생 명부 · 출석부 · 수강료 납부 내역 · 교습비 표 · 강사 명단 · 원천세 계산표 · 사업장현황 수입 요약을 엑셀로 만들어요.
   - 센터 관리: `center_admins`(이메일 목록, RPC로만: `am_center_admin` `list_center_admins` `add_center_admin(이메일|아이디)` `remove_center_admin`, 나 자신은 못 뺌). 판정은 `private.is_center_admin()` — 구글로 확인된 이메일이거나 센터 아이디일 때만. 첫 관리자: `yunji040615@gmail.com`, `imintogen2414@gmail.com`.
@@ -39,26 +42,28 @@
   - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
   - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
   - 채용: `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
-  - 제휴: `partner_applications`(원장 신청·확인 전 취소, 관리자가 new→contacted→connected→closed 처리). 제휴처 목록 자체는 `data.js`의 `partners`.
-  - 유학: `abroad_promos`(원장이 학부모에게 안내), `abroad_requests`(학부모·학생 신청 → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
+  - 제휴: `partner_applications`(원장 · 강사 신청, 신청한 사람은 트리거. 강사가 올리면 `owner_review` → 원장이 `decide_partner_request(신청, 승인?, 의견)`으로 승인하면 new, 반려하면 closed. 관리자는 owner_review를 못 보고 new→contacted→connected→closed 처리). 강사 메뉴 `#mou`(제휴처 · 유학 안내 · 내 제휴 신청). 제휴처 목록 자체는 `data.js`의 `partners`.
+  - 유학: `abroad_promos`(원장이 학부모에게 안내, 강사도 봐요), `abroad_requests`(학부모·학생 신청 · 강사가 학부모 대신 신청하면 `via_name`·`via_role` → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
   - 학부모·학생 앱: `student_links`(원생 ↔ 학부모·학생 계정, 원장이 `link_family(원생, 사람, 켬/끔)`으로 연결, 대상은 `list_family_members(학원)`). 학부모·학생은 `my_children()`, 학부모만 `my_child_invoices()`(원장 메모 뺌), 출결은 연결된 아이 것만 바로 읽기.
   - 학부모 공지: `notices`(원장 쓰기, `target_class`가 비면 전체·있으면 그 반 아이와 연결된 가족만), `notice_reads`(읽음은 `mark_notice_read(공지)`로만). 원장은 `notice_report(학원)` 읽음 수, `notice_readers(공지)` 읽은·안 읽은 사람.
   - 홍보 의뢰: `promo_requests`(원장·강사 의뢰, 의뢰한 사람 `requested_by`·이름·역할은 트리거가 채움. 원장은 우리 학원 것 전부, 강사는 내 것만. 접수 단계에서 취소, 관리자가 new→contacted→working→review→done + `admin_memo`).
   - 결재: `approvals`(강사·원장이 올림, 올린 사람은 트리거가 채움, 올린 사람과 원장만 보기, 기다리는 동안 올린 사람이 고치기·취소). 원장은 `decide_approval(결재, 승인?, 의견, 지출 항목|null)` — 항목을 넣으면 `expenses`에 저절로 들어가요. 원장 `#admin/approvals` 결재함, 강사 `#approvals`.
-  - 일정 · 시간표: `timetable`(반 · 요일 · 시간 · 과목 + 세부 강의실 · 담당 강사 · 메모, 원장 쓰기), `academy_events`(시험 · 행사 · 휴원 …, 원장 · 강사 쓰기, 강사는 내 것만 고침, 세부는 `detail`). 두 표 모두 원장 · 강사만 바로 읽고, 학부모 · 학생은 세부를 뺀 `family_timetable(학원)` · `family_events(학원, 부터, 까지)`. 화면 `#schedule`(모든 역할, 주간 시간표 · 월간 달력).
+  - 일정 · 시간표: `timetable`(반 · 요일 · 시간 · 과목 + 세부 강의실 · 담당 강사 · 메모, 원장 쓰기), `academy_events`(시험 · 행사 · 휴원 …, 원장 · 강사 쓰기, 강사는 내 것만 고침, 세부는 `detail`). 두 표 모두 원장 · 강사만 바로 읽고, 학부모 · 학생은 세부를 뺀 `family_timetable(학원)` · `family_events(학원, 부터, 까지)`. 화면 `#schedule`(모든 역할, 주간 시간표는 주를 넘기거나 날짜로 고르고 그 주 일정도 함께 · 월간 달력).
   - 학생 할 일: `student_todos`(학생 · 날짜 · 할 일, 만든 사람 · 역할은 트리거가 채움). 원장 · 강사는 반 전체나 학생 한 명에게, 학부모 · 학생은 연결된 아이에게만 넣기. 체크는 `check_todo(할 일, 했음?)`. 만든 사람이 고치고, 만든 사람과 원장이 지워요. 화면: 원장 `#members/todos`, 강사 `#todos`, 학부모 `#kid/todos`, 학생 `#todos`(홈 맨 위에도 카드).
   - 성장 리포트: `growth_reports`(학생 · 기간 · 과목 점수 `scores` · 학습 태도 `ratings` · 잘하는 점 · 노력할 점 · 종합 의견 · 다음 목표, 출결 · 할 일 수행 `stats`는 저장할 때 화면이 계산). 원장 · 강사가 쓰고 `status`를 issued로 바꾸면 연결된 가족이 봐요(발급 시각은 트리거). 인쇄 · PDF는 브라우저 인쇄(`@media print`). 화면: 원장 `#members/reports`, 강사 `#reports`, 학부모 `#kid/reports`, 학생 `#reports`.
   - 자료실: `library_items`(제목 · 분류 · 파일 또는 링크 · 공유 범위 `visibility` private 나만 / staff 원장·강사 / class 반 가족 / everyone 모두, 올린 사람은 트리거). 판정은 `private.can_see_library` — 원장은 전부(강사 비공개 포함). 파일은 Storage 비공개 버킷 `library`(50MB, 경로 `학원 id/무작위/file.확장자`), 읽기는 그 자료를 볼 수 있을 때만, 올리기는 원장·강사만. 열기 · 내려받기는 10분짜리 서명 주소. 화면 `#library`(모든 역할).
-  - 메신저(1:1): `conversations`(두 사람 `user_a < user_b`, 마지막 메시지는 트리거), `messages`(대화 두 사람만 읽기 · 쓰기, 보낼 때도 아직 대화할 수 있는 사이인지 확인), `conversation_reads`. 누가 누구와: `private.message_academy(a, b)` — 원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생(같은 아이로 연결됐을 때만). RPC `message_contacts()` `start_conversation(상대)` `my_conversations()`(안 읽은 수) `mark_conversation_read(대화)`. 화면 `#messages`(모든 역할 · 관리자 포함), 열어 둔 대화는 5초, 목록은 20초마다 새로 확인.
+  - 메신저(카톡처럼): 친구 · 채팅 두 화면. `friends`(내가 추가한 사람, RPC `find_people(검색어)` — 한 글자 이상 쳐야 나와요 · `add_friend` `remove_friend` `my_friends`). `conversations`(kind direct 1:1 `user_a < user_b` / group 방 이름 `title`, 마지막 메시지는 트리거), `conversation_members`(방 사람), `messages`(방 사람만 읽기 · 쓰기, 1:1은 보낼 때도 아직 대화할 수 있는 사이인지 `private.can_send`), `conversation_reads`. 누가 누구와: `private.message_academy(a, b)` — 원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생(같은 아이로 연결됐을 때만). 그룹은 `create_group(이름, 사람들)` `add_group_members` `rename_group` `leave_conversation` `conversation_people`. 목록은 `my_chats()`(안 읽은 수, 예전 `my_conversations` · `message_contacts`는 안 써요). 프로필 사진 · 상태 메시지는 `profiles.avatar_url` · `status_msg`, 사진은 공개 버킷 `avatars/내 id/…`(5MB). 화면 `#messages`(모든 역할 · 관리자 포함), 열어 둔 대화는 5초, 목록은 20초마다 새로 확인.
+  - 새 소식 빨간 점: `user_seen`(메뉴 경로마다 마지막으로 본 시각, 본인 것만). `app.js`의 `NEWS`(역할별 경로 → 남이 올린 것의 시각 목록)보다 새로운 게 있으면 메뉴 · 타일 · 종 모양에 점, 그 화면을 열면 `markSeen`이 지워요. 처음엔 최근 3일 것만. 예시 계정은 `DEMO_NEWS` + sessionStorage.
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
 - 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
 - 학원 코드가 없는 강사: 학원 연결 화면의 "채용 공고 먼저 보기" → `SEEKER` 모드(채용 공고만).
 - 관리자 신청 화면: `app.html#apply-admin`(왼쪽 아래 "센터 관리자 신청", 역할 고르기·학원 연결 화면에도 링크). 수락은 센터 관리 → 관리자.
 - 센터 관리자: 학원에 속해 있으면 메뉴에 "센터 관리"가 더 생기고, 학원 없이 관리자만이면 `ROLE = 'admin'`으로 센터 화면만 봐요(역할 고르기도 건너뜀).
-- 재정: 매출 = "납부 확인"한 청구(납부한 날 기준) + `incomes`, 순이익 = 매출 - `expenses`. 기간(오늘·최근 7일·월별·3·6개월·1년)마다 그래프 · 표 · 거래 내역 · 엑셀 내려받기(`app.js`의 `finRange` `ledger`). 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
+- 재정: 매출 = "납부 확인"한 청구(납부한 날 기준) + `incomes`, 순이익 = 매출 - `expenses`. 기간(오늘·최근 7일·월별·3·6개월·1년·직접 고르기 — 시작일부터 최대 1년, `customRange`)마다 그래프 · 표 · 거래 내역 · 엑셀 내려받기(`app.js`의 `finRange` `ledger`). 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
 - 뒤로 가기: 왼쪽 메뉴와 위치 표시(홈 › 분야) 링크는 기록을 바꿔치기(`goReplace`)해서 쌓이지 않아요. 화면 위 "‹ 이전"은 바로 전 화면 한 단계(처음 연 화면이면 한 단계 위).
 - 사용자에게 보이는 말: "데모" 대신 "예시 계정", 유학 제휴처 이름은 "인투유학".
 - 엑셀로 올리기: `assets/sheet.js`(바깥 라이브러리 없이 .xlsx·.csv 읽기 `readSheet`, 양식 만들기 `downloadXlsx`) + `app.js`의 `IMPORTS`·`importDialog`(원생 명단 · 재정에 "엑셀로 올리기"). 칸 이름은 여러 표현을 알아듣고(`alias`), "예시)" 줄·빈 줄은 건너뛰고, 이미 있는 줄은 건너뛰어요. .xls(예전 형식)는 .xlsx로 저장해 달라고 안내.
+- 금액 칸은 `type: 'won'`(치는 동안 쉼표, 저장할 땐 `numOf`로 숫자). 화면에 보이는 금액은 모두 `won()`(1,000 단위 쉼표 + 원). 입력 창은 화면보다 길면 안에서 스크롤되고 저장 버튼은 아래에 붙어 있어요.
 - 입력 창은 `app.js`의 `formDialog`(필드 목록만 넘기면 추가·수정·삭제까지)를 쓴다. 예시를 눌러 채우는 칸은 `chips`, 저장 전 확인은 `check`.
 - 정책(policy) 이름은 63바이트에서 잘려요(한글 한 글자 3바이트). 같은 표에서 앞부분이 같으면 부딪히니 짧게 짓는다.
 - 제휴(`#mou`) · 홍보(`#promo`) 첫 화면 아래에 쓰는 법 · 파트너 소개 · 자주 묻는 질문(`AREA_INTRO`).
@@ -80,8 +85,8 @@
 14. ~~성장 리포트 발급~~ (완료)
 15. ~~자료실~~ (완료)
 16. ~~서류·행정 자동 처리~~ (완료)
-17. ~~메신저~~ (완료)
-18. 새 소식 빨간 점 (확인하면 사라짐)
+17. ~~메신저~~ (완료 · 친구 · 그룹 · 프로필까지)
+18. ~~새 소식 빨간 점 (확인하면 사라짐)~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
