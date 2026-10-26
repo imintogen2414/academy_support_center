@@ -44,12 +44,15 @@
 - 원천세 계산(`#admin/payroll`, `payroll` 원장만): 강사마다 구분(프리랜서 3.3% · 일용직 (일당-15만원)×2.7% 소액부징수 · 근로소득 · 직접) · 지급액만 넣으면 소득세 · 지방소득세 · 실지급액(`calcTax`), "재정 지출에도 넣기"(`expense_id`), 지난달 불러오기, 신고 서류로 넣기(`wht:월`), 엑셀. 서류 바로 만들기는 바로 받지 않고 `sheetEditor`에서 칸을 고치고 줄을 더한 뒤 엑셀로 받아요(합계는 다시 계산).
 - 자동으로 처리(`#admin/auto`, `academies.auto` = { bill: {on, day}, unpaid: {on, days}, paper: {on} }, 기록 `auto_logs`): pg_cron `asc-automations`가 매일 한국 9시 10분 `private.run_automations()` — 매달 day일 정해 둔 수강료로 청구서, 기한 지난 미납에 학부모(성인 학원은 수강생)께 원장 이름 채팅 한 번(`invoices.reminded_at`, `private.auto_message`), 지난달 지급이 있으면 원천세 · 1월엔 사업장현황 서류. "지금 한 번 해 보기"는 `run_my_automations(학원)`. 서류 자동이 켜져 있으면 앱을 열 때 `paperSuggestions`도 저절로 넣어요(`autoPaperOnOpen`). 원장 홈에 "저절로 처리한 일".
 - 첫 화면 진행 상황 보기(`#check`): 접수 번호 + 남긴 연락처 → `check_my_request(번호, 연락처)`(가입 안 해도 돼요). 접수 완료 화면 · 오른쪽 아래 링크에서 바로.
-- 공유 미리보기 이미지 `assets/og.png`는 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
+- 공유 미리보기 이미지 `assets/og.png`는 흰 바탕에 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
 - 예시 계정의 날짜는 실제 오늘(`DATA.today = todayText()`), 오늘 출결 · 아이 오늘 일정은 오늘 요일에 수업이 있는 것만(일요일엔 없음). 예시 수납은 미납 목록(`DATA.unpaid`)으로 미납 수 · 금액을 계산해서 홈 · 목록 · 메뉴 숫자가 같아요.
 - 입력 칸은 되도록 눌러서 고르게: `chips`(학년 `GRADES`, 과목 `SUBJECTS`, 반, 강사 `staffNames()`, 서류 이름 · 내는 곳, 다음 할 일 …), 지역은 `regionPicker`, 전화번호 칸(type tel)은 치는 동안 하이픈이 저절로.
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
-- 디자인: 남색·파란 계열(진한 남색 배경, 세로 빛줄기, 반투명 카드, 밝은 파란 버튼). 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
+- 디자인(프로그램 안): 남색·파란 계열. 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
+- 디자인(첫 화면 `index.html` · `/area` · `/jobs` · 로그인): 흰 바탕 + 연회색 띠(`--soft`) + 파란 버튼 하나, 큰 글씨, 실제 화면 그림. 늘 밝은 화면(`<html data-theme="light">`, 다크 모드 버튼 없음 · theme.js 안 씀). 반투명 카드 · 빛줄기 · 글자 그라데이션 · 분야별 무지개 색은 쓰지 않는다. 스타일은 `assets/site.css`(첫 화면용 토큰을 `:root`에서 덮어씀).
+- 기기 그림: `assets/mock.js` — 노트북(`laptopMock`) · 휴대폰(`PHONE_SCREENS` 원장 · 강사 · 학부모 · 학생) · 창 모양(`AREA_MOCK` 분야마다). 정해진 크기로 그리고 `fitBox` + `fitMocks`가 칸 너비에 맞춰 줄여요. 숫자 · 이름은 예시.
+- 움직임(필요한 만큼만): `.rv`가 화면에 들어오면 아래에서 떠오름(`bindMotion`, `--d`는 순서, 빨리 지나친 것은 `revealPast`), 첫 화면 알림이 4초마다 바뀜(`HERO_TOASTS`), 휴대폰 섹션 역할 버튼이 5초마다 다음 역할(마우스를 올리면 멈춤), 목록 줄 · 그래프가 차례로. 기기 설정 "움직임 줄이기"면 모두 멈추고 바로 보여요(`html.motion`이 안 붙음).
 - 다크 모드: 기기 설정을 따르고, 해 · 달 버튼(`[data-theme-toggle]`, `assets/theme.js`)으로 고정하면 localStorage `asc-theme`. 어두운 색은 `base.css`의 같은 토큰을 덮어써요 — 새 화면은 `#fff` 대신 `var(--surface)` · `var(--ink)` 같은 토큰을 쓰기. 성장 리포트 · 파트너 카드처럼 종이 느낌인 곳만 흰색 고정.
 - 역할 색: `--r-owner`(파랑) · `--r-teacher`(초록) · `--r-parent`(주황) · `--r-student`(분홍) · `--r-admin`. 클래스 `.r-owner` 등이 `--rc`를 정해요.
 - 정적 HTML + 작은 빌드 단계 + Supabase. 화면을 React로 다시 짤 때가 오면 Next.js로 옮긴다.
@@ -128,6 +131,7 @@
 18. ~~새 소식 빨간 점 (확인하면 사라짐)~~ (완료)
 19. ~~4라운드: 시간 드롭다운 · 가로 스크롤 · 원생 들고 남 · 단계 설명 · 회원 상세 · 이용 분야 간결 · 채팅 · 자료실 폴더 · 관리자 홈 · 사용법 안내 · 현장 결제 직접 입력 · 원천세 계산 · 학부모 스위치 · 자동 처리~~ (완료)
 20. ~~5라운드: 첫 화면 개편(운영 프로그램 + 추가 서비스 3) · 사람인 같은 채용 게시판 · /jobs · 강사 이력서 · 수강료 할인 · 홈 목록 깨짐 · 학부모 바로 내기~~ (완료)
+21. ~~첫 화면 다시 디자인: 밝게 · 노트북 · 휴대폰 그림 · 필요한 만큼 움직임~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
@@ -136,11 +140,11 @@
 # 파일 구조
 - `index.html`: 첫 화면. 전체 너비 남색 + 위쪽 머리글(로고 · 운영 프로그램 · 추가 서비스 · 이용 사례 · 강사 채용 · [로그인] [무료로 시작하기]). 문구는 원장님 기준.
   - 구조는 "운영 프로그램 1개(무료로 시작) + 필요할 때만 붙이는 추가 서비스 3개(상담 후 진행)". `areas.js`의 `SITE_AREAS`에 `kind: 'program'`(행정·재정 자동화 `admin` · 학생·학부모 관리 `members` · 강사와 함께 쓰기 `teachers`) / `'service'`(홍보 대행 `promo` · 유학·캠프 제휴 `mou` · 강사 구하기 `hire`), `PROGRAM_AREAS` · `SERVICE_AREAS`. 프로그램은 "무료로 시작하기 · 예시 계정", 서비스는 "상담 신청하기". 행정 자동화를 "신청 → 매니저 연락 → 견적"으로 소개하지 않는다. 파트너 이름은 카드 제목이 아니라 "공식 파트너 ○○"로 작게.
-  - 처음 화면 순서(`homeView`): 메인 메시지(역할별 화면 그림 `roleScreens`) → ① 운영 프로그램 + 각자 자기 화면(역할 카드 → /demo/역할) → ② 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개(`SITE_FAQ` 세 번째 값 true) → 시작하기 띠. 자세한 설명 · 질문 전체 · 비용은 분야 상세(`/area/…`)와 `#faq`로.
+  - 처음 화면 순서(`homeView`): 메인 메시지(가운데 정렬 + 노트북 · 휴대폰 그림 `heroMock`) → 운영 프로그램 3개(글 · 화면 번갈아 `feat-row`) → 휴대폰에서(역할 버튼 + 바뀌는 휴대폰 `#mobile-sec`) → 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개(`SITE_FAQ` 세 번째 값 true) → 시작하기 띠(`startBand`) → 아래쪽(메뉴 묶음 + 사업자 정보). 화면 하나짜리(신청 · 문의 · 질문 · 예시 계정 · 강사 채용)는 `page()` 틀. 자세한 설명 · 질문 전체 · 비용은 분야 상세(`/area/…`)와 `#faq`로.
   - 해시 화면(`VIEWS`): `#apply/분야` 추가 서비스 상담 신청(서비스 3개 + "프로그램 도입 도움"), `#done`, `#ask`, `#check`, `#faq`(질문 전체 · 비용 · 사업자 정보), `#demo`(예시 계정 고르기, `/demo/seeker` 구직 강사 포함), `#login` · `#signup`(로그인 패널 `#program`을 보여 주고 소개는 숨김, `#signup/teacher`는 강사로 골라 두고 가입 뒤 `/app#jobs`). 그 밖의 해시(`#program-sec` 등)는 처음 화면의 그 자리로.
   - 강사로 일하고 싶은 분: `/jobs`(빌드가 `dist/jobs.html`, `vercel.json` rewrite). `public_job_board()`(가입 안 해도 됨)로 공고 · 가입한 학원, 공고가 없으면 예시 공고(`JOB_SAMPLES`)에 "예시" 표시. 상세는 `/jobs#job/공고`.
   - (예전) 분야 상세 흐름: `/area/admin` 분야 상세 → 프로그램이면 가입, 서비스면 `#apply/분야` → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
-  - 분야 상세페이지: 그림(`HERO_ART`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅 로고 `assets/brand/intomarketing-logo.png`(가로) · `intomarketing-mark.png`(세로, 앱 제휴 · 홍보 소개 칸).
+  - 분야 상세페이지: 화면 그림(`AREA_MOCK`) · 핵심 포인트 · 지원 내용 아이콘 · 분야 색(`AREA_LOOK.accent` → CSS `--ac`). 제휴 · 홍보는 공식 파트너 칸(`PARTNERS`: 로고 · 소개 · 연결 4단계). 인투유학 로고 `assets/brand/intoyuhak-logo.png`, 인투마케팅 로고 `assets/brand/intomarketing-logo.png`(가로) · `intomarketing-mark.png`(세로, 앱 제휴 · 홍보 소개 칸).
   - 로그인 패널(`#login` · `#signup`, 예전 `?signup=1`도): 아이디 로그인·회원가입, 구글로 계속하기, "예시 계정 들어가보기"(`DEMO_ROLES`), "초대 코드가 뭐예요?" 설명, "로그인 유지하기"
   - 비용 안내(`SITE_PRICE`, 운영 프로그램 · 채용 공고 무료) · 이용 사례(예시, `SITE_STORIES`) · 자주 묻는 질문(`SITE_FAQ`) · 운영 정보(예시, `SITE_ORG` — 실제 정보가 정해지면 여기만 바꾸기). 모두 `assets/areas.js`.
   - 분야 상세 주소는 `/area/admin`처럼 진짜 주소(검색 노출용). 빌드가 분야마다 제목 · 설명 · canonical이 들어간 `dist/area/분야.html`과 `robots.txt` · `sitemap.xml`을 만들고, `vercel.json` rewrites가 `/area/:id`를 이어 줘요. 화면 안에서 분야 · 처음 링크는 pushState로 바뀌고 탭 제목도 바뀌어요(`setMeta`). 예전 `#area/…` 주소는 저절로 바꿔 줘요. 그래서 `index.html`의 파일 주소는 `/assets/…`처럼 `/`로 시작해요.

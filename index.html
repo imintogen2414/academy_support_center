@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,34 +10,35 @@
 <meta property="og:title" content="학원지원센터 — 학원 운영은 프로그램 하나로, 나머지는 센터가 연결해 드려요">
 <meta property="og:description" content="출결·수납·재정·교육청 서류 자동화와 학생·학부모 관리를 원장·강사·학부모·학생이 함께 쓰는 운영 프로그램은 무료로 시작해요. 홍보 대행·유학 캠프 제휴·강사 구하기는 필요할 때만 상담 후 진행해요.">
 <meta property="og:url" content="https://academysupportcenter.vercel.app/">
-<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=2">
+<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=3">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="학원지원센터 — 학원 운영은 프로그램 하나로, 나머지는 센터가 연결해 드려요">
 <meta name="twitter:description" content="출결·수납·재정·교육청 서류 자동화와 학생·학부모 관리를 원장·강사·학부모·학생이 함께 쓰는 운영 프로그램은 무료로 시작해요. 홍보 대행·유학 캠프 제휴·강사 구하기는 필요할 때만 상담 후 진행해요.">
-<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=2">
-<meta name="theme-color" content="#070a3d">
+<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=3">
+<meta name="theme-color" content="#ffffff">
 <link rel="canonical" href="https://academysupportcenter.vercel.app/">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="/assets/base.css">
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/jobs.css">
-<script>try{var t=localStorage.getItem('asc-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
 
-<!-- 위쪽 머리글: 로고 · 메뉴 · 로그인 / 무료로 시작하기 -->
-<header class="site-top">
-  <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
-  <nav class="top-nav" aria-label="첫 화면 메뉴"><a href="/#program-sec">운영 프로그램</a><a href="/#service-sec">추가 서비스</a><a href="/#story-sec">이용 사례</a><a href="/jobs">강사 채용</a></nav>
-  <span class="top-r"><button type="button" class="theme-btn" data-theme-toggle aria-label="화면 밝기 바꾸기"></button><a class="btn outline sm" href="#login" id="topLogin">로그인</a><a class="btn light sm top-start" href="#signup">무료로 시작하기</a></span>
+<!-- 위쪽 머리글: 로고 · 메뉴 · 로그인 / 무료로 시작하기 (내리면 아래 선이 생겨요) -->
+<header class="site-top" id="siteTop">
+  <div class="wrap top-in">
+    <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
+    <nav class="top-nav" aria-label="첫 화면 메뉴"><a href="/#program-sec">운영 프로그램</a><a href="/#mobile-sec">휴대폰에서</a><a href="/#service-sec">추가 서비스</a><a href="/#story-sec">이용 사례</a><a href="/jobs">강사 채용</a></nav>
+    <span class="top-r"><a class="btn ghost sm" href="#login" id="topLogin">로그인</a><a class="btn primary sm top-start" href="#signup">무료로 시작하기</a></span>
+  </div>
 </header>
 
 <!-- 소개 화면들: 처음 · 분야 상세(/area/admin) · 강사 채용(/jobs) · 상담 신청(#apply) · 접수 완료(#done) · 문의(#ask) · 진행 상황(#check) · 자주 묻는 질문(#faq) · 예시 계정(#demo) -->
-<main class="support" id="site">
+<main class="site" id="site">
   <div id="panel"></div>
   <footer class="foot" id="siteFoot"></footer>
 </main>
@@ -120,7 +121,7 @@
 <script src="/assets/areas.js"></script>
 <script src="/assets/regions.js"></script>
 <script src="/assets/jobs.js"></script>
-<script src="/assets/theme.js"></script>
+<script src="/assets/mock.js"></script>
 <script>
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const panel = document.getElementById('panel');
@@ -137,86 +138,111 @@ const DEMO_ROLES = [
 const demoButtons = () => DEMO_ROLES.map(([r, av, t, d]) => `<button type="button" onclick="go('${r}')" class="r-${r}"><span class="av">${av}</span><div><div class="t">${t}</div><div class="d">${d}</div></div><span class="go">입장 →</span></button>`).join('');
 document.getElementById('demoList').innerHTML = demoButtons();
 
-// 처음: 메인 메시지 → 운영 프로그램 → 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개 → 시작하기 (원장님 기준)
+// 처음: 메인 메시지 → 운영 프로그램 3 → 휴대폰에서(역할별 화면) → 추가 서비스 3 → 이용 사례 → 질문 4개 → 시작하기 (원장님 기준)
+// .rv는 화면에 들어올 때 살짝 떠오르고(--d는 순서), 기기 그림은 assets/mock.js
+const ROLE_NAME = { owner: '원장님', teacher: '강사님', parent: '학부모님', student: '학생' };
 function homeView() {
   return `
   <section class="hero">
-    <div class="hero-text">
-      <span class="kick-line">학원 운영 프로그램 · 무료로 시작</span>
-      <h1>학원 운영은 프로그램 하나로,<br><em>나머지는 센터가 연결해 드려요</em></h1>
-      <p class="lede">출결 · 수납 · 재정 · 교육청 서류는 <b>자동으로</b>, 상담 · 원생 · 학부모 공지는 <b>한 흐름으로</b>. 원장님 · 강사님 · 학부모님 · 학생이 각자 자기 화면으로 같이 써요.</p>
-      <div class="acts"><a class="btn light lg" href="#signup">무료로 시작하기</a><a class="btn outline lg" href="#demo">예시 계정 둘러보기</a></div>
-      <p class="hero-note">카드 등록 없이 가입 · 홍보 · 유학 제휴 · 강사 구하기는 필요할 때만 상담 후 진행</p>
+    <div class="wrap hero-in">
+      <div class="hero-text">
+        <p class="eyebrow rv">학원 운영 프로그램 · 무료로 시작</p>
+        <h1 class="rv" style="--d:1">학원 운영은 프로그램 하나로, <br>나머지는 센터가 연결해 드려요</h1>
+        <p class="lede rv" style="--d:2">출결 · 수납 · 재정 · 교육청 서류는 자동으로 챙기고, 상담부터 등록 · 학부모 공지까지 한 흐름으로 이어져요. 원장님 · 강사님 · 학부모님 · 학생이 각자 자기 화면으로 함께 써요.</p>
+        <div class="acts rv" style="--d:3"><a class="btn primary lg" href="#signup">무료로 시작하기</a><a class="btn line lg" href="#demo">예시 계정 둘러보기</a></div>
+        <ul class="hero-facts rv" style="--d:4"><li>카드 등록 없이 가입</li><li>설치 없이 휴대폰에서도</li><li>쓰던 엑셀 명단 그대로</li></ul>
+      </div>
+      <div class="hero-art rv" style="--d:2">${heroMock()}</div>
     </div>
-    <div class="hero-art" aria-hidden="true">${roleScreens()}</div>
   </section>
 
-  <section class="h-sec" id="program-sec">
-    <div class="h-head"><span class="h-num">①</span><div><h2>운영 프로그램 <span class="tag-free">무료로 시작</span></h2><p>학원에서 매일 하는 일을 프로그램 하나로 끝내요.</p></div></div>
-    <div class="prog-grid">${PROGRAM_AREAS.map(a => `
-      <a class="prog" href="/area/${a.id}" style="--ac:${a.accent}">
-        <span class="ic">${sic(a.icon)}</span><b>${a.name}</b><small>${a.short}</small>
-        <ul>${a.items.map(x => `<li>${sic('check')}<span>${x[0]}</span></li>`).join('')}</ul>
-        <span class="go">자세히 보기 ›</span>
-      </a>`).join('')}
+  <section class="sec" id="program-sec">
+    <div class="wrap">
+      <div class="sec-head rv"><p class="eyebrow">운영 프로그램 · 무료</p><h2>매일 하는 일은<br>프로그램이 챙겨요</h2><p>따로 쓰던 엑셀 · 문자 · 단톡방을 하나로 모았어요. 켜 두면 아침마다 알아서 처리하고, 원장님은 확인만 하시면 돼요.</p></div>
+      ${PROGRAM_AREAS.map((a, i) => `
+      <div class="feat-row${i % 2 ? ' rev' : ''}">
+        <div class="fr-text rv">
+          <span class="fr-num">0${i + 1}</span>
+          <h3>${a.name}</h3>
+          <p>${a.short}</p>
+          <ul>${a.items.map(x => `<li><b>${x[0]}</b><span>${x[1]}</span></li>`).join('')}</ul>
+          <a class="link" href="/area/${a.id}">자세히 보기 <span aria-hidden="true">→</span></a>
+        </div>
+        <div class="fr-art rv${a.id === 'teachers' ? ' is-phone' : ''}" style="--d:1">${AREA_MOCK[a.id]()}</div>
+      </div>`).join('')}
     </div>
-    <div class="roles-row">
-      <div class="roles-title"><b>각자 자기 화면으로 같이 써요</b><small>초대 코드 하나로 역할에 맞는 화면이 생겨요 · 눌러서 예시 화면 보기</small></div>
-      <div class="role-cards">${DEMO_ROLES.map(([r, av, , d]) => `<a class="role-card r-${r}" href="/demo/${r}"><span class="av">${av}</span><span><b>${av} 화면</b><small>${d}</small></span></a>`).join('')}</div>
-    </div>
-    <div class="acts"><a class="btn light" href="#signup">무료로 시작하기</a><a class="btn outline" href="#demo">예시 계정 둘러보기</a></div>
   </section>
 
-  <section class="h-sec" id="service-sec">
-    <div class="h-head"><span class="h-num">②</span><div><h2>필요할 때만 붙이는 추가 서비스 <span class="tag-soft">상담 후 진행</span></h2><p>직접 안 하셔도 돼요. 필요하면 상담 신청만 하세요. 센터가 연결해 드려요.</p></div></div>
-    <div class="svc-grid">${SERVICE_AREAS.map(a => `
-      <article class="svc" style="--ac:${a.accent}">
-        <span class="ic">${sic(a.icon)}</span>
-        <div><b>${a.name}</b><small>${a.short}</small><span class="by">${a.partnerName ? `공식 파트너 ${a.partnerName}` : '센터 강사풀에서 연결'}</span></div>
-        <div class="acts"><a class="btn light sm" href="#apply/${a.id}">상담 신청하기</a><a class="btn outline sm" href="/area/${a.id}">자세히</a></div>
-      </article>`).join('')}
+  <section class="sec soft" id="mobile-sec">
+    <div class="wrap mob">
+      <div class="mob-text rv">
+        <p class="eyebrow">휴대폰에서도</p>
+        <h2>설치 없이 휴대폰에서,<br>각자 자기 화면으로</h2>
+        <p>원장님이 초대 코드를 보내면 역할에 맞는 화면이 생겨요. 앱을 깔 필요 없이 휴대폰 인터넷 창에서 그대로 쓰고, 홈 화면에 추가해 두면 앱처럼 열려요.</p>
+        <div class="role-tabs" role="tablist" aria-label="역할별 화면">${DEMO_ROLES.map(([r, , , d], i) => `
+          <button type="button" role="tab" class="rt r-${r}${i ? '' : ' on'}" data-role="${r}" aria-selected="${!i}"><b>${ROLE_NAME[r]}</b><small>${d}</small><i class="rt-bar"></i></button>`).join('')}
+        </div>
+        <a class="link" id="mobDemo" href="/demo/owner">원장님 화면 직접 눌러 보기 <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="mob-art rv" style="--d:1"><div class="mob-phones">${DEMO_ROLES.map(([r], i) => `<div class="mp${i ? '' : ' on'}" data-role="${r}">${fitBox(PHONE_W, PHONE_H, PHONE_SCREENS[r](), 'fit-phone')}</div>`).join('')}</div></div>
+    </div>
+  </section>
+
+  <section class="sec" id="service-sec">
+    <div class="wrap">
+      <div class="sec-head rv"><p class="eyebrow">추가 서비스 · 상담 후 진행</p><h2>직접 하기 어려운 일만,<br>센터가 연결해 드려요</h2><p>프로그램만 쓰셔도 충분해요. 홍보 · 유학 캠프 · 강사 구하기는 필요할 때 상담을 신청하시면 맞는 곳으로 이어 드려요.</p></div>
+      <div class="svc-list">${SERVICE_AREAS.map((a, i) => `
+        <article class="svc rv" style="--d:${i}">
+          <span class="svc-ic">${sic(a.icon)}</span>
+          <h3>${a.name}</h3>
+          <p>${a.short}</p>
+          <ul>${a.items.slice(0, 3).map(x => `<li>${x[0]}</li>`).join('')}</ul>
+          <span class="by">${a.partnerName ? `공식 파트너 ${a.partnerName}` : '센터 강사풀에서 연결'}</span>
+          <div class="acts"><a class="btn primary sm" href="#apply/${a.id}">상담 신청하기</a><a class="link sm" href="/area/${a.id}">자세히 <span aria-hidden="true">→</span></a></div>
+        </article>`).join('')}
+      </div>
     </div>
   </section>
 
   ${storySec()}
 
-  <section class="d-sec">
-    <h3>자주 묻는 질문</h3>
-    <div class="faq">${SITE_FAQ.filter(x => x[2]).map(([q, ans]) => `<details><summary>${q}</summary><p>${ans}</p></details>`).join('')}</div>
-    <a class="more" href="#faq">자주 묻는 질문 더 보기 · 비용 안내 ›</a>
+  <section class="sec">
+    <div class="wrap faq-wrap">
+      <div class="sec-head rv"><h2>자주 묻는 질문</h2><a class="link" href="#faq">질문 전체 · 비용 안내 <span aria-hidden="true">→</span></a></div>
+      <div class="faq rv" style="--d:1">${SITE_FAQ.filter(x => x[2]).map(([q, ans]) => `<details><summary>${q}</summary><p>${ans}</p></details>`).join('')}</div>
+    </div>
   </section>
 
-  <section class="start-band">
-    <div><h2>오늘 바로 무료로 시작해 보세요</h2><p>가입 → 학원 만들기 → 원생 엑셀 올리기. 10분이면 첫 출결을 넣을 수 있어요.</p></div>
-    <div class="acts"><a class="btn light lg" href="#signup">무료로 시작하기</a><a class="btn outline" href="#apply">추가 서비스 상담 신청</a></div>
-    <div class="start-links"><a href="#check">접수 번호로 진행 상황 보기</a><a href="#ask">가입 전에 문의하기</a><a href="/jobs">강사로 일하고 싶으세요? 채용 공고 보기 ›</a></div>
+  ${startBand()}`;
+}
+const startBand = () => `
+  <section class="start">
+    <div class="wrap start-in rv">
+      <div><h2>오늘 바로 무료로 시작해 보세요</h2><p>가입하고 학원을 만든 다음 쓰던 원생 엑셀을 올리면, 10분 안에 첫 출결을 넣을 수 있어요.</p></div>
+      <div class="acts"><a class="btn white lg" href="#signup">무료로 시작하기</a><a class="btn clear lg" href="#apply">추가 서비스 상담 신청</a></div>
+    </div>
+    <div class="wrap start-links"><a href="#check">접수 번호로 진행 상황 보기</a><a href="#ask">가입 전에 문의하기</a><a href="/jobs">강사로 일하고 싶으세요? 채용 공고 보기 →</a></div>
   </section>`;
-}
-// 첫 화면 그림: 역할마다 다른 화면 (원장 · 강사 · 학부모 · 학생)
-function roleScreens() {
-  const scr = (r, t, rows) => `<div class="scr r-${r}"><div class="scr-top"><span class="av"></span><b>${t}</b></div>${rows.map(([k, v, c]) => `<div class="scr-row"><span>${k}</span><i class="${c || ''}">${v}</i></div>`).join('')}</div>`;
-  return `<div class="scr-wrap">
-    ${scr('owner', '원장 화면', [['10월 미납', '자동 안내', 'warn'], ['청구서', '48건 · 자동', 'good'], ['원천세', '3.3% 계산', '']])}
-    ${scr('teacher', '강사 화면', [['초등 B반 출결', '12/13', 'good'], ['오늘 할 일', '5명', '']])}
-    ${scr('parent', '학부모 앱', [['오늘 출석', '15:02', 'good'], ['10월 수강료', '바로 내기', 'warn']])}
-    ${scr('student', '학생 앱', [['단어 30개', '완료', 'good'], ['16:30', '영어', '']])}
-  </div>`;
-}
+// 화면 하나짜리(신청서 · 문의 · 질문 · 예시 계정) 틀
+const page = (html, cls = '') => `<div class="wrap page ${cls}">${html}</div>`;
+
 // 비용 안내 (상세 페이지 · 자주 묻는 질문 화면)
 function priceSec() {
   return `
-    <section class="d-sec">
+    <section class="d-sec rv">
       <h3>비용 안내<small>운영 프로그램은 무료로 시작해요. 센터가 직접 해 주는 추가 서비스만 상담 후 견적을 드려요</small></h3>
       <div class="price">${SITE_PRICE.map(([t, p, d]) => `<div><b>${t}</b><span class="pp">${p}</span><small>${d}</small></div>`).join('')}</div>
     </section>`;
 }
 function storySec() {
   return `
-    <section class="d-sec" id="story-sec">
-      <h3>이용 사례 <span class="ex">예시</span><small>이렇게 쓰고 있어요</small></h3>
-      <div class="stories">${SITE_STORIES.map(([who, area, text, result]) => `
-        <figure><span class="st-area">${area}</span><blockquote>${text}</blockquote><figcaption><b>${who}</b><span>${result}</span></figcaption></figure>`).join('')}</div>
-    </section>`;
+  <section class="sec soft" id="story-sec">
+    <div class="wrap">
+      <div class="sec-head rv"><p class="eyebrow">이용 사례 <span class="ex">예시</span></p><h2>이렇게 쓰고 있어요</h2></div>
+      <div class="stories">${SITE_STORIES.map(([who, area, text, result], i) => `
+        <figure class="rv" style="--d:${i % 2}"><b class="st-res">${result}</b><blockquote>${text}</blockquote><figcaption><span>${who}</span><em>${area}</em></figcaption></figure>`).join('')}</div>
+    </div>
+  </section>`;
 }
 function orgSec() {
   const o = SITE_ORG;
@@ -224,40 +250,40 @@ function orgSec() {
     <section class="d-sec org">
       <h3>운영 정보 · 사업자 정보 ${o.ready ? '' : '<span class="ex">예시</span>'}</h3>
       <dl>${o.rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v || '<span class="muted">오픈 전 입력</span>'}</dd></div>`).join('')}</dl>
-      <div class="acts"><a class="btn outline sm" href="tel:${o.tel.replace(/[^0-9]/g, '')}">전화 ${o.tel}</a><a class="btn outline sm" href="mailto:${o.mail}">메일 보내기</a><a class="btn outline sm" href="#ask">문의 남기기</a></div>
+      <div class="acts"><a class="btn line sm" href="tel:${o.tel.replace(/[^0-9]/g, '')}">전화 ${o.tel}</a><a class="btn line sm" href="mailto:${o.mail}">메일 보내기</a><a class="btn line sm" href="#ask">문의 남기기</a></div>
     </section>`;
 }
 // 자주 묻는 질문 전체 + 비용 + 운영 정보
 function faqView() {
-  return `
+  return page(`
     <a class="back" href="/">‹ 처음으로</a>
     <h1>자주 묻는 질문</h1>
     <div class="faq">${SITE_FAQ.map(([q, ans]) => `<details><summary>${q}</summary><p>${ans}</p></details>`).join('')}</div>
     ${priceSec()}
-    ${orgSec()}`;
+    ${orgSec()}`, 'narrow');
 }
 // 예시 계정 고르기
 function demoView() {
-  return `
+  return page(`
     <a class="back" href="/">‹ 처음으로</a>
     <h1>예시 계정 둘러보기</h1>
     <p class="lede">가입하지 않고 예시 학원(하늘영어학원) 화면을 그대로 눌러 볼 수 있어요. 원장님 화면부터 보시길 추천해요.</p>
-    <div class="demo dark">${demoButtons()}</div>
-    <a class="grow" href="/demo/seeker" style="--ac:#b59bff"><span class="ic">${sic('brief')}</span><span><b>학원을 찾는 강사 화면</b><small>채용 공고 · 이력서 · 지원 현황</small></span><span class="go">입장 →</span></a>
-    <div class="acts"><a class="btn light" href="#signup">무료로 시작하기</a></div>`;
+    <div class="demo">${demoButtons()}</div>
+    <a class="grow" href="/demo/seeker"><span class="ic">${sic('brief')}</span><span><b>학원을 찾는 강사 화면</b><small>채용 공고 · 이력서 · 지원 현황</small></span><span class="go">입장 →</span></a>
+    <div class="acts"><a class="btn primary" href="#signup">무료로 시작하기</a></div>`, 'narrow');
 }
 
-// 분야 상세페이지: 그림이 있는 첫 화면 → 핵심 포인트 → 이런 고민 → 할 수 있는 일 → (공식 파트너) → 시작 순서 → 자주 묻는 질문 → 비용 → 다른 분야
-// 운영 프로그램은 "무료로 시작하기", 추가 서비스는 "상담 신청하기". 분야 색(--ac) · 그림 · 파트너 정보는 assets/areas.js
+// 분야 상세페이지: 첫 화면(글 + 화면 그림) → 핵심 포인트 → 이런 고민 → 할 수 있는 일 → (공식 파트너) → 시작 순서 → 자주 묻는 질문 → 비용 → 다른 분야
+// 운영 프로그램은 "무료로 시작하기", 추가 서비스는 "상담 신청하기". 그림은 assets/mock.js의 AREA_MOCK, 파트너 정보는 assets/areas.js
 function partnerView(p) {
   const brand = p.logo ? `<img src="${p.logo}" alt="${p.name}" class="p-logo">` : `<span class="p-word">${p.name}</span>`;
   return `
-    <section class="d-sec partner">
+    <section class="d-sec partner rv">
       <h3>공식 파트너<small>${p.sub}</small></h3>
       <div class="p-card">
         <div class="p-brand">${brand}<span class="p-tag">${p.tagline}</span></div>
         <p>${p.desc}</p>
-        <a class="btn primary sm" href="${p.url}" target="_blank" rel="noopener">${p.cta} ${sic('ext')}</a>
+        <a class="btn line sm" href="${p.url}" target="_blank" rel="noopener">${p.cta} ${sic('ext')}</a>
       </div>
       <ol class="p-flow">${p.flow.map(([icon, t, d]) => `<li><span class="p-ic">${sic(icon)}</span><b>${t}</b><small>${d}</small></li>`).join('')}</ol>
     </section>`;
@@ -266,65 +292,69 @@ function areaView(a) {
   const prog = a.kind === 'program', group = prog ? PROGRAM_AREAS : SERVICE_AREAS, idx = group.indexOf(a) + 1;
   const ext = a.link && /^https?:/.test(a.link[1]);
   const cta = prog
-    ? `<a class="btn light" href="#signup">무료로 시작하기</a><a class="btn outline" href="${a.demo}">예시 화면 보기</a>`
-    : `<a class="btn light" href="#apply/${a.id}">상담 신청하기</a>${a.link ? `<a class="btn outline" href="${a.link[1]}"${ext ? ' target="_blank" rel="noopener"' : ''}>${a.link[0]}${ext ? ` ${sic('ext')}` : ''}</a>` : ''}`;
-  const other = list => list.filter(x => x !== a).map(x => `<a href="/area/${x.id}" style="--ac:${x.accent}">${sic(x.icon)}${x.name}</a>`).join('');
+    ? `<a class="btn primary" href="#signup">무료로 시작하기</a><a class="btn line" href="${a.demo}">예시 화면 보기</a>`
+    : `<a class="btn primary" href="#apply/${a.id}">상담 신청하기</a>${a.link ? `<a class="btn line" href="${a.link[1]}"${ext ? ' target="_blank" rel="noopener"' : ''}>${a.link[0]}${ext ? ` ${sic('ext')}` : ''}</a>` : ''}`;
+  const other = list => list.filter(x => x !== a).map(x => `<a href="/area/${x.id}">${sic(x.icon)}${x.name}</a>`).join('');
   return `
-  <div class="area" style="--ac:${a.accent}">
-    <a class="back" href="/">‹ 처음으로</a>
-    <div class="d-hero">
-      <div class="d-hero-text">
-        <div class="d-head"><div class="big-ic">${sic(a.icon)}</div><span class="kick">${prog ? `운영 프로그램 ${idx}/${group.length} · 무료로 시작` : `추가 서비스 ${idx}/${group.length} · 상담 후 진행`}</span></div>
-        <h1>${a.title}</h1>
-        <p class="lede">${a.lede}</p>
+  <div class="area">
+    <section class="d-hero">
+      <div class="wrap d-hero-in">
+        <div class="d-hero-text">
+          <a class="back rv" href="/">‹ 처음으로</a>
+          <p class="eyebrow rv">${prog ? `운영 프로그램 ${idx}/${group.length} · 무료로 시작` : `추가 서비스 ${idx}/${group.length} · 상담 후 진행`}</p>
+          <h1 class="rv" style="--d:1">${a.title}</h1>
+          <p class="lede rv" style="--d:2">${a.lede}</p>
+          <div class="acts rv" style="--d:3">${cta}</div>
+        </div>
+        <div class="d-art rv${a.id === 'teachers' ? ' is-phone' : ''}" style="--d:2">${a.partner && a.partner.logo ? `<div class="art-badge"><img src="${a.partner.logo}" alt="${a.partner.name}"></div>` : ''}${AREA_MOCK[a.id]()}</div>
+      </div>
+    </section>
+
+    <div class="wrap d-body">
+      <div class="points">${a.points.map(([icon, t, d], i) => `
+        <div class="rv" style="--d:${i}"><span class="pt-ic">${sic(icon)}</span><b>${t}</b><small>${d}</small></div>`).join('')}
+      </div>
+
+      <section class="d-sec rv">
+        <h3>이런 고민 있으세요?</h3>
+        <div class="pains">${a.pains.map(p => `<div>${p}</div>`).join('')}</div>
+      </section>
+
+      <section class="d-sec">
+        <h3 class="rv">${prog ? '프로그램으로 이렇게 해요' : '이렇게 도와드려요'}<small>${a.name}에서 할 수 있는 일 ${a.items.length}가지</small></h3>
+        <div class="feats">${a.items.map(([t, d, list], i) => `
+          <article class="rv" style="--d:${i % 2}">
+            <div class="f-top"><span class="f-ic">${sic(a.itemIcons[i] || a.icon)}</span><span class="n">0${i + 1}</span></div>
+            <b>${t}</b>
+            <p>${d}</p>
+            <ul>${list.map(x => `<li>${sic('check')}<span>${x}</span></li>`).join('')}</ul>
+          </article>`).join('')}
+        </div>
+      </section>
+
+      ${a.partner ? partnerView(a.partner) : ''}
+      <section class="d-sec rv">
+        <h3>${prog ? '이렇게 시작해요' : '진행 순서'}</h3>
+        <ol class="flow">${a.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+      </section>
+
+      <section class="d-sec rv">
+        <h3>자주 묻는 질문</h3>
+        <div class="faq">${a.faq.map(([q, ans]) => `<details><summary>${q}</summary><p>${ans}</p></details>`).join('')}</div>
+      </section>
+
+      ${priceSec()}
+
+      <section class="d-sec rv">
+        <h3>다른 운영 프로그램 · 추가 서비스</h3>
+        <div class="chips">${other(PROGRAM_AREAS)}</div>
+        <div class="chips">${other(SERVICE_AREAS)}</div>
+      </section>
+
+      <div class="sticky-cta">
+        <span><b>${a.name}</b> · ${prog ? '가입하고 바로 무료로 써요' : '상담 후 학원에 맞춰 견적을 드려요 · 평일에 연락드려요'}</span>
         <div class="acts">${cta}</div>
       </div>
-      <div class="d-art">${a.partner && a.partner.logo ? `<div class="art-badge"><img src="${a.partner.logo}" alt=""></div>` : ''}${a.art}</div>
-    </div>
-
-    <div class="points">${a.points.map(([icon, t, d]) => `
-      <div><span class="pt-ic">${sic(icon)}</span><b>${t}</b><small>${d}</small></div>`).join('')}
-    </div>
-
-    <section class="d-sec">
-      <h3>이런 고민 있으세요?</h3>
-      <div class="pains">${a.pains.map(p => `<div>${p}</div>`).join('')}</div>
-    </section>
-
-    <section class="d-sec">
-      <h3>${prog ? '프로그램으로 이렇게 해요' : '이렇게 도와드려요'}<small>${a.name}에서 할 수 있는 일 ${a.items.length}가지</small></h3>
-      <div class="feats">${a.items.map(([t, d, list], i) => `
-        <article>
-          <div class="f-top"><span class="f-ic">${sic(a.itemIcons[i] || a.icon)}</span><span class="n">0${i + 1}</span></div>
-          <b>${t}</b>
-          <p>${d}</p>
-          <ul>${list.map(x => `<li>${sic('check')}<span>${x}</span></li>`).join('')}</ul>
-        </article>`).join('')}
-      </div>
-    </section>
-
-    ${a.partner ? partnerView(a.partner) : ''}
-    <section class="d-sec">
-      <h3>${prog ? '이렇게 시작해요' : '진행 순서'}</h3>
-      <ol class="flow">${a.steps.map(s => `<li>${s}</li>`).join('')}</ol>
-    </section>
-
-    <section class="d-sec">
-      <h3>자주 묻는 질문</h3>
-      <div class="faq">${a.faq.map(([q, ans]) => `<details><summary>${q}</summary><p>${ans}</p></details>`).join('')}</div>
-    </section>
-
-    ${priceSec()}
-
-    <section class="d-sec">
-      <h3>다른 운영 프로그램 · 추가 서비스</h3>
-      <div class="chips">${other(PROGRAM_AREAS)}</div>
-      <div class="chips">${other(SERVICE_AREAS)}</div>
-    </section>
-
-    <div class="sticky-cta">
-      <span><b>${a.name}</b> · ${prog ? '가입하고 바로 무료로 써요' : '상담 후 학원에 맞춰 견적을 드려요 · 평일에 연락드려요'}</span>
-      <div class="acts">${cta}</div>
     </div>
   </div>`;
 }
@@ -340,20 +370,20 @@ async function loadBoard() {
   renderPanel();
 }
 function jobsView(id) {
-  if (!BOARD) { setTimeout(loadBoard); return '<p class="lede">채용 공고를 불러오는 중이에요…</p>'; }
+  if (!BOARD) { setTimeout(loadBoard); return page('<p class="lede">채용 공고를 불러오는 중이에요…</p>'); }
   const signup = '<a class="btn primary" href="#signup/teacher">강사로 가입하고 지원하기</a><a class="btn" href="#login/jobs">이미 가입했어요 · 로그인</a>';
   if (id) {
     const j = BOARD.posts.find(x => x.id === id);
-    if (j) return `<a class="back" href="/jobs">‹ 채용 공고 목록</a>
-      <div class="jb-sheet">${jbDetail(j, { cta: signup, acad: BOARD.acads.find(x => x.id === j.academy_id) || { name: j.academy_name }, others: BOARD.posts.filter(x => x.academy_id === j.academy_id && x.id !== j.id), href: x => `/jobs#job/${x.id}` })}</div>`;
+    if (j) return page(`<a class="back" href="/jobs">‹ 채용 공고 목록</a>
+      <div class="jb-sheet">${jbDetail(j, { cta: signup, acad: BOARD.acads.find(x => x.id === j.academy_id) || { name: j.academy_name }, others: BOARD.posts.filter(x => x.academy_id === j.academy_id && x.id !== j.id), href: x => `/jobs#job/${x.id}` })}</div>`);
   }
-  return `
+  return page(`
     <a class="back" href="/">‹ 처음으로</a>
     <div class="jobs-hero">
-      <div><span class="kick-line">강사님을 위한 페이지</span>
+      <div><p class="eyebrow">강사님을 위한 페이지</p>
         <h1>강사로 일하고 싶으세요?</h1>
         <p class="lede">학원지원센터에 가입한 학원들이 강사님을 찾고 있어요. 가입하고 이력서를 한 번 써 두면 공고마다 바로 지원할 수 있어요.</p>
-        <div class="acts"><a class="btn light" href="#signup/teacher">강사로 무료 가입하기</a><a class="btn outline" href="/demo/seeker">강사 화면 미리 보기</a></div></div>
+        <div class="acts"><a class="btn primary" href="#signup/teacher">강사로 무료 가입하기</a><a class="btn line" href="/demo/seeker">강사 화면 미리 보기</a></div></div>
       <ul class="jobs-why">
         <li>${sic('doc')}<span><b>이력서는 한 번만</b><small>지원할 때마다 원장님께 함께 가요</small></span></li>
         <li>${sic('video')}<span><b>센터 교육 영상 무료</b><small>이수 기록이 지원서에 함께 붙어요</small></span></li>
@@ -361,7 +391,7 @@ function jobsView(id) {
       </ul>
     </div>
     <div class="jb-sheet">${jbTabs(BOARD.posts.length, BOARD.acads.length)}${JB.tab === 'acads' ? jbAcademies(BOARD.acads) : jbBoard(BOARD.posts, { href: j => `/jobs#job/${j.id}`, side: j => `<a class="btn sm primary" href="/jobs#job/${j.id}">자세히 · 지원</a>`, note: BOARD.sample ? '예시 공고예요 · 학원이 공고를 올리면 실제 공고로 바뀌어요' : '' })}</div>
-    <p class="note-line">학원 원장님이세요? <a class="u" href="/area/hire">강사 구하기</a> · 공고 올리기는 프로그램 "강사 채용"에서 무료예요.</p>`;
+    <p class="note-line">학원 원장님이세요? <a class="u" href="/area/hire">강사 구하기</a> · 공고 올리기는 프로그램 "강사 채용"에서 무료예요.</p>`);
 }
 
 // 개인정보 수집 · 이용 동의 (신청 · 문의 공통)
@@ -382,7 +412,7 @@ const CONTACT_TIMES = ['오전 (9시~12시)', '오후 (12시~6시)', '저녁 (6�
 const PROGRAM_HELP = '프로그램 도입 도움 (명단 옮기기 · 사용법)';
 
 function applyView(pick) {
-  return `
+  return page(`
     <a class="back" href="${pick ? `/area/${pick}` : '/'}">‹ 이전으로</a>
     <h1>추가 서비스 상담 신청</h1>
     <p class="lede">홍보 대행 · 유학·캠프 제휴 · 강사 구하기 중 필요한 것을 골라 남겨 주세요. 담당 매니저가 고른 시간대에 연락드리고, 비용은 상담 후 학원에 맞춰 견적을 드려요.<br><small>운영 프로그램은 신청 없이 <a class="u" href="#signup">바로 무료로 시작</a>할 수 있어요.</small></p>
@@ -390,7 +420,7 @@ function applyView(pick) {
       <p class="req-note">${req} 표시는 꼭 적어 주세요</p>
       <div class="two">
         <label class="f"><span>학원 이름 ${req}</span><input name="academy" placeholder="예: 하늘영어학원" maxlength="100" required></label>
-        <div class="f"><span>지역</span><span class="region-dark">${regionPicker('area')}</span></div>
+        <div class="f"><span>지역</span><span class="region">${regionPicker('area')}</span></div>
       </div>
       <div class="two">
         <label class="f"><span>원장님 성함 ${req}</span><input name="name" placeholder="예: 홍길동" maxlength="50" autocomplete="name" required></label>
@@ -408,8 +438,8 @@ function applyView(pick) {
       </div>
       ${privacyBox('학원 이름, 지역, 원장님 성함, 연락처, 상담받을 서비스, 남기신 말씀')}
       <p class="err" id="applyErr" role="alert" hidden></p>
-      <div class="acts"><button class="btn light">신청하기</button></div>
-    </form>`;
+      <div class="acts"><button class="btn primary lg">신청하기</button></div>
+    </form>`, 'narrow');
 }
 
 // 쉬는 날(공휴일 · 대체 공휴일 · 선거일). 해마다 다음 해 것을 더해 주세요.
@@ -440,7 +470,7 @@ function etaText(when, now = new Date()) {
 function doneView() {
   if (!applied) return homeView();
   const a = applied;
-  return `
+  return page(`
     <div class="done-ic">✓</div>
     <h1>${a.kind === 'ask' ? '문의가 접수됐어요' : '신청이 접수됐어요'}</h1>
     <div class="receipt">
@@ -452,7 +482,7 @@ function doneView() {
       <div><span>연락처</span><b>${esc(a.phone)}</b></div>
     </div>
     <p class="lede">담당 매니저가 위 연락처로 연락드려요. 접수 번호와 연락처로 언제든 진행 상황${a.kind === 'ask' ? ' · 답변' : ''}을 볼 수 있어요. 급하시면 <a href="tel:${SITE_ORG.tel.replace(/[^0-9]/g, '')}" class="u">${SITE_ORG.tel}</a>로 전화 주시고 접수 번호를 말씀해 주세요.</p>
-    <div class="acts"><a class="btn light" href="/">처음으로</a><a class="btn outline" href="#check">진행 상황 보기</a>${a.kind === 'ask' ? '' : `<a class="btn outline" href="#signup">프로그램 무료로 시작하기</a>`}</div>`;
+    <div class="acts"><a class="btn primary" href="/">처음으로</a><a class="btn line" href="#check">진행 상황 보기</a>${a.kind === 'ask' ? '' : `<a class="btn line" href="#signup">프로그램 무료로 시작하기</a>`}</div>`, 'narrow');
 }
 
 // 내 문의 · 지원 신청 확인: 접수 번호 + 남긴 연락처가 맞으면 진행 상황과 답변을 보여 줘요 (가입 안 해도 돼요)
@@ -463,7 +493,7 @@ const CHECK_STATE = {
 let checked = null; // 마지막으로 확인한 결과
 function checkView() {
   const a = applied || {};
-  return `
+  return page(`
     <a class="back" href="#">‹ 이전으로</a>
     <h1>진행 상황 보기</h1>
     <p class="lede">지원 신청 · 문의를 남길 때 받은 <b>접수 번호</b>(영어 · 숫자 8자리)와 <b>남긴 연락처</b>를 넣으면 진행 상황과 답변을 볼 수 있어요.</p>
@@ -473,9 +503,9 @@ function checkView() {
         <label class="f"><span>연락처 ${req}</span><input name="phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" maxlength="13" value="${esc(a.phone || '')}"></label>
       </div>
       <p class="err" id="checkErr" role="alert" hidden></p>
-      <div class="acts"><button class="btn light">확인하기</button></div>
+      <div class="acts"><button class="btn primary">확인하기</button></div>
     </form>
-    <div id="checkOut">${checked ? checkResult(checked) : ''}</div>`;
+    <div id="checkOut">${checked ? checkResult(checked) : ''}</div>`, 'narrow');
 }
 function checkResult(list) {
   return list.map(r => `
@@ -491,7 +521,7 @@ function checkResult(list) {
 // 가입 전 문의 (프로그램을 쓰는 분은 로그인 후 "문의하기"에서 따로 남겨요)
 const ASK_CATS = ['이용 방법', '비용 · 견적', '가입 · 초대 코드', '제휴 · 유학', '홍보', '기타'];
 function askView() {
-  return `
+  return page(`
     <a class="back" href="#">‹ 이전으로</a>
     <h1>먼저 문의하기</h1>
     <p class="lede">가입하기 전에 궁금한 점을 남겨 주세요. 담당 매니저가 평일 하루 안에 답해 드려요.<br>이미 프로그램을 쓰고 계시면 로그인한 뒤 <b>문의하기</b>에서 남겨 주세요. 학원 정보가 함께 전달돼서 더 빨라요.</p>
@@ -510,8 +540,8 @@ function askView() {
       </div>
       ${privacyBox('성함, 연락처, 문의 내용')}
       <p class="err" id="askErr" role="alert" hidden></p>
-      <div class="acts"><button class="btn light">문의 보내기</button></div>
-    </form>`;
+      <div class="acts"><button class="btn primary lg">문의 보내기</button></div>
+    </form>`, 'narrow');
 }
 
 // 전화번호: 치는 동안 010-1234-5678 모양으로, 형식이 맞는지 확인
@@ -544,7 +574,54 @@ function showAuth(on) {
   document.getElementById('topLogin').hidden = on;
 }
 // 강사 채용 화면만 다시 그려요 (거르기 · 검색을 바꿀 때 위로 튀지 않게)
-function paintJobs(id) { panel.innerHTML = jobsView(id); jbBind(panel, () => paintJobs(id)); }
+function paintJobs(id) { panel.innerHTML = jobsView(id); jbBind(panel, () => paintJobs(id)); bindMotion(panel); }
+
+/* ---------- 움직임: 필요한 만큼만 (화면에 들어올 때 떠오르기 · 알림 · 역할 화면 넘기기). 움직임 줄이기 설정이면 멈춰요 ---------- */
+const CALM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (!CALM && window.IntersectionObserver) document.documentElement.classList.add('motion');
+let seen = null, toastTimer = null;
+function bindMotion(root) {
+  fitMocks(root);
+  if (seen) seen.disconnect();
+  const els = root.querySelectorAll('.rv');
+  if (!document.documentElement.classList.contains('motion')) els.forEach(el => el.classList.add('in'));
+  else {
+    seen = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); seen.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+    els.forEach(el => seen.observe(el));
+  }
+  // 첫 화면 알림: 몇 초마다 다른 알림이 떠올라요
+  clearInterval(toastTimer);
+  const toast = root.querySelector('.hm-toast');
+  if (toast) {
+    let n = 0;
+    const show = () => {
+      const [r, t, d] = HERO_TOASTS[n++ % HERO_TOASTS.length];
+      toast.classList.remove('on');
+      setTimeout(() => { toast.className = `hm-toast r-${r} on`; toast.querySelector('b').textContent = t; toast.querySelector('small').textContent = d; }, CALM ? 0 : 350);
+    };
+    setTimeout(show, CALM ? 0 : 1400);
+    if (!CALM) toastTimer = setInterval(show, 4200);
+  }
+  // 휴대폰에서: 역할 버튼을 누르거나 5초마다 다음 역할 화면으로
+  const tabs = root.querySelectorAll('.rt');
+  if (tabs.length) {
+    const pick = r => {
+      tabs.forEach(b => { const on = b.dataset.role === r; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+      root.querySelectorAll('.mp').forEach(m => m.classList.toggle('on', m.dataset.role === r));
+      const a = root.querySelector('#mobDemo'); a.href = `/demo/${r}`; a.firstChild.textContent = `${ROLE_NAME[r]} 화면 직접 눌러 보기 `;
+    };
+    tabs.forEach((b, i) => {
+      b.onclick = () => pick(b.dataset.role);
+      b.querySelector('.rt-bar').onanimationend = () => pick(tabs[(i + 1) % tabs.length].dataset.role);
+    });
+  }
+}
+// 머리글: 내리면 아래 선 · 그림자
+const siteTop = document.getElementById('siteTop');
+// 빨리 내려서 지나친 것도 보이게 (지나친 .rv는 바로 보여요)
+function revealPast() { panel.querySelectorAll('.rv:not(.in)').forEach(el => { if (el.getBoundingClientRect().top < innerHeight) el.classList.add('in'); }); }
+const topShade = () => { siteTop.classList.toggle('scrolled', window.scrollY > 8); revealPast(); };
+window.addEventListener('scroll', topShade, { passive: true }); topShade();
 function renderPanel() {
   const [hv0, hid] = location.hash.slice(1).split('/');
   const hv = VIEWS.includes(hv0) ? hv0 : '';
@@ -569,10 +646,10 @@ function renderPanel() {
   else if (view === 'faq') { panel.innerHTML = faqView(); setMeta('자주 묻는 질문 · 비용', '', '/'); }
   else if (view === 'demo') { panel.innerHTML = demoView(); setMeta('예시 계정 둘러보기', '', '/'); }
   else { panel.innerHTML = homeView(); setMeta('', '', '/'); }
-  document.body.classList.toggle('wide', view === 'area' && !!area);
   const anchor = !hv && hv0 && document.getElementById(hv0);
   if (anchor) anchor.scrollIntoView(); else window.scrollTo(0, 0);
   bindRegionPickers(panel);
+  if (!(view === 'jobs' || view === 'job')) bindMotion(panel);
   panel.querySelectorAll('input[type=tel]').forEach(i => i.oninput = () => { i.value = fmtPhone(i.value); i.classList.remove('bad'); });
   panel.querySelectorAll('.picks.quick button').forEach(b => b.onclick = () => {
     const t = b.closest('.f').querySelector('textarea');
@@ -609,7 +686,7 @@ function renderPanel() {
     if (!el.agree.checked) return fail('개인정보 수집 · 이용에 동의해 주세요.', el.agree.closest('.agree'));
     if (!SB) return fail('지금은 신청을 받을 수 없어요. 잠시 후 다시 시도해 주세요.');
     err.hidden = true;
-    const btn = form.querySelector('button.light'); btn.disabled = true; btn.textContent = '보내는 중…';
+    const btn = form.querySelector('button.primary'); btn.disabled = true; btn.textContent = '보내는 중…';
     // 서버에서 한 번 더 확인하고 접수 번호를 돌려줘요 (support_requests는 센터 관리자만 읽어요)
     const { data, error } = await SB.rpc('submit_support_request', {
       p_academy: v('academy'), p_region: v('area'), p_name: v('name'), p_phone: v('phone'),
@@ -629,7 +706,7 @@ function renderPanel() {
     if (!phoneOk(ph)) return fail('남기신 연락처를 넣어 주세요. 예: 010-1234-5678', el.phone);
     if (!SB) return fail('지금은 확인할 수 없어요. 잠시 후 다시 시도해 주세요.');
     err.hidden = true;
-    const btn = chk.querySelector('button.light'); btn.disabled = true; btn.textContent = '확인하는 중…';
+    const btn = chk.querySelector('button.primary'); btn.disabled = true; btn.textContent = '확인하는 중…';
     const { data, error } = await SB.rpc('check_my_request', { p_no: no, p_phone: ph });
     btn.disabled = false; btn.textContent = '확인하기';
     if (error) return fail('확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -649,7 +726,7 @@ function renderPanel() {
     if (!el.agree.checked) return fail('개인정보 수집 · 이용에 동의해 주세요.', el.agree.closest('.agree'));
     if (!SB) return fail('지금은 문의를 받을 수 없어요. 잠시 후 다시 시도해 주세요.');
     err.hidden = true;
-    const btn = ask.querySelector('button.light'); btn.disabled = true; btn.textContent = '보내는 중…';
+    const btn = ask.querySelector('button.primary'); btn.disabled = true; btn.textContent = '보내는 중…';
     const msg = v('when') && v('when') !== '아무 때나' ? `${v('msg')}\n\n(연락 받기 편한 시간: ${v('when')})` : v('msg');
     // 로그인한 상태로 보내면 프로그램 "문의하기"에서 답을 볼 수 있어요
     const { data, error } = await SB.rpc('submit_inquiry', { p_name: v('name'), p_contact: v('phone'), p_category: v('cat'), p_message: msg, p_agreed: true });
@@ -659,7 +736,17 @@ function renderPanel() {
   };
 }
 // 아래쪽: 운영 정보 · 파트너 (예시)
-document.getElementById('siteFoot').innerHTML = `<b>${SITE_ORG.name}</b> · 고객센터 ${SITE_ORG.tel} (${SITE_ORG.hours}) · ${SITE_ORG.mail}<br>${SITE_ORG.rows.filter(([k, v]) => v && !['고객센터', '이메일'].includes(k)).map(([k, v]) => `${k} ${v}`).join(' · ')}<br>공식 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투유학</a> (유학·캠프) · <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> (홍보) · <a href="#faq">자주 묻는 질문 · 비용 · 사업자 정보</a> · <a href="/jobs">강사 채용</a>${SITE_ORG.ready ? '' : ' · 시안 화면이라 운영 정보와 표시된 수치는 예시예요.'}`;
+const footCol = (t, links) => `<div><b>${t}</b>${links.map(([h, x, ext]) => `<a href="${h}"${ext ? ' target="_blank" rel="noopener"' : ''}>${x}</a>`).join('')}</div>`;
+document.getElementById('siteFoot').innerHTML = `<div class="wrap">
+  <div class="foot-top">
+    <div class="foot-brand"><span class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</span><p>고객센터 <b>${SITE_ORG.tel}</b><br>${SITE_ORG.hours} · ${SITE_ORG.mail}</p></div>
+    ${footCol('운영 프로그램', PROGRAM_AREAS.map(a => [`/area/${a.id}`, a.name]))}
+    ${footCol('추가 서비스', SERVICE_AREAS.map(a => [`/area/${a.id}`, a.name]))}
+    ${footCol('도움', [['#faq', '자주 묻는 질문 · 비용'], ['#ask', '가입 전 문의'], ['#check', '진행 상황 보기'], ['/jobs', '강사 채용']])}
+    ${footCol('공식 파트너', [['https://intoabroad.com', '인투유학 (유학·캠프)', 1], ['https://intomarketing.co.kr', '인투마케팅 (홍보)', 1]])}
+  </div>
+  <p class="foot-biz">${SITE_ORG.rows.filter(([k, v]) => v && !['고객센터', '이메일'].includes(k)).map(([k, v]) => `${k} ${v}`).join(' · ')}${SITE_ORG.ready ? '' : '<br>시안 화면이라 운영 정보와 표시된 수치는 예시예요.'}</p>
+</div>`;
 window.addEventListener('hashchange', renderPanel);
 window.addEventListener('popstate', renderPanel);
 // 분야 · 처음 화면 · 강사 채용 링크는 페이지를 새로 열지 않고 주소만 바꿔요
