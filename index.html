@@ -39,7 +39,7 @@
     <span class="tag">지원받기</span>
   </div>
   <div id="panel"></div>
-  <div class="foot">유학 제휴 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투어브로드</a> · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</div>
+  <div class="foot">유학 제휴 파트너 <a href="https://intoabroad.com" target="_blank" rel="noopener">인투유학</a> · 홍보 지원 파트너 <a href="https://intomarketing.co.kr" target="_blank" rel="noopener">인투마케팅</a> · 시안 화면이며 표시된 수치는 예시예요.</div>
 </aside>
 
 <!-- 오른쪽: 프로그램 쓰기 -->
@@ -47,7 +47,7 @@
   <div class="box">
     <span class="kicker">프로그램 쓰기</span>
     <h2 id="title">다시 오셨네요</h2>
-    <p class="sub" id="lede">아이디로 로그인하거나, 데모 계정으로 둘러보세요.</p>
+    <p class="sub" id="lede">아이디로 로그인하거나, 예시 계정으로 들어가 보세요.</p>
 
     <!-- 이미 로그인돼 있으면 보여 줌 -->
     <div class="signed" id="signedIn" hidden>
@@ -60,9 +60,20 @@
       <button role="tab" aria-selected="false" data-tab="signup">회원가입</button>
     </div>
 
+    <details class="codeinfo">
+      <summary><span class="q">?</span>초대 코드가 뭐예요?</summary>
+      <p>학원지원센터는 <b>초대 코드</b>로 우리 학원 사람끼리만 연결돼요. 어떤 코드로 들어왔는지에 따라 역할이 정해져요.</p>
+      <ul>
+        <li><b>원장님</b> · 코드 없이 가입한 뒤 "학원 만들기"를 누르세요. 강사용 · 학부모·학생용 코드가 바로 생겨요.</li>
+        <li><b>강사님</b> · 원장님께 받은 <em>강사용 코드</em>를 가입 후 첫 화면에 넣어요. 코드가 없어도 채용 공고는 먼저 볼 수 있어요.</li>
+        <li><b>학부모님 · 학생</b> · 학원에서 받은 <em>학부모·학생용 코드</em>를 넣으면, 원장님이 아이와 연결해 출결 · 수납 · 공지를 보여 드려요.</li>
+      </ul>
+    </details>
+
     <form id="loginForm" novalidate>
       <div class="field"><label for="lid">아이디</label><input id="lid" name="uid" placeholder="아이디" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="lpw">비밀번호</label><input id="lpw" name="pw" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <label class="keep"><input type="checkbox" id="keepLogin" checked><span>로그인 유지하기</span><small>공용 PC라면 꺼 주세요 · 끄면 창을 닫을 때 로그아웃돼요</small></label>
       <p class="msg" id="loginMsg" hidden></p>
       <button class="btn primary wide">로그인</button>
     </form>
@@ -80,7 +91,8 @@
       <div class="field"><label for="sid">아이디 <small>영어 소문자·숫자·_ 4~20자</small></label><input id="sid" name="uid" placeholder="예: haneul_owner" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="spw">비밀번호 <small>8자 이상</small></label><input id="spw" name="pw" type="password" placeholder="••••••••" autocomplete="new-password"></div>
       <div class="field" id="acField"><label for="ac">학원 이름</label><input id="ac" name="academy" placeholder="예: 하늘영어학원"></div>
-      <p class="hint-line" id="codeHint" hidden>가입한 뒤 학원에서 받은 <b>초대 코드</b>를 넣으면 우리 학원에 연결돼요.</p>
+      <p class="hint-line" id="ownerHint">원장님은 가입 후 <b>학원 만들기</b>를 누르면 강사용 · 학부모·학생용 <b>초대 코드</b>가 생겨요. 그 코드를 보내 학원 사람들을 초대하세요.</p>
+      <p class="hint-line" id="codeHint" hidden>가입한 다음 화면에서 학원에서 받은 <b>초대 코드</b>(8자리, 예: K7P2QX9M)를 넣으면 우리 학원에 연결돼요. 아직 코드가 없으면 학원에 요청해 주세요.</p>
       <p class="msg" id="signupMsg" hidden></p>
       <button class="btn primary wide">가입하고 시작하기</button>
     </form>
@@ -91,14 +103,14 @@
       구글로 계속하기
     </button>
 
-    <div class="divider">데모 계정으로 둘러보기</div>
+    <div class="divider">예시 계정 들어가보기</div>
     <div class="demo">
       <button onclick="go('owner')"><span class="av" style="background:var(--blue-600)">정</span><div><div class="t">원장 · 정수민</div><div class="d">하늘영어학원 원장</div></div><span class="go">입장 →</span></button>
       <button onclick="go('teacher')"><span class="av" style="background:#17a06b">김</span><div><div class="t">강사 · 김민지</div><div class="d">초등 A·B반 담당</div></div><span class="go">입장 →</span></button>
       <button onclick="go('parent')"><span class="av" style="background:#c98a12">김</span><div><div class="t">학부모 · 김은정</div><div class="d">이서연 어머니 · 학원 3곳</div></div><span class="go">입장 →</span></button>
       <button onclick="go('student')"><span class="av" style="background:#7c85ff">서</span><div><div class="t">학생 · 이서연</div><div class="d">초등 5학년</div></div><span class="go">입장 →</span></button>
     </div>
-    <p class="note">데모 계정은 예시 학원 데이터로 둘러보는 화면이에요.</p>
+    <p class="note">예시 계정은 예시 학원 데이터로 둘러보는 화면이에요.</p>
   </div>
 </main>
 
@@ -249,7 +261,7 @@ function setTab(t) {
   document.getElementById('loginForm').hidden = t !== 'login';
   document.getElementById('signupForm').hidden = t !== 'signup';
   document.getElementById('title').textContent = t === 'login' ? '다시 오셨네요' : '학원지원센터 시작하기';
-  document.getElementById('lede').textContent = t === 'login' ? '아이디로 로그인하거나, 데모 계정으로 둘러보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
+  document.getElementById('lede').textContent = t === 'login' ? '아이디로 로그인하거나, 예시 계정으로 들어가 보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
   if (t === 'signup' && window.innerWidth <= 900) document.querySelector('main').scrollIntoView({ behavior: 'smooth' });
 }
 tabs.forEach(b => b.onclick = () => setTab(b.dataset.tab));
@@ -268,7 +280,8 @@ loginForm.onsubmit = e => {
   e.preventDefault();
   const el = loginForm.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value;
   if (!id || !pw) return showMsg(loginMsg, '아이디와 비밀번호를 적어 주세요.');
-  if (!SB) return showMsg(loginMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  if (!SB) return showMsg(loginMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
+  setKeepLogin(document.getElementById('keepLogin').checked);
   busy(loginForm.querySelector('button'), '로그인 중…', async () => {
     const { error } = await SB.auth.signInWithPassword({ email: idToEmail(id), password: pw });
     if (error) return showMsg(loginMsg, authErrorText(error));
@@ -282,7 +295,8 @@ signupForm.onsubmit = e => {
   if (!name) return showMsg(signupMsg, '이름을 적어 주세요.');
   if (!ID_RULE.test(id)) return showMsg(signupMsg, '아이디는 영어 소문자·숫자·_ 로 4~20자예요.');
   if (pw.length < 8) return showMsg(signupMsg, '비밀번호는 8자 이상으로 정해 주세요.');
-  if (!SB) return showMsg(signupMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  if (!SB) return showMsg(signupMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
+  setKeepLogin(true);
   busy(f.querySelector('button'), '가입하는 중…', async () => {
     const { data, error } = await SB.auth.signUp({
       email: idToEmail(id), password: pw,
@@ -299,13 +313,16 @@ signupForm.querySelectorAll('[name=role]').forEach(r => r.onchange = () => {
   const owner = signupForm.elements.role.value === 'owner';
   document.getElementById('acField').hidden = !owner;
   document.getElementById('codeHint').hidden = owner;
+  document.getElementById('ownerHint').hidden = !owner;
 });
 
 document.getElementById('googleBtn').onclick = async () => {
-  if (!SB) return showMsg(loginMsg, '지금은 데모 계정으로만 둘러볼 수 있어요.');
+  if (!SB) return showMsg(loginMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
   // 구글 로그인이 꺼져 있으면 하얀 오류 화면 대신 안내 문구를 보여 줘요
   const s = await fetch(`${ENV.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: ENV.SUPABASE_KEY } }).then(r => r.json()).catch(() => null);
   if (s && s.external && !s.external.google) { setTab('login'); return showMsg(loginMsg, '구글 로그인이 아직 준비 중이에요.'); }
+  // 로그인 탭에서 "로그인 유지하기"를 껐으면 구글 로그인도 창을 닫을 때 로그아웃돼요
+  setKeepLogin(document.getElementById('loginForm').hidden || document.getElementById('keepLogin').checked);
   const { error } = await SB.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/app.html' } });
   if (error) { setTab('login'); showMsg(loginMsg, authErrorText(error)); }
 };

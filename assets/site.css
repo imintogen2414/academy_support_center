@@ -151,3 +151,19 @@ main { display: grid; place-items: center; padding: 40px 24px; }
 .btn:disabled { opacity: .6; cursor: wait; transform: none; }
 .signed { background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; display: grid; gap: 10px; font-size: 14px; font-weight: 600; }
 .signed .row { display: flex; gap: 8px; }
+
+/* 로그인 유지하기 */
+.keep { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; margin: -2px 0 14px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.keep input { width: 17px; height: 17px; accent-color: var(--blue-600); }
+.keep small { grid-column: 2; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+/* 초대 코드 설명 */
+.codeinfo { margin: 0 0 16px; border: 1px solid var(--blue-100); background: var(--blue-50); border-radius: 14px; padding: 10px 14px; font-size: 13px; }
+.codeinfo summary { cursor: pointer; font-weight: 700; color: var(--blue-600); list-style: none; display: flex; align-items: center; gap: 8px; }
+.codeinfo summary::-webkit-details-marker { display: none; }
+.codeinfo summary::after { content: "›"; margin-left: auto; transition: transform .2s; }
+.codeinfo[open] summary::after { transform: rotate(90deg); }
+.codeinfo .q { width: 20px; height: 20px; border-radius: 50%; background: var(--blue-600); color: #fff; display: grid; place-items: center; font-size: 12px; }
+.codeinfo p { margin: 10px 0 6px; color: var(--ink); }
+.codeinfo ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink); }
+.codeinfo em { font-style: normal; font-weight: 700; color: var(--blue-600); }

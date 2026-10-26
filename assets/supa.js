@@ -1,8 +1,17 @@
 // Supabase 연결 — 키는 빌드 때 환경변수로 만든 assets/env.js(window.ENV)에서 받아요.
 // 환경변수가 없으면(로컬에서 그냥 열 때) SB는 null이고, 화면은 데모로만 동작해요.
+// 로그인 유지하기: 켜면(기본) 브라우저를 닫아도 로그인이 남고(localStorage), 끄면 창을 닫을 때 로그아웃돼요(sessionStorage).
+const KEEP_KEY = 'asc-keep-login';
+const keepLogin = () => { try { return localStorage.getItem(KEEP_KEY) !== '0'; } catch { return true; } };
+const setKeepLogin = on => { try { localStorage.setItem(KEEP_KEY, on ? '1' : '0'); } catch {} };
+const authStore = {
+  getItem: k => { try { return (keepLogin() ? localStorage : sessionStorage).getItem(k); } catch { return null; } },
+  setItem: (k, v) => { try { (keepLogin() ? localStorage : sessionStorage).setItem(k, v); } catch {} },
+  removeItem: k => { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch {} }
+};
 const SB = (window.ENV && ENV.SUPABASE_URL && ENV.SUPABASE_KEY && window.supabase)
   // pkce: 구글 로그인 후 주소에 #토큰 대신 ?code= 로 돌아와서, 화면 주소(#home 같은 해시)와 부딪히지 않아요
-  ? supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_KEY, { auth: { flowType: 'pkce' } })
+  ? supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_KEY, { auth: { flowType: 'pkce', storage: authStore } })
   : null;
 
 // 아이디 로그인: Supabase는 이메일로 로그인하므로, 아이디를 내부용 이메일로 바꿔서 써요.
