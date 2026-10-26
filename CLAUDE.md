@@ -20,7 +20,7 @@
 - 분야별 이용(`academy_services`): 원생 · 출결 · 일정 · 채팅 같은 기본 프로그램은 누구나 쓰고, 센터가 직접 해 주는 지원만 학원마다 분야(행정 · 강사 · 학생·학부모 · 제휴 · 홍보)가 "이용 중"(active)일 때 열려요. 상담 중(consulting) · 이용 끝남(ended) · 줄 없음(신청 전)이면 `app.js`의 `SVC_GATE` 화면 대신 `svcLockPage`(신청 안내)가 보이고, 신청 · 의뢰 버튼은 `svcGuard`가 막아요. DB도 `private.has_service(학원, 분야)` · `private.my_service(분야)`로 제휴 신청 · 유학 안내/상담 · 홍보 의뢰 · 채용 공고 · 강사 교육 영상 · 리플렉션 · 센터에 맡기기를 막아요. 이 기능 전에 있던 학원은 다섯 분야 모두 이용 중으로 넣어 뒀고, 새로 만든 학원은 신청 전부터 시작해요.
   - 원장: `#services`(이용 중인 센터 지원 · 분야 더 신청하기 `request_academy_services` → 센터 "지원 신청"에 학원과 이어진 채로 들어가고 그 분야는 상담 중), 첫 화면 접수 번호로 잇기 `claim_support_request(학원, 번호)`. 홈에 안 쓰는 분야가 있으면 한 줄 안내(`svcHint`), `#help` 위에도 요약.
   - 관리자: 센터 관리 → 학원 · 이용 분야(`#center/academies`, `admin_academies()` · `set_academy_service(학원, 분야, 상태|null)`). 학원마다 다섯 분야 칸을 눌러 고르면 바로 저장, 상담 중인 학원이 맨 위 + "모두 이용 중으로 열기".
-  - 학부모 · 학생: 제휴가 꺼져 있으면 유학 메뉴가 안 보여요.
+  - 학부모 · 학생: 제휴가 꺼져 있으면 유학 메뉴가 안 보여요. 학생(성인 수강생 포함)도 `#abroad`에서 학원이 안내하는 캠프 · 어학연수 · 유학을 보고 직접 상담을 신청해요(신청 창 문구는 본인 기준).
 - 신청한 분야만 열기: 첫 화면에서 지원 신청한 휴대폰과 원장 프로필 휴대폰이 같으면 `create_academy`가 그 신청을 학원과 잇고 신청한 분야만 "이용 중"으로 열어요(`private.open_services`). 접수 번호로 잇기(`claim_support_request`)도 바로 이용 중. 이용 중이 아닌 센터 지원은 메뉴 · 타일에서 숨겨요(`tailorMenus`, 제휴 · 홍보는 통째로 `SVC_WHOLE`). 주소로 들어오면 신청 안내.
 - 성인 학원(`academies.family` = false): 학원 만들 때 "어린이 · 청소년 / 성인" 고르기, 원장 설정 "학부모 기능"으로 바꾸기. 끄면 학부모 칸(`personFields`) · 학부모 말이 빠지고 "수강생 관리 · 수강생 명단 · 연락처(students.phone)"로 보여요. 학부모·학생용 코드는 "수강생용"으로. `famOn()`.
 - 파트너 계정(`partner_members`, 관리자가 센터 관리 → 관리자 "파트너 담당자"에서 `add_partner_member(아이디|이메일, 회사)` · `remove_partner_member`): 인투마케팅 담당자는 홍보 의뢰, 인투유학 담당자는 유학 상담(원장이 넘긴 것) · 유학 제휴 신청(a1~a5)을 센터를 거치지 않고 바로 받아 단계 · 안내를 바꿔요(`private.my_partner()` 정책). 로그인하면 `ROLE = 'partner'`, 센터 화면(`centerPromoPage` 등)을 우리 회사 몫만 채운 `CENTER`(`loadPartner`, `CENTER.partner`)로 같이 써요. 센터장은 전부 보고 문제 있을 때만 개입.
@@ -44,13 +44,13 @@
 - 원천세 계산(`#admin/payroll`, `payroll` 원장만): 강사마다 구분(프리랜서 3.3% · 일용직 (일당-15만원)×2.7% 소액부징수 · 근로소득 · 직접) · 지급액만 넣으면 소득세 · 지방소득세 · 실지급액(`calcTax`), "재정 지출에도 넣기"(`expense_id`), 지난달 불러오기, 신고 서류로 넣기(`wht:월`), 엑셀. 서류 바로 만들기는 바로 받지 않고 `sheetEditor`에서 칸을 고치고 줄을 더한 뒤 엑셀로 받아요(합계는 다시 계산).
 - 자동으로 처리(`#admin/auto`, `academies.auto` = { bill: {on, day}, unpaid: {on, days}, paper: {on} }, 기록 `auto_logs`): pg_cron `asc-automations`가 매일 한국 9시 10분 `private.run_automations()` — 매달 day일 정해 둔 수강료로 청구서, 기한 지난 미납에 학부모(성인 학원은 수강생)께 원장 이름 채팅 한 번(`invoices.reminded_at`, `private.auto_message`), 지난달 지급이 있으면 원천세 · 1월엔 사업장현황 서류. "지금 한 번 해 보기"는 `run_my_automations(학원)`. 서류 자동이 켜져 있으면 앱을 열 때 `paperSuggestions`도 저절로 넣어요(`autoPaperOnOpen`). 원장 홈에 "저절로 처리한 일".
 - 첫 화면 진행 상황 보기(`#check`): 접수 번호 + 남긴 연락처 → `check_my_request(번호, 연락처)`(가입 안 해도 돼요). 접수 완료 화면 · 오른쪽 아래 링크에서 바로.
-- 공유 미리보기 이미지 `assets/og.png`는 흰 바탕에 Pretendard 굵은 글씨로 첫 화면 문구 그대로. 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
+- 공유 미리보기 이미지 `assets/og.png`는 첫 화면처럼 남색 그라데이션 + 첫 화면 문구 + 노트북 · 휴대폰 그림(`mock.js`의 `heroMock`을 1200×630으로 찍은 것). 이미지를 바꾸면 메신저가 새로 읽도록 html의 `og.png?v=` 숫자를 올리기.
 - 센터에 문의하기(`#help`, 원장 · 강사만 — 왼쪽 아래 카드): `submit_inquiry`로 보내고 내 문의 · 답변을 봐요. 관리자는 센터 관리 → 문의(`#center/inquiries`)에서 `answer_inquiry`. 학부모 · 학생 화면에는 센터 카드가 없어요.
 - 예시 계정의 날짜는 실제 오늘(`DATA.today = todayText()`), 오늘 출결 · 아이 오늘 일정은 오늘 요일에 수업이 있는 것만(일요일엔 없음). 예시 수납은 미납 목록(`DATA.unpaid`)으로 미납 수 · 금액을 계산해서 홈 · 목록 · 메뉴 숫자가 같아요.
 - 입력 칸은 되도록 눌러서 고르게: `chips`(학년 `GRADES`, 과목 `SUBJECTS`, 반, 강사 `staffNames()`, 서류 이름 · 내는 곳, 다음 할 일 …), 지역은 `regionPicker`, 전화번호 칸(type tel)은 치는 동안 하이픈이 저절로.
 - 화면은 한 번에 다 보여주지 않고 "홈 → 분야 → 세부 → 항목"처럼 한 단계씩 들어가게 정돈한다.
 - 디자인(프로그램 안): 남색·파란 계열. 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
-- 디자인(첫 화면 `index.html` · `/area` · `/jobs` · 로그인): 흰 바탕 + 연회색 띠(`--soft`) + 파란 버튼 하나, 큰 글씨, 실제 화면 그림. 늘 밝은 화면(`<html data-theme="light">`, 다크 모드 버튼 없음 · theme.js 안 씀). 반투명 카드 · 빛줄기 · 글자 그라데이션 · 분야별 무지개 색은 쓰지 않는다. 스타일은 `assets/site.css`(첫 화면용 토큰을 `:root`에서 덮어씀).
+- 디자인(첫 화면 `index.html` · `/area` · `/jobs` · 로그인): 흰 바탕 + 파란 버튼 하나 + 큰 글씨 + 실제 화면 그림, 군데군데 남색 그라데이션 구간(메인 그림 뒤 띠 `.hero-art::before`, 휴대폰에서 `.sec.navy`, 분야 상세 맨 위 `.d-hero`, 시작하기 `.start`, 아래쪽 `.foot`). 다크 모드도 돼요(머리글 해 · 달 버튼, `site.css`의 다크 토큰). 기기 그림 속 화면은 늘 밝게(`.fit-in`이 토큰을 밝게 고정). 반투명 카드 · 빛줄기 · 글자 그라데이션 · 분야별 무지개 색은 쓰지 않는다. 스타일은 `assets/site.css`(첫 화면용 토큰을 `:root`에서 덮어씀).
 - 기기 그림: `assets/mock.js` — 노트북(`laptopMock`) · 휴대폰(`PHONE_SCREENS` 원장 · 강사 · 학부모 · 학생) · 창 모양(`AREA_MOCK` 분야마다). 정해진 크기로 그리고 `fitBox` + `fitMocks`가 칸 너비에 맞춰 줄여요. 숫자 · 이름은 예시.
 - 움직임(필요한 만큼만): `.rv`가 화면에 들어오면 아래에서 떠오름(`bindMotion`, `--d`는 순서, 빨리 지나친 것은 `revealPast`), 첫 화면 알림이 4초마다 바뀜(`HERO_TOASTS`), 휴대폰 섹션 역할 버튼이 5초마다 다음 역할(마우스를 올리면 멈춤), 목록 줄 · 그래프가 차례로. 기기 설정 "움직임 줄이기"면 모두 멈추고 바로 보여요(`html.motion`이 안 붙음).
 - 다크 모드: 기기 설정을 따르고, 해 · 달 버튼(`[data-theme-toggle]`, `assets/theme.js`)으로 고정하면 localStorage `asc-theme`. 어두운 색은 `base.css`의 같은 토큰을 덮어써요 — 새 화면은 `#fff` 대신 `var(--surface)` · `var(--ink)` 같은 토큰을 쓰기. 성장 리포트 · 파트너 카드처럼 종이 느낌인 곳만 흰색 고정.
@@ -104,6 +104,7 @@
 - 재정: 매출 = "납부 확인"한 청구(납부한 날 기준) + `incomes`, 순이익 = 매출 - `expenses`. 기간(오늘·최근 7일·월별·3·6개월·1년·직접 고르기 — 시작일부터 최대 1년, `customRange`)마다 그래프 · 표 · 거래 내역 · 엑셀 내려받기(`app.js`의 `finRange` `ledger`). 학원에 아직 속하지 않은 회원은 `app.html`에서 학원 만들기/코드 합류 화면을 먼저 본다.
 - 뒤로 가기: 왼쪽 메뉴와 위치 표시(홈 › 분야) 링크는 기록을 바꿔치기(`goReplace`)해서 쌓이지 않아요. 화면 위 "‹ 이전"은 바로 전 화면 한 단계(처음 연 화면이면 한 단계 위).
 - 사용자에게 보이는 말: "데모" 대신 "예시 계정", 유학 제휴처 이름은 "인투유학".
+- 사진으로 올리기(`PHOTO_IMPORTS` · `photoImportDialog`, 원장만): 시간표(`#schedule`) · 수강료표(수납 "정해 둔 수강료") 사진 → 긴 쪽 1600px JPEG로 줄여(`shrinkPhoto`) Edge Function `read-photo`(`supabase/functions/read-photo`, Claude가 읽어 JSON, 원장인지 확인)로 보내고 → 줄마다 칸을 고치는 확인 창(흐린 칸은 "확인 필요", 이미 있는 줄은 체크 꺼짐) → 저장. 키는 Supabase Edge Function 비밀 값 `ANTHROPIC_API_KEY`(없으면 "준비 중" 안내). 예시 계정은 예시 결과(`sample`)만.
 - 엑셀로 올리기: `assets/sheet.js`(바깥 라이브러리 없이 .xlsx·.csv 읽기 `readSheet`, 양식 만들기 `downloadXlsx`) + `app.js`의 `IMPORTS`·`importDialog`(원생 명단 · 재정에 "엑셀로 올리기"). 칸 이름은 여러 표현을 알아듣고(`alias`), "예시)" 줄·빈 줄은 건너뛰고, 이미 있는 줄은 건너뛰어요. .xls(예전 형식)는 .xlsx로 저장해 달라고 안내.
 - 금액 칸은 `type: 'won'`(치는 동안 쉼표, 저장할 땐 `numOf`로 숫자). 화면에 보이는 금액은 모두 `won()`(1,000 단위 쉼표 + 원). 입력 창은 화면보다 길면 안에서 스크롤되고 저장 버튼은 아래에 붙어 있어요.
 - 입력 창은 `app.js`의 `formDialog`(필드 목록만 넘기면 추가·수정·삭제까지)를 쓴다. 예시를 눌러 채우는 칸은 `chips`, 저장 전 확인은 `check`.
@@ -132,6 +133,7 @@
 19. ~~4라운드: 시간 드롭다운 · 가로 스크롤 · 원생 들고 남 · 단계 설명 · 회원 상세 · 이용 분야 간결 · 채팅 · 자료실 폴더 · 관리자 홈 · 사용법 안내 · 현장 결제 직접 입력 · 원천세 계산 · 학부모 스위치 · 자동 처리~~ (완료)
 20. ~~5라운드: 첫 화면 개편(운영 프로그램 + 추가 서비스 3) · 사람인 같은 채용 게시판 · /jobs · 강사 이력서 · 수강료 할인 · 홈 목록 깨짐 · 학부모 바로 내기~~ (완료)
 21. ~~첫 화면 다시 디자인: 밝게 · 노트북 · 휴대폰 그림 · 필요한 만큼 움직임~~ (완료)
+22. ~~사진으로 시간표 · 수강료 올리기 · 학생도 유학 · 남색 구간 · 첫 화면 다크 모드 · 강사 교육 목록 깨짐~~ (완료 · `ANTHROPIC_API_KEY` 비밀 값을 넣으면 실제로 읽어요)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
