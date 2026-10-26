@@ -140,7 +140,15 @@ function attendPage() {
         <div><div class="t">${c.cls} <span class="muted small">${c.time}</span></div>${bar(c.present / c.total * 100)}</div>
         <div class="r"><b class="num">${c.present}/${c.total}</b>${c.absent ? `<span class="chip crit">결석 ${c.absent}</span>` : c.present < c.total ? '<span class="chip warn">입력 전</span>' : '<span class="chip good">전원 출석</span>'}</div>
       </div>`).join('')}
-  </div></section>`;
+  </div></section>${demoQrCard(rows)}`;
+}
+// 예시 계정: 오늘 입구 QR · 출석 번호로 들어온 출석 (진짜처럼 보이는 예시)
+function demoQrCard(rows) {
+  const cls = rows.map(c => c.cls), list = DATA.students.filter(s => cls.includes(s.cls)).slice(0, 5);
+  const at = ['15:02', '15:04', '15:06', '15:11', '16:43'], how = ['QR', 'QR', '출석 번호', 'QR', 'QR'];
+  return `<section class="card"><div class="card-head"><h2>오늘 학생이 직접 찍은 출석</h2><a class="btn sm" href="#kiosk">${ic('attend')}입구 출석 화면</a></div>
+    <div class="list">${list.map((s, i) => `<div class="li"><span class="av">${esc(s.name[0])}</span><div><div class="t">${esc(s.name)} <span class="muted small">${esc(s.cls)}</span></div><div class="d">${how[i]} ${at[i]}</div></div><div class="r">${i === 4 ? '<span class="chip warn">지각</span>' : '<span class="chip good">출석</span>'}</div></div>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">예시예요. 입구 출석 화면에서 출석 번호 2481을 눌러 보거나, 학생 예시 계정 홈에서 "예시로 QR 찍어 보기"를 눌러 보세요.</p></section>`;
 }
 
 function billingPage() {
@@ -278,7 +286,7 @@ async function kioskTick() {
     const { data, error } = await SB.rpc('checkin_qr', { p_academy: REAL.academy.id });
     if (error || !data) { const el = $('#kQr'); if (el) el.innerHTML = '<p class="muted">QR을 만들지 못했어요. 인터넷 연결을 확인해 주세요.</p>'; return; }
     KIOSK.token = data;
-  } else KIOSK.token = `demo.${Math.floor((Date.now() + 9 * 3600000) / 86400000) - 10957}.demo`;
+  } else KIOSK.token = demoToken();
   if (KIOSK.shown === KIOSK.token) return; // 같은 날이면 그대로
   KIOSK.shown = KIOSK.token;
   const el = $('#kQr'); if (el) el.innerHTML = qrSvg(checkinUrl(KIOSK.token));
@@ -357,7 +365,19 @@ function checkinPage(token) {
     <div class="row-btns" style="justify-content:center"><a class="btn" href="#${ROLE === 'parent' ? 'kid/attend' : 'attend'}">출결 보기</a><a class="btn primary" href="#home">홈으로</a></div></section>`;
 }
 const checkinHint = () => ROLE === 'student' || ROLE === 'parent'
-  ? `<div class="hint">${ic('attend')}<span>학원에 도착하면 입구 화면의 <b>QR을 휴대폰 카메라로 찍어</b> 출석해요${ROLE === 'parent' ? ' (아이와 함께 왔을 때)' : ''}</span></div>` : '';
+  ? `<div class="hint">${ic('attend')}<span>학원에 도착하면 입구 화면의 <b>QR을 휴대폰 카메라로 찍어</b> 출석해요${ROLE === 'parent' ? ' (아이와 함께 왔을 때)' : ''}</span>${DEMO ? '<button type="button" class="btn sm primary" data-act="demoScan">예시로 QR 찍어 보기</button>' : ''}</div>` : '';
+// 예시 계정: 카메라로 입구 QR을 찍는 모습 → 찍으면 출석 완료 화면
+const demoToken = () => `demo.${Math.floor((Date.now() + 9 * 3600000) / 86400000) - 10957}.demo`;
+function demoScanDialog() {
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg"><h2>예시로 QR 찍어 보기</h2>
+    <p class="muted small" style="margin:0">실제로는 학원 입구 화면이나 붙여 둔 종이의 QR을 휴대폰 카메라로 찍어요. 여기서는 아래 QR을 찍었다고 치고 눌러 보세요.</p>
+    <div class="demo-cam"><div class="dc-frame">${qrSvg(checkinUrl(demoToken()))}</div><small>${esc(DATA.academy.name)} · ${kioskDay()} 출석 QR</small></div>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button type="button" class="btn primary" id="dcShot">${ic('attend')}찍기</button></div></form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#dcShot').onclick = () => { d.close(); CHECKIN = null; location.hash = `#checkin/${demoToken()}`; };
+}
 
 async function markAttendance(ids, status) {
   const before = { ...REAL.attend.map };
@@ -831,7 +851,8 @@ function finXlsx() {
   const rows = [['날짜', '구분', '항목', '금액(원)', '내용'],
     ...list.map(e => [e.day, e.kind === 'in' ? (e.src === 'inv' ? '수납' : '수입') : '지출', e.cat, String(e.kind === 'out' ? -e.amount : e.amount), e.memo]),
     [], ['', '', '매출 합계', String(t.inc), ''], ['', '', '지출 합계', String(t.out), ''], ['', '', '순이익', String(t.net), '']];
-  downloadXlsx(`finance_${r.from}_${r.to}.xlsx`, rows, [12, 8, 14, 14, 30]);
+  const acad = REAL ? REAL.academy.name : DATA.academy.name;
+  downloadXlsx(`finance_${r.from}_${r.to}.xlsx`, [[`${acad} 거래 내역`], [`${r.from} ~ ${r.to} · 만든 날 ${TODAY}`], [], ...rows], [12, 8, 14, 14, 30], { sheet: '거래 내역' });
   toast('거래 내역을 내려받았어요');
 }
 
@@ -893,6 +914,15 @@ const IMPORTS = {
     dupText: '같은 날짜 · 항목 · 금액이 이미 있어요'
   }
 };
+// 올리기 양식: 꼭 채울 칸은 진한 머리줄, "예시)" 줄은 회색, 두 번째 시트 "작성 안내"에 칸마다 적는 법
+function importGuide(cfg) {
+  const how = o => o.type === 'date' ? '2026-10-05처럼 (2026.10.5 · 10/5도 돼요)' : o.type === 'money' ? '숫자로 (쉼표 · "원"이 있어도 돼요)' : o.max ? `${o.max}자까지` : '';
+  return {
+    sheet: cfg.what, example: true, blank: 30, required: cfg.cols.map((c, i) => c[2].required ? i : -1).filter(i => i >= 0),
+    guide: cfg.cols.map(([, label, o]) => [label, o.required ? '꼭' : '', [how(o), o.alias ? `칸 이름이 ${o.alias.slice(0, 4).map(a => `"${a}"`).join(' · ')}여도 알아들어요` : ''].filter(Boolean).join(' · ')])
+      .concat([[], ['* "예시)"로 시작하는 줄은 올라가지 않아요. 지우거나 그대로 두셔도 돼요.'], ['* 이미 있는 줄은 건너뛰어요.']])
+  };
+}
 const normHead = s => String(s || '').replace(/[\s*·_\-]|\(필수\)|\(선택\)/g, '').toLowerCase();
 // 날짜: 2026-10-05 · 2026.10.5 · 2026/10/5 · 20261005 · 10/5(올해) · 엑셀 날짜 숫자
 function toYmd(v) {
@@ -959,7 +989,7 @@ function importDialog(kind) {
       <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div>
     </form>`;
     $('#dlgCancel').onclick = () => d.close();
-    $('#impTpl').onclick = () => downloadXlsx(cfg.file, [cfg.cols.map(c => c[1]), ...cfg.sample], cfg.widths);
+    $('#impTpl').onclick = () => downloadXlsx(cfg.file, [cfg.cols.map(c => c[1]), ...cfg.sample], cfg.widths, importGuide(cfg));
     $('#impFile').onchange = async e => {
       const f = e.target.files[0];
       if (!f) return;
@@ -1336,7 +1366,7 @@ function sheetEditor(name, rows, file, widths, totals) {
     const num = v => /^-?[\d,]+$/.test(String(v).trim());
     const sumRow = totals && body.length ? header.map((h, ci) => ci === 0 ? '합계' : body.every(r => String(r[ci]).trim() === '' || num(r[ci])) && body.some(r => num(r[ci])) && !/일$|날|기한|번호/.test(h) ? String(sum(body, r => Number(String(r[ci]).replace(/,/g, '')) || 0)) : '') : null;
     const out = [[e.target.elements.title.value.trim() || titleRow], ...rows.slice(1, hi), header, ...body, ...(sumRow ? [[], sumRow] : []), ...(notes.length ? [[], ...notes] : [])];
-    downloadXlsx(file, out, widths);
+    downloadXlsx(file, out, widths, { sheet: name });
     toast('엑셀로 받았어요 · 신고한 뒤 서류 목록에서 "제출 완료"를 눌러 주세요');
   };
 }
@@ -4721,6 +4751,12 @@ const centerTodo = () => {
   return items;
 };
 
+// 센터 관리자: 예시 계정 바로 열기 (새 탭) — 원장 · 강사 · 학부모 · 학생 · 구직 강사 화면을 그대로 눌러 보고 안내할 때 써요
+const DEMO_ACCOUNTS = [['owner', '원장', '정수민 · 하늘영어학원', '운영 전체 · 수납 · 재정 · 서류 · 입구 QR 출석'], ['teacher', '강사', '김민지', '담당 반 출결 · 할 일 · 리포트'], ['parent', '학부모', '김은정', '우리 아이 출결 · 수납 · 공지'], ['student', '학생', '이서연', '오늘 할 일 · QR 출석 · 시간표'], ['seeker', '구직 강사', '학원 연결 전', '채용 공고 · 이력서 · 지원']];
+const demoAccountsCard = () => `
+  <section class="card demo-acc"><div class="card-head"><h2>예시 계정</h2><span class="sub">새 탭으로 열려요 · 저장되지 않아요</span></div>
+    <div class="da-list">${DEMO_ACCOUNTS.map(([r, l, n, d]) => `<a class="da r-${r === 'seeker' ? 'teacher' : r}" href="/demo/${r}" target="_blank" rel="noopener"><span class="av">${l[0]}</span><span><b>${l}</b><small>${n}</small><small class="muted">${d}</small></span><i>↗</i></a>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">학원에 기능을 안내하거나 화면을 확인할 때 써요. 원장 예시 계정의 출결 → "입구 출석 화면 열기"에서 QR 출석도 해 볼 수 있어요.</p></section>`;
 // 센터 관리자 홈: 숫자 한 줄 → 지금 처리할 일 → 가입 현황 → 메뉴(묶음별 짧은 목록)
 const CENTER_GROUPS = [
   ['학원 · 회원', '신청 받고 분야 열기 · 문의 답하기', ['requests', 'academies', 'members', 'inquiries', 'tasks']],
@@ -4740,6 +4776,8 @@ function centerHome() {
   const items = centerTodo();
   return `
   <div class="kpis">${kpi.map(([l, n, h, c]) => `<a class="kpi ${n ? c : ''}" href="${h}"><span>${l}</span><b class="num">${n}</b></a>`).join('')}</div>
+  ${acadOverview(true)}
+  ${demoAccountsCard()}
   <div class="ch-grid">
     <section class="card">
       <div class="card-head"><h2>지금 처리할 일</h2><span class="sub">${items[0] && items[0][0].startsWith('새로 처리할 일이 없어요') ? '모두 처리했어요' : `${items.length}건`}</span></div>
@@ -5017,22 +5055,45 @@ function centerMembersPage() {
     : `<section class="card empty"><span class="tile-ic">${ic('users')}</span><h2>${all.length ? '찾는 회원이 없어요' : '아직 가입한 회원이 없어요'}</h2></section>`}`;
 }
 let ACAD_Q = '';
+/* ---------- 학원 · 회원 한눈에 (센터 관리자 홈 맨 위 · 학원 · 이용 분야 화면) ----------
+   학원 한 줄에 원장 · 사람 수 · 다섯 분야를 함께. 분야 칸을 누르면 바로 켜고 꺼요(이용 중 ↔ 이용 끝남, 상담 중 → 이용 중).
+   학원 이름을 누르면 그 학원 회원(원장 · 강사 · 학부모 · 학생)이 펼쳐져요. 학원에 아직 안 들어간 회원은 맨 아래 한 줄. */
+const SVC_SHORT = { admin: '행정', teachers: '강사', members: '학생·학부모', mou: '제휴', promo: '홍보' };
+const OV_OPEN = new Set();
+const ROLE_ORDER = { owner: 0, teacher: 1, parent: 2, student: 3 };
+function acadOverview(home) {
+  const C = CENTER, cons = a => Object.values(a.services).some(x => x.status === 'consulting');
+  const list = C.academies.filter(a => stuMatch(ACAD_Q, a.name, a.region, a.owners)).sort((a, b) => cons(b) - cons(a));
+  const memOf = a => C.members.filter(m => (m.academy_ids || []).includes(a.id)).sort((x, y) => (ROLE_ORDER[x.role] ?? 9) - (ROLE_ORDER[y.role] ?? 9));
+  const loose = C.members.filter(m => !(m.academy_ids || []).length);
+  const pill = (a, k) => { const st = (a.services[k] || {}).status || 'none', on = st === 'active';
+    return `<button type="button" class="ov-svc st-${st}" data-ov-svc="${a.id}:${k}" title="${SVC_AREAS[k]} · ${SVC_STATE[st][1]} — 누르면 ${on ? '끄기(이용 끝남)' : '이용 중으로 열기'}" aria-pressed="${on}"><small>${SVC_SHORT[k]}</small><b>${on ? '켜짐' : st === 'consulting' ? '신청' : '꺼짐'}</b></button>`; };
+  const person = m => `<a class="ov-p" href="#center/members/${m.id}"><span class="av sm" style="background:var(--r-${m.role || 'admin'}, var(--navy-700))">${esc((m.name || m.username || '?')[0])}</span><span><span class="ov-pn"><b>${esc(m.name || '(이름 없음)')}</b><span class="chip ${m.role ? 'info' : 'mute'}">${MEM_ROLES[m.role || 'none']}</span></span><small>${m.phone ? fmtPhone(m.phone) : '휴대폰 없음'} · 마지막 로그인 ${when(m.last_sign_in_at)}</small></span></a>`;
+  return `
+  <section class="card ov">
+    <div class="card-head"><h2>학원 · 회원 한눈에</h2><span class="sub">학원 ${C.academies.length}곳 · 회원 ${C.members.length}명</span></div>
+    <div class="ov-tools">${C.academies.length > 4 ? `<span class="search-in">${ic('search')}<input id="acadQ" value="${esc(ACAD_Q)}" placeholder="학원 이름 · 지역 · 원장으로 찾기"></span>` : ''}
+      <span class="muted small">분야 칸을 누르면 바로 켜고 꺼요 · 학원 이름을 누르면 회원이 펼쳐져요</span></div>
+    ${list.length ? `<div class="ov-table">
+      <div class="ov-head"><span>학원</span><span>사람</span><span class="ov-svcs">${Object.keys(SVC_AREAS).map(k => `<i>${SVC_SHORT[k]}</i>`).join('')}</span></div>
+      ${list.map(a => { const ms = memOf(a); return `
+      <details class="ov-row${cons(a) ? ' ask' : ''}" data-ov-row="${a.id}" ${OV_OPEN.has(a.id) ? 'open' : ''}>
+        <summary>
+          <span class="ov-name"><b>${esc(a.name)}</b><small>${esc(a.region || '')} · 원장 ${esc(a.owners || '-')}</small>${cons(a) ? '<span class="chip warn">열어 달라는 신청</span>' : ''}</span>
+          <span class="ov-count"><span>강사 <b>${a.teachers}</b></span><span>원생 <b>${a.students}</b></span><span>가족 <b>${a.families ?? '-'}</b></span></span>
+          <span class="ov-svcs">${Object.keys(SVC_AREAS).map(k => pill(a, k)).join('')}</span>
+        </summary>
+        <div class="ov-mem">${ms.length ? ms.map(person).join('') : '<p class="muted small">가입한 회원이 없어요</p>'}
+          ${cons(a) ? `<button class="btn sm primary" data-svc-open="${a.id}">상담 중인 분야 모두 "이용 중"으로 열기</button>` : ''}</div>
+      </details>`; }).join('')}
+      ${loose.length && !ACAD_Q ? `<details class="ov-row loose" data-ov-row="loose" ${OV_OPEN.has('loose') ? 'open' : ''}><summary><span class="ov-name"><b>학원 연결 전 회원</b><small>가입했지만 아직 학원을 만들거나 코드를 넣지 않았어요</small></span><span class="ov-count"><span><b>${loose.length}</b>명</span></span><span class="ov-svcs"></span></summary>
+        <div class="ov-mem">${loose.map(person).join('')}</div></details>` : ''}
+    </div>` : `<p class="muted small">${C.academies.length ? '찾는 학원이 없어요' : '아직 가입한 학원이 없어요'}</p>`}
+    ${home ? '<a class="sub" href="#center/members" style="display:inline-block;margin-top:10px">회원 전체 목록 · 검색 →</a>' : ''}
+  </section>`;
+}
 function centerAcademiesPage() {
-  const all = CENTER.academies, cons = a => Object.values(a.services).some(x => x.status === 'consulting');
-  const list = all.filter(a => stuMatch(ACAD_Q, a.name, a.region, a.owners)).sort((a, b) => cons(b) - cons(a));
-  const cell = (a, k) => { const st = (a.services[k] || {}).status || 'none'; return `
-    <label class="svc-cell st-${st}"><span>${SVC_AREAS[k]}</span>
-      <select data-svc-set="${a.id}:${k}" aria-label="${esc(a.name)} ${SVC_AREAS[k]}">${['none', 'consulting', 'active', 'ended'].map(x => `<option value="${x}" ${st === x ? 'selected' : ''}>${SVC_STATE[x][1]}</option>`).join('')}</select></label>`; };
-  return head('학원 · 이용 분야', '학원마다 다섯 분야의 상태를 바로 고르면 저장돼요. "이용 중"인 분야만 그 학원 원장 · 강사 화면에서 열려요. 원장님이 신청한 분야(상담 중)는 맨 위에 와요.') + `
-  <div class="svc-legend">${['none', 'consulting', 'active', 'ended'].map(x => `<span class="st-${x}"><i></i>${SVC_STATE[x][1]}</span>`).join('')}</div>
-  ${all.length > 6 ? `<div class="stu-find"><span class="search-in">${ic('search')}<input id="acadQ" value="${esc(ACAD_Q)}" placeholder="학원 이름 · 지역 · 원장으로 찾기"></span></div>` : ''}
-  ${list.length ? `<div class="svc-board">${list.map(a => `
-    <section class="card svc-acad ${cons(a) ? 'ask' : ''}">
-      <div class="sa-head"><div><b>${esc(a.name)}</b><small>${esc(a.region || '')} · 원장 ${esc(a.owners || '-')} · 강사 ${a.teachers} · 원생 ${a.students}</small></div>${cons(a) ? '<span class="chip warn">열어 달라는 신청</span>' : ''}</div>
-      <div class="svc-cells">${Object.keys(SVC_AREAS).map(k => cell(a, k)).join('')}</div>
-      ${cons(a) ? `<button class="btn sm primary" data-svc-open="${a.id}">상담 중인 분야 모두 "이용 중"으로 열기</button>` : ''}
-    </section>`).join('')}</div>`
-    : `<section class="card empty"><span class="tile-ic">${ic('home')}</span><h2>${all.length ? '찾는 학원이 없어요' : '아직 가입한 학원이 없어요'}</h2></section>`}`;
+  return head('학원 · 이용 분야', '학원마다 원장 · 사람 수 · 다섯 분야를 한 줄로 봐요. 분야 칸을 누르면 바로 켜지고 꺼져요. "켜짐"인 분야만 그 학원 원장 · 강사 화면에서 열려요. 원장님이 신청한 분야(신청)는 맨 위에 와요.') + acadOverview(false);
 }
 async function setSvc(aid, area, st) {
   const a = CENTER.academies.find(x => x.id === aid);
@@ -5938,6 +5999,7 @@ function bind() {
   on('[data-import]', b => REAL ? importDialog(b.dataset.import) : toast('예시 계정에서는 올릴 수 없어요'));
   on('[data-act="addIncome"]', () => incomeDialog(null));
   on('[data-act="finXlsx"]', finXlsx);
+  on('[data-act="demoScan"]', demoScanDialog);
   on('[data-fin]', b => { FIN = b.dataset.fin; render(); });
   const ff = $('#finFrom'), ft = $('#finTo');
   if (ff) ff.onchange = () => { if (!ff.value) return; FIN_FROM = ff.value; const r = customRange(); FIN_TO = r.to; render(); };
@@ -6016,6 +6078,14 @@ function bind() {
   on('[data-task-new]', b => { const [area, ...k] = b.dataset.taskNew.split(':'); taskDialog(area, k.join(':')); });
   on('[data-task-edit]', b => taskDialog(null, null, REAL.tasks.find(t => t.id === b.dataset.taskEdit)));
   document.querySelectorAll('[data-svc-set]').forEach(x => x.onchange = async () => { const [aid, k] = x.dataset.svcSet.split(':'); if (await setSvc(aid, k, x.value)) { render(); toast(`${SVC_AREAS[k]} → ${SVC_STATE[x.value][1]}`); } });
+  document.querySelectorAll('[data-ov-row]').forEach(d => d.ontoggle = () => { if (d.open) OV_OPEN.add(d.dataset.ovRow); else OV_OPEN.delete(d.dataset.ovRow); });
+  document.querySelectorAll('[data-ov-svc]').forEach(b => b.onclick = async e => {
+    e.preventDefault(); e.stopPropagation();
+    const [aid, k] = b.dataset.ovSvc.split(':'), a = CENTER.academies.find(x => x.id === aid), st = (a.services[k] || {}).status || 'none';
+    const next = st === 'active' ? 'ended' : 'active';
+    b.disabled = true;
+    if (await setSvc(aid, k, next)) { render(); toast(`${a.name} · ${SVC_AREAS[k]} ${next === 'active' ? '켰어요(이용 중)' : '껐어요(이용 끝남)'}`); }
+  });
   on('[data-svc-open]', async b => { const a = CENTER.academies.find(x => x.id === b.dataset.svcOpen); const ks = Object.keys(a.services).filter(k => a.services[k].status === 'consulting'); for (const k of ks) if (!(await setSvc(a.id, k, 'active'))) return; render(); toast(`${a.name} · ${ks.map(k => SVC_AREAS[k]).join(' · ')} 이용 중으로 열었어요`); });
   const aq = $('#acadQ'); if (aq) aq.oninput = () => { ACAD_Q = aq.value.trim(); const pos = aq.selectionStart; render(); const n = $('#acadQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } };
   on('[data-task-filter]', b => { taskFilter = b.dataset.taskFilter; render(); });

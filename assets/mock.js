@@ -20,22 +20,38 @@ if (window.ResizeObserver) {
 }
 
 const TABS = { owner: ['홈', '수납', '채팅', '전체 메뉴'], teacher: ['출결', '원생', '채팅', '전체 메뉴'], parent: ['홈', '수납', '채팅', '전체 메뉴'], student: ['할 일', '시간표', '채팅', '전체 메뉴'] };
-// 휴대폰: 상태 표시줄 + 앱 위쪽 + 내용
-const phone = (role, title, body, extra = '') => `
-  <div class="m-phone r-${role}">
-    <div class="m-screen">
-      <div class="m-status"><span>9:41</span><i class="m-island"></i><span class="m-sig"><i></i><i></i><i></i></span></div>
+// 휴대폰: 상태 표시줄 + 앱 위쪽 + 내용 + 아래 탭(tab번째가 켜짐)
+const STATUS = '<div class="m-status"><span>9:41</span><i class="m-island"></i><span class="m-sig"><i></i><i></i><i></i></span></div>';
+const appPage = (role, title, body, tab = 0) => `
       <div class="m-app-top"><span class="m-av"></span><b>${title}</b><span class="m-bell"></span></div>
       <div class="m-body">${body}</div>
-      ${extra}
-      <div class="m-tabbar">${TABS[role].map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('')}</div>
-    </div>
+      <div class="m-tabbar">${TABS[role].map((t, i) => `<span class="${i === tab ? 'on' : ''}">${t}</span>`).join('')}</div>`;
+const phone = (role, title, body, tab = 0) => `
+  <div class="m-phone r-${role}">
+    <div class="m-screen">${STATUS}${appPage(role, title, body, tab)}</div>
   </div>`;
 const PHONE_W = 300, PHONE_H = 620;
 
-// 역할마다 휴대폰 화면
-const PHONE_SCREENS = {
-  owner: () => phone('owner', '하늘영어학원', `
+// 예시 QR 그림 (진짜로 찍히지는 않아요): 세 귀퉁이 네모 + 정해진 무늬
+function fakeQr(n = 25) {
+  let seed = 11; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  let r = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const f = [[0, 0], [n - 7, 0], [0, n - 7]].find(([a, b]) => x >= a && x < a + 7 && y >= b && y < b + 7);
+    let on;
+    if (f) { const dx = x - f[0], dy = y - f[1]; on = dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4); }
+    else on = rnd() > .52 && !((x === 7 || y === 7) && (x < 8 || y < 8 || x > n - 9 || y > n - 9));
+    if (on) r += `<rect x="${x}" y="${y}" width="1.02" height="1.02"/>`;
+  }
+  return `<svg class="m-qr" viewBox="-1 -1 ${n + 2} ${n + 2}" aria-hidden="true">${r}</svg>`;
+}
+const bubble = (t, me, who) => `<div class="m-bub${me ? ' me' : ''}">${who ? `<small>${who}</small>` : ''}<span>${t}</span></div>`;
+const scoreBar = (t, v) => `<div class="m-score"><span>${t}</span><i style="--w:${v}%"></i><b>${v}</b></div>`;
+
+// 역할마다 휴대폰 여러 장: [위쪽 제목, 켜진 탭, 아래 설명 [제목, 설명], 내용]. 첫 장은 첫 화면 그림에도 써요.
+const PHONE_PAGES = {
+  owner: [
+    ['하늘영어학원', 0, ['홈 · 오늘 챙길 일', '미납 · 입금 확인 · 서류 마감 · 체험수업처럼 오늘 할 일만 먼저 보여요. 누르면 그 일로 바로 가요.'], `
     <p class="m-hello">정수민 원장님, 오늘 챙길 일 4개</p>
     <div class="m-card">
       ${mk.row('10월 미납', '6건', mk.chip('안내 보내기', 'blue'))}
@@ -44,14 +60,43 @@ const PHONE_SCREENS = {
       ${mk.row('체험수업 16:00', '2명', '')}
     </div>
     <div class="m-card m-split"><div><small>다니는 원생</small><b>128명</b></div><div><small>10월 수납</small><b>92%</b></div></div>
-    <div class="m-card"><small class="m-cap">저절로 처리한 일</small>${mk.row('10월 청구서 48건', '', mk.chip('완료', 'good'))}${mk.row('미납 안내 6가정', '', mk.chip('완료', 'good'))}</div>`),
-  teacher: () => phone('teacher', '초등 B반 출결', `
+    <div class="m-card"><small class="m-cap">저절로 처리한 일</small>${mk.row('10월 청구서 48건', '', mk.chip('완료', 'good'))}${mk.row('미납 안내 6가정', '', mk.chip('완료', 'good'))}</div>`],
+    ['입구 출석 QR', 0, ['입구 QR 출석', '하루에 한 번 바뀌는 QR을 입구에 띄우거나 인쇄해 붙여 두면, 학생이 와서 직접 찍어 출석해요. 수업 10분이 지나면 지각으로 저절로 들어가요.'], `
+    <div class="m-card m-qrcard">${fakeQr()}<b>10월 26일 (월) 출석 QR</b><small>휴대폰 카메라로 찍어 주세요</small><span class="m-chip blue">QR 인쇄</span></div>
+    <div class="m-card"><small class="m-cap">방금 출석</small>${mk.row('김서연 · 초등 B반', '15:02', mk.chip('출석', 'good'))}${mk.row('박준호 · 중등 A반', '15:04', mk.chip('출석', 'good'))}${mk.row('정민재 · 중등 A반', '16:43', mk.chip('지각', ''))}</div>`],
+    ['수납 · 10월', 1, ['수납 · 청구', '정해 둔 수강료와 할인으로 청구서가 저절로 만들어지고, 학부모님이 "보냈어요"를 누르면 입금 확인만 하면 돼요.'], `
+    <div class="m-card m-split"><div><small>받을 돈</small><b>3,840만</b></div><div><small>받은 돈</small><b>92%</b></div></div>
+    <div class="m-card"><small class="m-cap">입금 확인</small>${mk.row('박준호 · 320,000원', '', mk.chip('확인', 'blue'))}${mk.row('최유나 · 270,000원', '', mk.chip('확인', 'blue'))}</div>
+    <div class="m-card"><small class="m-cap">미납 6건</small>${mk.row('이하은 · 300,000원', 'D+3', '')}${mk.row('한지우 · 300,000원', 'D+1', '')}<div class="m-btn sm">미납 안내 한 번에 보내기</div></div>`],
+    ['학부모 공지', 1, ['공지 · 읽음 확인', '전체나 반별로 공지를 보내면 학부모 휴대폰에 바로 떠요. 읽은 가족 · 안 읽은 가족이 보여서 다시 알릴 사람만 골라요.'], `
+    <div class="m-card"><small class="m-cap">어제 보낸 공지</small><b class="m-big-t">겨울방학 특강 안내</b><div class="m-meter"><i style="--w:82%"></i></div><small class="m-note">28가족 중 23가족 읽음</small></div>
+    <div class="m-card"><small class="m-cap">안 읽은 가족 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`]
+  ],
+  teacher: [
+    ['초등 B반 출결', 0, ['담당 반 출결', '수업 중에 휴대폰으로 출석 · 지각 · 결석을 눌러요. QR로 먼저 찍은 학생은 이미 체크돼 있어요.'], `
     <p class="m-hello">10월 26일 월요일 · 16:30 수업</p>
     <div class="m-card m-att">${['김서연', '박준호', '이하은', '정민재', '최유나', '한지우'].map((n, i) => `
       <div class="m-row" style="--i:${i}"><span><i class="m-dot"></i>${n}</span><span class="m-seg">${['출석', '지각', '결석'].map((s, j) => `<em class="${(i === 3 ? j === 1 : j === 0) ? 'on' : ''}">${s}</em>`).join('')}</span></div>`).join('')}
     </div>
-    <div class="m-btn">저장하기 · 12/13</div>`),
-  parent: () => phone('parent', '우리 아이 · 김서연', `
+    <div class="m-btn">저장하기 · 12/13</div>`],
+    ['원생 · 이하은', 1, ['학생 한 명 보기', '학부모 연락처를 누르면 바로 전화 · 문자가 되고, 최근 출결 · 상담 기록 · 할 일을 한 화면에서 봐요.'], `
+    <div class="m-card m-hi"><span class="m-av2">이</span><div><b>이하은 · 초5</b><small>초등 B반 · 학부모 이수진</small></div></div>
+    <div class="m-card">${mk.row('학부모 연락처', '010-0000-1234', '')}<div class="m-chips">${mk.chip('전화 걸기', 'blue')}${mk.chip('문자', '')}${mk.chip('번호 복사', '')}</div></div>
+    <div class="m-card"><small class="m-cap">최근 수업 7번</small><div class="m-days">${['출', '출', '지', '출', '출', '결', '출'].map(x => `<i class="${x === '지' ? 'late' : x === '결' ? 'off' : ''}">${x}</i>`).join('')}</div></div>
+    <div class="m-card"><small class="m-cap">상담 메모</small><p class="m-p">문법 기초 보충 원함 · 11월부터 주 3회 상의</p></div>`],
+    ['오늘 할 일 주기', 1, ['오늘 할 일', '반 전체나 학생 여러 명을 골라 숙제를 주면 학생 · 학부모 화면에 바로 떠요. 누가 했는지도 보여요.'], `
+    <div class="m-card"><small class="m-cap">누구에게</small><div class="m-chips">${mk.chip('초등 B반 전체', 'blue')}${mk.chip('여러 명 고르기', '')}</div></div>
+    <div class="m-card m-todo">${[['단어 30개 외우기', 1], ['리딩 3과 읽기', 1], ['문법 워크북 12쪽', 1]].map(([t], i) => `<div class="m-row" style="--i:${i}"><span><i class="m-box on"></i>${t}</span></div>`).join('')}</div>
+    <div class="m-card"><small class="m-cap">어제 숙제</small>${mk.row('다 한 학생', '11/13', '')}${mk.row('안 한 학생', '정민재 · 한지우', '')}</div>
+    <div class="m-btn">13명에게 보내기</div>`],
+    ['성장 리포트 · 10월', 3, ['성장 리포트', '과목 점수 · 학습 태도 · 의견을 적어 발급하면 학부모님이 휴대폰으로 받아 봐요. 출결 · 숙제는 저절로 채워져요.'], `
+    <div class="m-card"><small class="m-cap">김서연 · 과목 점수</small>${scoreBar('리딩', 92)}${scoreBar('문법', 84)}${scoreBar('단어', 96)}</div>
+    <div class="m-card">${mk.row('출석률', '100%', '')}${mk.row('숙제 수행', '27/28', '')}</div>
+    <div class="m-card"><small class="m-cap">종합 의견</small><p class="m-p">긴 지문도 끝까지 읽는 힘이 생겼어요. 다음 달은 서술형 문법에 집중해요.</p></div>
+    <div class="m-btn">학부모님께 발급하기</div>`]
+  ],
+  parent: [
+    ['우리 아이 · 김서연', 0, ['홈 · 우리 아이', '오늘 출석 · 이번 달 수강료 · 새 공지 · 오늘 할 일을 한 번에 봐요.'], `
     <div class="m-card m-hi"><span class="m-live"></span><div><b>오늘 15:02 출석했어요</b><small>하늘영어학원 · 초등 B반</small></div></div>
     <div class="m-card">
       <small class="m-cap">10월 수강료</small>
@@ -59,15 +104,46 @@ const PHONE_SCREENS = {
       <small class="m-note">형제 할인 10% · 오늘까지</small>
       <div class="m-btn sm">바로 내기</div>
     </div>
-    <div class="m-card">${mk.row('겨울방학 특강 안내', '', mk.chip('새 공지', 'blue'))}${mk.row('오늘 할 일', '2/3', '')}</div>`),
-  student: () => phone('student', '오늘 할 일', `
+    <div class="m-card">${mk.row('겨울방학 특강 안내', '', mk.chip('새 공지', 'blue'))}${mk.row('오늘 할 일', '2/3', '')}</div>`],
+    ['출석 알림', 0, ['QR 출석 알림', '아이가 학원 입구 QR을 찍으면 그 시각이 바로 떠요. 학원에 와야만 찍히니 출석이 정확해요.'], `
+    <div class="m-card m-done"><span class="m-ok"></span><b>서연이가 출석했어요</b><small>오늘 15:02 · 입구 QR · 수업 시작 전</small></div>
+    <div class="m-card"><small class="m-cap">이번 주 출결</small><div class="m-days">${['월', '화', '수', '목', '금'].map((d, i) => `<i class="${i === 2 ? 'late' : i > 3 ? 'none' : ''}">${d}</i>`).join('')}</div><small class="m-note">수요일 16:43 지각 · 나머지 출석</small></div>
+    <div class="m-card">${mk.row('다음 수업', '수 16:30', mk.chip('302호', ''))}</div>`],
+    ['수강료 내기', 1, ['수강료 바로 내기', '학원 계좌를 복사해 보내고 "보냈어요"를 누르면 원장님께 바로 알림이 가요. 할인 내역도 함께 보여요.'], `
+    <div class="m-card"><small class="m-cap">10월 수강료</small><div class="m-price"><s>300,000원</s><b>270,000원</b></div><small class="m-note">형제 할인 10%</small></div>
+    <div class="m-card"><small class="m-cap">입금 계좌</small>${mk.row('국민 123456-00-000000', '', mk.chip('복사', 'blue'))}${mk.row('예금주', '하늘영어학원', '')}</div>
+    <div class="m-btn">보냈어요</div>
+    <p class="m-hello">원장님이 확인하면 "납부 완료"로 바뀌어요</p>`],
+    ['김민지 강사님', 2, ['채팅', '개인 번호 없이 원장님 · 담당 강사님과 바로 이야기해요. 읽으면 읽음 표시가 바로 바뀌어요.'], `
+    <div class="m-chat">${bubble('어머님, 서연이 오늘 리딩 발표 정말 잘했어요!', 0, '김민지 강사')}${bubble('와 감사해요 ㅎㅎ 집에서도 칭찬해 줄게요', 1)}${bubble('다음 주 단어 시험 범위는 3~4과예요', 0, '김민지 강사')}${bubble('네 알겠습니다!', 1)}</div>
+    <div class="m-input"><span>메시지 보내기</span><i></i></div>`]
+  ],
+  student: [
+    ['오늘 할 일', 0, ['오늘 할 일', '선생님이 준 숙제를 하고 체크해요. 부모님 화면에도 바로 보여요.'], `
     <p class="m-hello">서연아, 오늘 3개 중 2개 했어</p>
     <div class="m-card m-todo">${[['단어 30개 외우기', 1], ['리딩 3과 읽기', 1], ['문법 워크북 12쪽', 0]].map(([t, d], i) => `
       <div class="m-row" style="--i:${i}"><span><i class="m-box ${d ? 'on' : ''}"></i>${t}</span></div>`).join('')}
     </div>
     <div class="m-card"><small class="m-cap">다음 수업</small>${mk.row('16:30 영어 · 초등 B반', '', mk.chip('302호', ''))}</div>
-    <div class="m-card"><small class="m-cap">성장 리포트</small>${mk.row('9월 리포트가 왔어요', '', mk.chip('보기', 'blue'))}</div>`)
+    <div class="m-card"><small class="m-cap">성장 리포트</small>${mk.row('9월 리포트가 왔어요', '', mk.chip('보기', 'blue'))}</div>`],
+    ['QR로 출석', 0, ['입구 QR로 출석', '학원에 도착하면 입구 QR을 휴대폰 카메라로 찍어요. 로그인돼 있으면 바로 "출석했어요"가 떠요.'], `
+    <div class="m-cam"><div class="m-frame">${fakeQr()}</div><small>입구 QR을 네모 안에 맞춰 주세요</small></div>
+    <div class="m-card m-done sm"><span class="m-ok"></span><div><b>출석했어요 · 15:02</b><small>하늘영어학원 · 초등 B반</small></div></div>`],
+    ['시간표', 1, ['이번 주 시간표', '요일마다 수업 · 강의실 · 선생님이 보이고, 시험 · 휴원 일정도 함께 나와요.'], `
+    <div class="m-card">${[['월', '16:30 영어 리딩', '302호'], ['화', '16:30 영어 문법', '302호'], ['수', '16:30 영어 리딩', '302호'], ['목', '쉬는 날', ''], ['금', '16:30 단어 시험', '301호']].map(([d, t, r]) => mk.row(`<em class="m-wd">${d}</em>${t}`, '', r ? mk.chip(r, '') : '')).join('')}</div>
+    <div class="m-card"><small class="m-cap">일정</small>${mk.row('11월 2일 · 월말 평가', '', mk.chip('시험', 'crit'))}${mk.row('11월 9일 · 학원 휴원', '', mk.chip('휴원', ''))}</div>`],
+    ['성장 리포트 · 9월', 3, ['성장 리포트', '선생님이 보낸 리포트로 과목 점수와 잘한 점 · 노력할 점을 봐요.'], `
+    <div class="m-card"><small class="m-cap">과목 점수</small>${scoreBar('리딩', 92)}${scoreBar('문법', 84)}${scoreBar('단어', 96)}</div>
+    <div class="m-card"><small class="m-cap">잘한 점</small><p class="m-p">긴 지문도 끝까지 집중해서 읽어요.</p><small class="m-cap">다음 목표</small><p class="m-p">서술형 문법 문제 80점 넘기기</p></div>`]
+  ]
 };
+// 첫 장만 (첫 화면 그림 · 강사 소개)
+const PHONE_SCREENS = Object.fromEntries(Object.entries(PHONE_PAGES).map(([r, ps]) => [r, () => phone(r, ps[0][0], ps[0][3], ps[0][1])]));
+// 여러 장을 옆으로 넘기는 휴대폰 (첫 화면 "휴대폰에서도")
+const phoneDeck = role => `
+  <div class="m-phone r-${role}">
+    <div class="m-screen">${STATUS}<div class="m-pages">${PHONE_PAGES[role].map(([t, tab, , body], i) => `<div class="m-pg" data-pg="${i}">${appPage(role, t, body, tab)}</div>`).join('')}</div></div>
+  </div>`;
 
 // 노트북: 원장 화면 (왼쪽 메뉴 + 오늘 챙길 일 + 숫자 + 매출 그래프)
 const LAP_W = 820, LAP_H = 470;
@@ -105,7 +181,7 @@ const heroMock = () => `
 // 떠오르는 알림 (몇 초마다 바뀌어요)
 const HERO_TOASTS = [
   ['owner', '10월 청구서 48건을 만들었어요', '자동으로 처리 · 오전 9:10'],
-  ['parent', '서연이가 15:02에 출석했어요', '학부모님께 바로 알림'],
+  ['parent', '서연이가 입구 QR로 출석했어요', '15:02 · 학부모님께 바로 알림'],
   ['teacher', '김민지 강사님이 출결을 넣었어요', '초등 B반 12/13'],
   ['owner', '원천세 신고 마감 5일 전이에요', '계산표가 준비됐어요']
 ];

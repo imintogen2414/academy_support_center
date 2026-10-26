@@ -158,6 +158,55 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 /* 화면에 들어오면 한 줄씩 체크돼요 */
 .motion .rv .m-att .m-row, .motion .rv .m-todo .m-row, .motion .rv .m-li, .motion .rv .m-tr:not(.m-th), .motion .rv .m-col, .motion .rv .m-ap { opacity: 0; transform: translateX(-8px); transition: opacity .5s, transform .5s; transition-delay: calc(300ms + var(--i) * 110ms); }
 .motion .rv.in .m-att .m-row, .motion .rv.in .m-todo .m-row, .motion .rv.in .m-li, .motion .rv.in .m-tr:not(.m-th), .motion .rv.in .m-col, .motion .rv.in .m-ap, .motion .mp.on .m-row { opacity: 1; transform: none; }
+/* 휴대폰 여러 장: 안에서 옆으로 넘겨요 (첫 화면 "휴대폰에서도") */
+.m-pages { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; cursor: grab; }
+.m-pages::-webkit-scrollbar { display: none; }
+.m-pages.drag { cursor: grabbing; scroll-snap-type: none; }
+.m-pg .m-body { grid-template-columns: minmax(0, 1fr); }
+.m-pg { flex: 0 0 100%; min-width: 0; display: flex; flex-direction: column; scroll-snap-align: start; user-select: none; }
+.m-qrcard { display: grid; justify-items: center; gap: 6px; padding: 16px 14px 14px; text-align: center; }
+.m-qr { width: 150px; height: 150px; fill: #101828; background: #fff; }
+.m-qrcard b { font-size: 14px; } .m-qrcard small { font-size: 12px; color: var(--muted); }
+.m-big-t { display: block; font-size: 15px; margin: 2px 0 10px; }
+.m-card .m-meter { margin-bottom: 6px; }
+.m-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 12px; }
+.m-chips .m-chip { font-size: 12.5px; padding: 5px 10px; }
+.m-p { margin: 4px 0 10px; font-size: 13px; line-height: 1.55; color: var(--ink); }
+.m-days { display: flex; gap: 5px; padding: 6px 0 10px; }
+.m-days i { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 700; background: #e3f6ed; color: #12865a; }
+.m-days i.late { background: #fff1d6; color: #b26b00; } .m-days i.off { background: #fde9e7; color: #d13b2c; } .m-days i.none { background: #f0f2f5; color: var(--muted); }
+.m-score { display: grid; grid-template-columns: 40px 1fr 26px; gap: 8px; align-items: center; padding: 7px 0; font-size: 12.5px; }
+.m-score i { height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--rc) var(--w), #eef0f3 var(--w)); }
+.m-score b { text-align: right; }
+.m-done { display: grid; justify-items: center; gap: 4px; padding: 18px 14px; text-align: center; }
+.m-done b { font-size: 16px; } .m-done small { font-size: 12px; color: var(--muted); }
+.m-done.sm { display: flex; justify-items: start; text-align: left; gap: 12px; padding: 12px 14px; }
+.m-done.sm b { display: block; font-size: 14px; }
+.m-ok { width: 46px; height: 46px; border-radius: 50%; flex: none; background: #1bb57a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12l4 4 8-8'/%3E%3C/svg%3E") center / 24px no-repeat; }
+.m-done.sm .m-ok { width: 34px; height: 34px; background-size: 18px; }
+.m-cam { position: relative; display: grid; justify-items: center; gap: 10px; padding: 22px 14px 16px; border-radius: 18px; background: #1d2230; }
+.m-cam small { color: rgba(255, 255, 255, .75); font-size: 12px; }
+.m-frame { position: relative; padding: 12px; border-radius: 14px; background: #fff; box-shadow: 0 0 0 3px #1d2230, 0 0 0 5px rgba(255, 255, 255, .85); }
+.m-frame .m-qr { width: 120px; height: 120px; }
+.m-wd { font-style: normal; font-weight: 800; color: var(--rc); width: 18px; }
+.m-chat { display: grid; gap: 8px; align-content: start; }
+.m-bub { display: grid; justify-items: start; gap: 3px; max-width: 82%; }
+.m-bub small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.m-bub span { padding: 9px 12px; border-radius: 4px 14px 14px 14px; background: #fff; font-size: 13px; line-height: 1.45; box-shadow: 0 1px 2px rgba(25, 31, 40, .05); }
+.m-bub.me { justify-self: end; justify-items: end; }
+.m-bub.me span { border-radius: 14px 4px 14px 14px; background: var(--rc); color: #fff; }
+.m-input { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 8px 8px 8px 14px; border-radius: 999px; background: #fff; font-size: 12.5px; color: var(--muted); }
+.m-input span { flex: 1; } .m-input i { width: 28px; height: 28px; border-radius: 50%; background: var(--rc); }
+/* 휴대폰 아래 설명 · 넘기기 */
+.mob-cap { display: grid; gap: 8px; justify-items: center; text-align: center; width: min(360px, 88vw); margin-top: 22px; }
+.mc-nav { display: flex; align-items: center; gap: 12px; }
+.mc-nav button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .06); color: #fff; font-size: 20px; line-height: 1; display: grid; place-items: center; }
+.mc-nav button:hover { background: rgba(255, 255, 255, .14); }
+.mc-dots { display: flex; gap: 6px; }
+.mc-dots button { width: 8px; height: 8px; padding: 0; border-radius: 4px; border: 0; background: rgba(255, 255, 255, .3); transition: width .25s, background .25s; }
+.mc-dots button.on { width: 22px; background: #fff; }
+.mob-cap b { font-size: 18px; color: #fff; }
+.mob-cap p { margin: 0; font-size: 14.5px; line-height: 1.6; color: rgba(255, 255, 255, .72); min-height: 4.8em; }
 /* 노트북 */
 .m-laptop { width: 820px; }
 .m-lid { padding: 14px 14px 0; border-radius: 22px 22px 0 0; background: #15171c; box-shadow: inset 0 0 0 1.5px #3a3d44; }
@@ -271,7 +320,8 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 .rt.on small { color: var(--sub); }
 .rt-bar { position: absolute; left: 18px; right: 18px; bottom: 0; height: 2px; background: transparent; }
 .rt.on .rt-bar::after { content: ""; position: absolute; inset: 0; background: var(--rc); transform-origin: left; transform: scaleX(0); }
-.motion .rt.on .rt-bar::after { animation: rtp 5s linear forwards; }
+.motion .rt.on .rt-bar::after { animation: rtp var(--dur, 5s) linear forwards; }
+.mob.manual .rt.on .rt-bar::after { animation: none; transform: scaleX(1); }
 .motion .mob:hover .rt.on .rt-bar::after { animation-play-state: paused; }
 @keyframes rtp { to { transform: scaleX(1); } }
 .mob-art { display: grid; justify-items: center; }

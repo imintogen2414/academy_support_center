@@ -30,10 +30,11 @@
 - 학부모 수강료 내기: 원장이 설정 → 결제 정보에서 학원 입금 계좌(`academies.pay_bank` · `pay_account` · `pay_holder` · `pay_note`)를 넣으면, 학부모 수납 화면 "내기"(`payDialog`)에 계좌와 복사 버튼이 나와요. 보낸 뒤 "보냈어요" → `report_invoice_paid(청구, 메모, 취소?)`가 `invoices.reported_at`을 남기고, 원장 수납 · 홈 "오늘 챙길 일"에 "입금 확인"으로 떠요. 납부 확인(`paid_at`)은 그대로 원장이. 카드 결제(PG)는 아직 없어요.
 - 결재함(`#admin/approvals`) 아래에 강사가 올린 홍보 의뢰 · 제휴 신청(원장 결재 대기)도 모아 보여요(`otherApvCard`).
 - 센터 관리 → 회원(`#center/members`, `admin_members()`): 가입한 사람 이름 · 아이디/이메일 · 로그인 방법 · 역할 · 휴대폰 · 학원 · 가입일 · 마지막 로그인. 보기만 해요. 사람을 누르면 `#center/members/회원`(`memberDetail`, `admin_member_detail(회원)`): 학원 · 역할 · 이용 분야 · 자동 처리 · 연결된 아이 · 최근 연 메뉴(`user_seen`) · 쓴 기록 수 · 첫 화면 지원 신청.
-- 센터 관리자 홈(`centerHome`): 숫자 한 줄(새 신청 · 열어 줄 분야 · 답할 문의 · 맡긴 일 · 연결 중) → 지금 처리할 일(`centerTodo`) · 가입 현황 → 메뉴 묶음(`CENTER_GROUPS`).
+- 센터 관리자 홈(`centerHome`): 숫자 한 줄(새 신청 · 열어 줄 분야 · 답할 문의 · 맡긴 일 · 연결 중) → 학원 · 회원 한눈에(`acadOverview`: 학원 한 줄에 원장 · 강사 · 원생 · 가족 수 + 다섯 분야 칸, 칸을 누르면 켜짐(active) ↔ 꺼짐(ended) · 신청(consulting) → 켜짐, 학원 이름을 누르면 그 학원 회원이 펼쳐짐 `OV_OPEN`, 학원 연결 전 회원 한 줄. `admin_members().academy_ids` · `admin_academies().families`) → 예시 계정 바로 열기(`demoAccountsCard`, 새 탭 `/demo/역할`) → 지금 처리할 일(`centerTodo`) · 가입 현황 → 메뉴 묶음(`CENTER_GROUPS`). `#center/academies`도 같은 표.
 - 예시 원생은 `data.js` 끝에서 반별 출결 인원(`attendance.total`)만큼 채워요 — 원생 수 · 강사 담당 반 원생 · 출결 · 수납 숫자가 서로 맞아요. 예시 연락처는 `010-0000-`으로 시작하는 가짜 번호.
 - 시간 칸(`formDialog`의 `type: 'time'`): 지역 고르기처럼 오전/오후 · 시 · 분(5분 단위) 드롭다운(`clockPicker` · `bindClockPickers`, 값은 hidden 칸에 "16:00"). 시간표 추가는 요일을 여러 개 고르면 요일마다 한 줄씩(`type: 'multi'` + `expand`), 시작을 바꾸면 끝이 수업 길이만큼 따라와요(`timePickers` · `setClock`).
 - 가로 스크롤 없애기: 표(`.table .tr`)는 좁은 화면에서 두 칸 카드로, 칸반(`.board`)은 줄바꿈, 입력 창은 옆으로 안 밀려요(`dialog` overflow-x hidden). 넓은 서류 편집도 줄마다 카드(`sheetEditor`).
+- 예시 계정 QR 출석: 원장 · 강사 출결 아래 "오늘 학생이 직접 찍은 출석"(`demoQrCard`), 학생 · 학부모 홈 안내의 "예시로 QR 찍어 보기"(`demoScanDialog` → `#checkin/demo.날짜.demo`).
 - 학원에 와야만 되는 출석(`#kiosk` 입구 출석 화면, 원장 · 강사): 출결 화면 "입구 출석 화면 열기" → 메뉴 없는 전체 화면(`kioskPage` · `bindKiosk`, 화면 꺼짐 방지)에 한국 날짜마다 하나인 오늘 QR(`checkin_qr`, "QR 인쇄"로 뽑아 붙여도 돼요(`@media print`), 서명은 `private.checkin_keys`, 그리기는 `assets/vendor/qrcode.js` = npm `qrcode-generator`를 빌드가 복사). 학생 · 학부모가 휴대폰 카메라로 찍으면 `/app#checkin/토큰` → `qr_check_in`(오늘 QR만, QR 주소는 늘 정식 주소 `SITE_URL` — Vercel 미리보기 주소는 Vercel 로그인으로 잠겨 있어서, 연결된 아이 모두 출석, 로그인 전이면 sessionStorage `asc-next`로 로그인 뒤 돌아옴). 휴대폰이 없으면 같은 화면에서 출석 번호(학부모 · 본인 휴대폰 뒤 4자리, `kiosk_find` · `kiosk_check_in`). 수업 시작 10분이 지나면 지각(`private.do_checkin`, 시간표 기준). `attendance.method`(qr · kiosk · staff) · `checked_at`이 남고 출결 화면에 "QR 15:02" 표시. 아래 "방금 출석"은 `kiosk_recent`.
 - 오늘 할 일: 반 전체 · 학생 한 명 · "학생 여러 명 골라서"(`todoPicker`, 반 이름을 누르면 그 반 모두).
 - 상담·등록: 학년(선택) · 생년월일(`birth`, 선택) · 학생 본인 연락처(`phone`, 성인 · 고등학생) · 학부모는 선택. 등록하면 트리거가 원생으로 함께 옮겨요. 강사도 메뉴 `#leads`(삭제는 원장만).
@@ -53,7 +54,7 @@
 - 디자인(프로그램 안): 남색·파란 계열. 색 토큰은 `assets/base.css`의 `:root`에 모여 있다.
 - 디자인(첫 화면 `index.html` · `/area` · `/jobs` · 로그인): 흰 바탕 + 파란 버튼 하나 + 큰 글씨 + 실제 화면 그림, 군데군데 남색 그라데이션 구간(메인 그림 뒤 띠 `.hero-art::before`, 휴대폰에서 `.sec.navy`, 분야 상세 맨 위 `.d-hero`, 시작하기 `.start`, 아래쪽 `.foot`). 다크 모드도 돼요(머리글 해 · 달 버튼, `site.css`의 다크 토큰). 기기 그림 속 화면은 늘 밝게(`.fit-in`이 토큰을 밝게 고정). 반투명 카드 · 빛줄기 · 글자 그라데이션 · 분야별 무지개 색은 쓰지 않는다. 스타일은 `assets/site.css`(첫 화면용 토큰을 `:root`에서 덮어씀).
 - 기기 그림: `assets/mock.js` — 노트북(`laptopMock`) · 휴대폰(`PHONE_SCREENS` 원장 · 강사 · 학부모 · 학생) · 창 모양(`AREA_MOCK` 분야마다). 정해진 크기로 그리고 `fitBox` + `fitMocks`가 칸 너비에 맞춰 줄여요. 숫자 · 이름은 예시.
-- 움직임(필요한 만큼만): `.rv`가 화면에 들어오면 아래에서 떠오름(`bindMotion`, `--d`는 순서, 빨리 지나친 것은 `revealPast`), 첫 화면 알림이 4초마다 바뀜(`HERO_TOASTS`), 휴대폰 섹션 역할 버튼이 5초마다 다음 역할(마우스를 올리면 멈춤), 목록 줄 · 그래프가 차례로. 기기 설정 "움직임 줄이기"면 모두 멈추고 바로 보여요(`html.motion`이 안 붙음).
+- 움직임(필요한 만큼만): `.rv`가 화면에 들어오면 아래에서 떠오름(`bindMotion`, `--d`는 순서, 빨리 지나친 것은 `revealPast`), 첫 화면 알림이 4초마다 바뀜(`HERO_TOASTS`), 휴대폰 섹션은 4초마다 다음 장 · 마지막 장 뒤 다음 역할(마우스를 올리면 멈춤), 목록 줄 · 그래프가 차례로. 기기 설정 "움직임 줄이기"면 모두 멈추고 바로 보여요(`html.motion`이 안 붙음).
 - 다크 모드: 기기 설정을 따르고, 해 · 달 버튼(`[data-theme-toggle]`, `assets/theme.js`)으로 고정하면 localStorage `asc-theme`. 어두운 색은 `base.css`의 같은 토큰을 덮어써요 — 새 화면은 `#fff` 대신 `var(--surface)` · `var(--ink)` 같은 토큰을 쓰기. 성장 리포트 · 파트너 카드처럼 종이 느낌인 곳만 흰색 고정.
 - 역할 색: `--r-owner`(파랑) · `--r-teacher`(초록) · `--r-parent`(주황) · `--r-student`(분홍) · `--r-admin`. 클래스 `.r-owner` 등이 `--rc`를 정해요.
 - 정적 HTML + 작은 빌드 단계 + Supabase. 화면을 React로 다시 짤 때가 오면 Next.js로 옮긴다.
@@ -106,6 +107,7 @@
 - 뒤로 가기: 왼쪽 메뉴와 위치 표시(홈 › 분야) 링크는 기록을 바꿔치기(`goReplace`)해서 쌓이지 않아요. 화면 위 "‹ 이전"은 바로 전 화면 한 단계(처음 연 화면이면 한 단계 위).
 - 사용자에게 보이는 말: "데모" 대신 "예시 계정", 유학 제휴처 이름은 "인투유학".
 - 사진으로 올리기(`PHOTO_IMPORTS` · `photoImportDialog`, 원장만): 시간표(`#schedule`) · 수강료표(수납 "정해 둔 수강료") 사진 → 긴 쪽 1600px JPEG로 줄여(`shrinkPhoto`) Edge Function `read-photo`(`supabase/functions/read-photo`, 중간 모델 Claude Sonnet 5.5가 읽어 JSON)로 보내고 → 줄마다 칸을 고치는 확인 창(흐린 칸은 "확인 필요", 이미 있는 줄은 체크 꺼짐) → 저장. 키는 Supabase Edge Function 비밀 값 `ANTHROPIC_API_KEY`(없으면 "준비 중" 안내). 학원마다 한 달 10장(`PHOTO_LIMIT`, DB `photo_reads` · `start_photo_read`가 원장인지 · 남은 장수를 확인하고 막아요, 읽기에 실패하면 `cancel_photo_read`로 되돌림, 남은 장수 `photo_read_left` — 센터 관리자는 null = 제한 없음). 예시 계정은 예시 결과(`sample`)만.
+- 엑셀 내려받기 모양(`downloadXlsx(파일, 행, 너비, 옵션)`): 칸이 두 개 이상 찬 첫 줄이 머리줄(남색 바탕 흰 글씨), 그 위 한 칸 줄은 제목(크게 · 가로 합치기) · 부제목, 칸마다 테두리 · 한 줄 건너 옅은 색, 금액 칸(머리줄에 원 · 금액 · 세 …)은 숫자 + 1,000 쉼표, 합계 줄 굵게, "*" 안내 줄은 회색, 머리줄 아래 틀 고정 + 거르기, 칸 너비 저절로, 인쇄는 한 쪽 너비. 올리기 양식(`importGuide`)은 꼭 채울 칸 진한 머리줄 · "예시)" 줄 회색 · 빈 줄 30개 · 두 번째 시트 "작성 안내"(올리기는 첫 시트만 읽어요).
 - 엑셀로 올리기: `assets/sheet.js`(바깥 라이브러리 없이 .xlsx·.csv 읽기 `readSheet`, 양식 만들기 `downloadXlsx`) + `app.js`의 `IMPORTS`·`importDialog`(원생 명단 · 재정에 "엑셀로 올리기"). 칸 이름은 여러 표현을 알아듣고(`alias`), "예시)" 줄·빈 줄은 건너뛰고, 이미 있는 줄은 건너뛰어요. .xls(예전 형식)는 .xlsx로 저장해 달라고 안내.
 - 금액 칸은 `type: 'won'`(치는 동안 쉼표, 저장할 땐 `numOf`로 숫자). 화면에 보이는 금액은 모두 `won()`(1,000 단위 쉼표 + 원). 입력 창은 화면보다 길면 안에서 스크롤되고 저장 버튼은 아래에 붙어 있어요.
 - 입력 창은 `app.js`의 `formDialog`(필드 목록만 넘기면 추가·수정·삭제까지)를 쓴다. 예시를 눌러 채우는 칸은 `chips`, 저장 전 확인은 `check`.
@@ -137,6 +139,7 @@
 22. ~~사진으로 시간표 · 수강료 올리기 · 학생도 유학 · 남색 구간 · 첫 화면 다크 모드 · 강사 교육 목록 깨짐~~ (완료 · `ANTHROPIC_API_KEY` 비밀 값을 넣으면 실제로 읽어요)
 23. ~~QR · 출석 번호로 학원에서만 출석 · 채팅 읽음 바로 · 채팅 프로필 보기 · 친구 추가~~ (완료)
 24. ~~출석 QR 하루 단위 · QR 인쇄 · QR 주소를 정식 주소로~~ (완료)
+25. ~~첫 화면 QR 출석 소개 · 휴대폰 여러 장 넘기기 · 예시 계정 QR · 관리자 학원 · 회원 한눈에 · 관리자 예시 계정 · 엑셀 꾸미기~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.
@@ -145,7 +148,7 @@
 # 파일 구조
 - `index.html`: 첫 화면. 전체 너비 남색 + 위쪽 머리글(로고 · 운영 프로그램 · 추가 서비스 · 이용 사례 · 강사 채용 · [로그인] [무료로 시작하기]). 문구는 원장님 기준.
   - 구조는 "운영 프로그램 1개(무료로 시작) + 필요할 때만 붙이는 추가 서비스 3개(상담 후 진행)". `areas.js`의 `SITE_AREAS`에 `kind: 'program'`(행정·재정 자동화 `admin` · 학생·학부모 관리 `members` · 강사와 함께 쓰기 `teachers`) / `'service'`(홍보 대행 `promo` · 유학·캠프 제휴 `mou` · 강사 구하기 `hire`), `PROGRAM_AREAS` · `SERVICE_AREAS`. 프로그램은 "무료로 시작하기 · 예시 계정", 서비스는 "상담 신청하기". 행정 자동화를 "신청 → 매니저 연락 → 견적"으로 소개하지 않는다. 파트너 이름은 카드 제목이 아니라 "공식 파트너 ○○"로 작게.
-  - 처음 화면 순서(`homeView`): 메인 메시지(가운데 정렬 + 노트북 · 휴대폰 그림 `heroMock`) → 운영 프로그램 3개(글 · 화면 번갈아 `feat-row`) → 휴대폰에서(역할 버튼 + 바뀌는 휴대폰 `#mobile-sec`) → 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개(`SITE_FAQ` 세 번째 값 true) → 시작하기 띠(`startBand`) → 아래쪽(메뉴 묶음 + 사업자 정보). 화면 하나짜리(신청 · 문의 · 질문 · 예시 계정 · 강사 채용)는 `page()` 틀. 자세한 설명 · 질문 전체 · 비용은 분야 상세(`/area/…`)와 `#faq`로.
+  - 처음 화면 순서(`homeView`): 메인 메시지(가운데 정렬 + 노트북 · 휴대폰 그림 `heroMock`) → 운영 프로그램 3개(글 · 화면 번갈아 `feat-row`) → 휴대폰에서(역할 버튼 + 역할마다 4장을 옆으로 넘기는 휴대폰 `phoneDeck` · `PHONE_PAGES`[위쪽 제목, 켜진 탭, [설명 제목, 설명], 내용], 아래 설명 · 점 · ‹ › `#mobCap`, 4초마다 다음 장 → 다음 역할, 넘기거나 누르면 저절로 넘기기 멈춤 `#mobile-sec`) → 추가 서비스 3개 → 이용 사례 → 자주 묻는 질문 4개(`SITE_FAQ` 세 번째 값 true) → 시작하기 띠(`startBand`) → 아래쪽(메뉴 묶음 + 사업자 정보). 화면 하나짜리(신청 · 문의 · 질문 · 예시 계정 · 강사 채용)는 `page()` 틀. 자세한 설명 · 질문 전체 · 비용은 분야 상세(`/area/…`)와 `#faq`로.
   - 해시 화면(`VIEWS`): `#apply/분야` 추가 서비스 상담 신청(서비스 3개 + "프로그램 도입 도움"), `#done`, `#ask`, `#check`, `#faq`(질문 전체 · 비용 · 사업자 정보), `#demo`(예시 계정 고르기, `/demo/seeker` 구직 강사 포함), `#login` · `#signup`(로그인 패널 `#program`을 보여 주고 소개는 숨김, `#signup/teacher`는 강사로 골라 두고 가입 뒤 `/app#jobs`). 그 밖의 해시(`#program-sec` 등)는 처음 화면의 그 자리로.
   - 강사로 일하고 싶은 분: `/jobs`(빌드가 `dist/jobs.html`, `vercel.json` rewrite). `public_job_board()`(가입 안 해도 됨)로 공고 · 가입한 학원, 공고가 없으면 예시 공고(`JOB_SAMPLES`)에 "예시" 표시. 상세는 `/jobs#job/공고`.
   - (예전) 분야 상세 흐름: `/area/admin` 분야 상세 → 프로그램이면 가입, 서비스면 `#apply/분야` → `#done` 접수 완료. 분야 내용은 `assets/areas.js`
