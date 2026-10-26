@@ -1337,6 +1337,141 @@ async function openLib(id, download) {
   if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
 }
 
+/* ================= 메신저 (Supabase conversations · messages) =================
+   1:1 대화. 누구와 대화할 수 있는지는 DB(private.message_academy)가 정해요:
+   원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 가족만).
+   새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
+const MSG = { convs: [], contacts: null, msgs: {}, loaded: false };
+const WHO = { admin: '센터 관리자', owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
+const DEMO_CONVS = [
+  { id: 'dc1', other_name: '김민지', other_role: 'teacher', last_at: '2026-10-25T08:10:00Z', last_text: '내일 보강 수업 강의실 2번 써도 될까요?', unread: 1, can_send: true },
+  { id: 'dc2', other_name: '김은정', other_role: 'parent', last_at: '2026-10-24T11:00:00Z', last_text: '서연이 다음 주 화요일 결석해요.', unread: 0, can_send: true },
+  { id: 'dc3', other_name: '학원지원센터', other_role: 'admin', last_at: '2026-10-22T02:00:00Z', last_text: '제휴 연결이 완료됐어요.', unread: 0, can_send: true }
+];
+const convsData = () => USER ? MSG.convs : DEMO_CONVS;
+const msgUnread = () => sum(convsData(), c => Number(c.unread) || 0);
+const msgTime = s => { const d = new Date(s); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const msgWhen = s => { const d = ymd(new Date(s)); return d === TODAY ? msgTime(s) : md(d); };
+
+function messagesPage() {
+  const list = convsData();
+  const add = `<button class="btn primary" data-act="newChat">${ic('plus')}새 대화</button>`;
+  const can = { owner: '센터 관리자 · 강사 · 학부모 · 학생', teacher: '원장님 · 다른 강사 · 학부모 · 학생', parent: '원장님 · 선생님 · 우리 아이', student: '원장님 · 선생님 · 부모님', admin: '원장님' }[ROLE] || '';
+  return head('메신저', `${can}과 1:1로 이야기할 수 있어요.`, add) + (list.length ? `
+  <section class="card"><div class="list">${list.map(c => `
+    <a class="li link conv" href="#messages/${c.id}">
+      <span class="av" style="background:${c.other_role === 'admin' ? 'var(--navy-700)' : c.other_role === 'teacher' ? 'var(--good)' : c.other_role === 'owner' ? 'var(--blue-600)' : 'var(--warn)'}">${esc((c.other_name || '?')[0])}</span>
+      <div><div class="t">${esc(c.other_name)} <span class="muted small">${WHO[c.other_role] || ''}${c.academy_name && c.other_role === 'owner' && ROLE === 'admin' ? ` · ${esc(c.academy_name)}` : ''}</span></div><div class="d">${esc(c.last_text || '아직 메시지가 없어요')}</div></div>
+      <div class="r">${c.last_at ? `<span class="time">${msgWhen(c.last_at)}</span>` : ''}${+c.unread ? `<span class="count-dot">${c.unread}</span>` : ''}</div>
+    </a>`).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('chat')}</span><h2>아직 대화가 없어요</h2><p class="muted">"새 대화"를 눌러 이야기할 사람을 골라 주세요.</p>${add}</section>`);
+}
+
+function chatPage(id) {
+  const c = convsData().find(x => x.id === id);
+  if (!c) return notFound();
+  if (USER && !(id in MSG.msgs)) loadMessages(id);
+  const msgs = USER ? MSG.msgs[id] : [{ sender_id: 'o', body: c.last_text, created_at: c.last_at }];
+  return `
+  <section class="card chat">
+    <div class="chat-head"><span class="av" style="background:var(--blue-600)">${esc(c.other_name[0])}</span><div><b>${esc(c.other_name)}</b><span class="muted small">${WHO[c.other_role] || ''}${c.academy_name ? ` · ${esc(c.academy_name)}` : ''}</span></div></div>
+    <div class="chat-log" id="chatLog">${chatLog(msgs)}</div>
+    ${c.can_send === false ? '<p class="muted small chat-off">학원을 나갔거나 연결이 끊겨서 더 이상 메시지를 보낼 수 없어요.</p>' : `
+    <form class="chat-send" id="chatSend" novalidate><textarea name="body" rows="1" maxlength="2000" placeholder="메시지 입력 (Enter 보내기 · Shift+Enter 줄 바꿈)"></textarea><button class="btn primary">보내기</button></form>`}
+  </section>`;
+}
+function chatLog(msgs) {
+  if (msgs == null) return '<p class="muted small" style="text-align:center">불러오는 중…</p>';
+  if (!msgs.length) return '<p class="muted small" style="text-align:center">첫 메시지를 보내 보세요.</p>';
+  let day = '';
+  return msgs.map(m => {
+    const d = ymd(new Date(m.created_at)), sep = d !== day ? `<div class="chat-day">${d === TODAY ? '오늘' : `${+d.slice(5, 7)}월 ${+d.slice(8)}일`}</div>` : '';
+    day = d;
+    return `${sep}<div class="bubble ${USER && m.sender_id === USER.id ? 'mine' : ''}"><p>${esc(m.body)}</p><time>${msgTime(m.created_at)}</time></div>`;
+  }).join('');
+}
+
+function newChatDialog() {
+  if (!USER) { toast('예시 계정에서는 대화를 시작할 수 없어요'); return; }
+  const d = dialogEl();
+  const draw = () => {
+    const q = ($('#ctQ') || { value: '' }).value.trim();
+    const list = (MSG.contacts || []).filter(x => !q || x.name.includes(q) || (x.kids || '').includes(q));
+    const groups = ['admin', 'owner', 'teacher', 'parent', 'student'].map(r => [r, list.filter(x => x.role === r)]).filter(([, l]) => l.length);
+    $('#ctList').innerHTML = MSG.contacts === null ? '<p class="muted small">불러오는 중…</p>' : groups.length ? groups.map(([r, l]) => `
+      <h3 class="ct-h">${WHO[r]} ${l.length}</h3>${l.map(x => `<button type="button" class="ct" data-ct="${x.user_id}"><span class="av">${esc(x.name[0])}</span><span><b>${esc(x.name)}</b><small>${x.kids ? `${esc(x.kids)} ${r === 'parent' ? '학부모' : ''}` : esc(x.academy_name || '')}</small></span></button>`).join('')}`).join('')
+      : '<p class="muted small">대화할 수 있는 사람이 없어요. 학원에 합류한 사람만 보여요.</p>';
+    $('#ctList').querySelectorAll('[data-ct]').forEach(b => b.onclick = async () => {
+      const { data, error } = await SB.rpc('start_conversation', { p_other: b.dataset.ct });
+      if (error) { toast('대화를 시작할 수 없는 사람이에요'); return; }
+      d.close(); await loadConvs(); location.hash = `#messages/${data}`;
+    });
+  };
+  d.innerHTML = `<div class="dlg"><h2>새 대화</h2><input id="ctQ" class="ct-q" placeholder="이름 · 아이 이름으로 찾기"><div class="ct-list" id="ctList"></div>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close(); $('#ctQ').oninput = draw; draw();
+  if (MSG.contacts === null) SB.rpc('message_contacts').then(({ data }) => { MSG.contacts = data || []; if (d.open) draw(); });
+}
+
+async function loadConvs() {
+  const { data } = await SB.rpc('my_conversations');
+  MSG.convs = data || []; MSG.loaded = true;
+}
+async function loadMessages(id, since) {
+  let q = SB.from('messages').select('id, sender_id, body, created_at').eq('conversation_id', id).order('created_at').limit(500);
+  if (since) q = q.gt('created_at', since);
+  const { data } = await q;
+  const before = MSG.msgs[id];
+  MSG.msgs[id] = since ? [...(before || []), ...(data || []).filter(m => !(before || []).some(x => x.id === m.id))] : (data || []);
+  const c = MSG.convs.find(x => x.id === id);
+  if (c && +c.unread) { c.unread = 0; SB.rpc('mark_conversation_read', { p_conv: id }); }
+  else if (!since) SB.rpc('mark_conversation_read', { p_conv: id });
+  const grew = !before || MSG.msgs[id].length !== before.length;
+  if (grew) drawChatLog(id);
+  return grew;
+}
+// 대화창만 다시 그려요 (쓰고 있던 글은 그대로)
+function drawChatLog(id) {
+  const log = $('#chatLog');
+  if (!log || location.hash !== `#messages/${id}`) return;
+  const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+  log.innerHTML = chatLog(MSG.msgs[id]);
+  if (atEnd || log.dataset.first !== '1') { log.scrollTop = log.scrollHeight; log.dataset.first = '1'; }
+  updateMsgBadge();
+}
+async function sendMessage(id, body) {
+  const { data, error } = await SB.from('messages').insert({ conversation_id: id, body }).select('id, sender_id, body, created_at').single();
+  if (error) { toast('보내지 못했어요. 잠시 후 다시 시도해 주세요.'); return false; }
+  MSG.msgs[id] = [...(MSG.msgs[id] || []), data];
+  const c = MSG.convs.find(x => x.id === id);
+  if (c) { c.last_text = body.slice(0, 100); c.last_at = data.created_at; }
+  drawChatLog(id);
+  const log = $('#chatLog'); if (log) log.scrollTop = log.scrollHeight;
+  return true;
+}
+const updateMsgBadge = () => {
+  const a = document.querySelector('#nav a[href="#messages"]');
+  if (!a) return;
+  let b = a.querySelector('.badge'); const n = msgUnread();
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'badge'; a.appendChild(b); }
+  b.textContent = n > 99 ? '99+' : n;
+};
+let msgTick = 0;
+setInterval(async () => {
+  if (!USER || !SB || !MY) return;
+  msgTick++;
+  const m = (location.hash || '').match(/^#messages\/([0-9a-f-]{36})$/);
+  if (m && document.visibilityState === 'visible') {
+    const list = MSG.msgs[m[1]];
+    await loadMessages(m[1], list && list.length ? list[list.length - 1].created_at : undefined);
+  }
+  if (msgTick % 4 === 0) {
+    const before = msgUnread(); await loadConvs();
+    if (location.hash === '#messages' && msgUnread() !== before) render(); else updateMsgBadge();
+  }
+}, 5000);
+
 /* ================= 결재: 강사 → 원장 (Supabase approvals) =================
    강사가 물품 · 재정 지출을 올리면 원장이 승인 · 반려. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요. */
 const APV_KINDS = ['물품 구입', '재정 지출', '기타'];
@@ -2724,6 +2859,8 @@ function attendStat() {
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
+const MESSAGES_AREA = { name: '메신저', icon: 'chat', desc: '원장 · 강사 · 학부모 · 학생 1:1 대화', stat: () => { const n = msgUnread(); return n ? `안 읽은 메시지 ${n}개` : `대화 ${convsData().length}개`; },
+  render: messagesPage, detail: chatPage, title: id => (convsData().find(c => c.id === id) || {}).other_name };
 const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
 const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
@@ -2758,6 +2895,7 @@ const AREAS = {
         notices: { name: '학부모 공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
+    messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     library: LIBRARY_AREA,
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
@@ -2776,6 +2914,7 @@ const AREAS = {
   },
   teacher: {
     attend: { name: '출결 입력', icon: 'attend', desc: '수업 중에 우리 반 출석 체크', stat: attendStat, render: attendPage },
+    messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
     reports: REPORT_AREA,
@@ -2796,10 +2935,11 @@ const AREAS = {
       } },
     schedule: SCHEDULE_AREA,
     news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
+    messages: MESSAGES_AREA,
     library: LIBRARY_AREA,
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
-  student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
+  student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, messages: MESSAGES_AREA, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
 };
 AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보를 인투마케팅에 의뢰' };
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done').length : DATA.promoRequests.length;
@@ -2818,6 +2958,7 @@ const FAMILY_AREAS = {
       } },
     schedule: SCHEDULE_AREA,
     news: newsArea,
+    messages: MESSAGES_AREA,
     library: LIBRARY_AREA,
     abroad: AREAS.parent.abroad
   },
@@ -2827,6 +2968,7 @@ const FAMILY_AREAS = {
     reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' },
     attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
     news: newsArea,
+    messages: MESSAGES_AREA,
     library: LIBRARY_AREA
   }
 };
@@ -2996,13 +3138,14 @@ function renderChrome(area) {
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
   // 숫자 배지는 아직 예시 데이터라 실제 로그인에서는 숨겨요
-  const badge = REAL ? {} : {
+  const badge = REAL || USER ? { messages: msgUnread() } : {
     members: DATA.leads.filter(l => l.urgent).length,
-    learn: DATA.training.filter(t => t.status[ME.name] !== 'done').length
+    learn: DATA.training.filter(t => t.status[ME.name] !== 'done').length,
+    messages: msgUnread()
   };
   const items = [...(SEEKER ? [] : [['home', '홈', 'home']]), ...Object.entries(MY).map(([id, a]) => [id, a.name, a.icon])];
   $('#nav').innerHTML = items.map(([id, label, icon]) => `
-    <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && ROLE !== 'parent' ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
+    <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : ''}</a>`).join('');
   $('#me').innerHTML = `<span class="av" style="background:${ME.color}">${ME.av}</span><div><b>${ME.name}</b><span>${ME.label}</span></div><a href="index.html" id="logout">로그아웃</a>`;
   $('#logout').onclick = async e => {
     if (!PROFILE || !SB) return;
@@ -3023,8 +3166,8 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}" data-up>${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav></div>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'library', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'library', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center']
+    owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center'],
+    teacher: ['home', 'attend', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -3199,6 +3342,17 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 메신저
+  on('[data-act="newChat"]', newChatDialog);
+  const chatForm = $('#chatSend');
+  if (chatForm) {
+    const id = location.hash.split('/')[1], ta = chatForm.elements.body;
+    const go = async () => { const t = ta.value.trim(); if (!t) return; ta.disabled = true; const ok = await sendMessage(id, t); ta.disabled = false; if (ok) ta.value = ''; ta.focus(); };
+    chatForm.onsubmit = e => { e.preventDefault(); if (USER) go(); else toast('예시 계정에서는 보낼 수 없어요'); };
+    ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatForm.requestSubmit(); } };
+    ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(140, ta.scrollHeight)}px`; };
+    const log = $('#chatLog'); if (log) log.scrollTop = log.scrollHeight;
+  }
   // 자료실
   on('[data-act="addLib"]', () => libDialog(null));
   on('[data-edit-lib]', b => libDialog(REAL.library.find(x => x.id === b.dataset.editLib)));
@@ -3689,6 +3843,7 @@ async function boot() {
     ]);
     PROFILE = p || {};
     if (admin) await loadCenter();
+    await loadConvs();
     if (location.hash === '#apply-admin') { if (admin) history.replaceState(null, '', 'app.html#center/admins'); else { adminApplyScreen(user); return; } }
     if (!PROFILE.role && !CENTER) { rolePicker(user); return; }
 
@@ -3703,7 +3858,7 @@ async function boot() {
       }
       if (!CENTER) { onboarding(user); return; }
       // 학원 없이 센터 관리만 하는 관리자
-      ROLE = 'admin'; MY = { center: CENTER_AREA };
+      ROLE = 'admin'; MY = { center: CENTER_AREA, messages: MESSAGES_AREA };
       const nm = esc(PROFILE.name || user.user_metadata?.full_name || PROFILE.username || (user.email || '관리자').split('@')[0]);
       ME = { name: nm, av: nm[0], label: '센터 관리자', color: 'var(--navy-700)' };
       DATA.today = todayText();
