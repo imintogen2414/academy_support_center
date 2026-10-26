@@ -197,63 +197,7 @@ const PARTNERS = {
     flow: [['megaphone', '프로그램에서 의뢰', '필요한 서비스를 골라 내용을 적어요'], ['users', '인투마케팅 연결', '센터가 담당자를 연결하고 학원 정보를 전달'], ['image', '시안 확인', '시안을 보고 고칠 점을 전달해요'], ['check', '게시 · 리포트', '진행 상황은 "내 의뢰"에서 확인']] }
 };
 
-// 상세페이지 맨 위 그림 (분야 색 --ac로 칠해요)
-const HERO_ART = {
-  admin: `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <rect x="30" y="24" width="170" height="150" rx="16" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
-    <rect x="46" y="42" width="70" height="10" rx="5" fill="rgba(255,255,255,.6)"/>
-    ${[0, 1, 2, 3].map(i => `<g transform="translate(46 ${66 + i * 24})"><rect width="138" height="16" rx="8" fill="rgba(255,255,255,.08)"/><circle cx="10" cy="8" r="5" fill="${i === 2 ? '#ffb4ab' : 'var(--ac)'}"/><rect x="22" y="5" width="${60 + i * 8}" height="6" rx="3" fill="rgba(255,255,255,.5)"/></g>`).join('')}
-    <rect x="180" y="64" width="112" height="72" rx="14" fill="#fff"/>
-    <rect x="194" y="78" width="40" height="8" rx="4" fill="#c9cdf8"/>
-    <rect x="194" y="94" width="76" height="14" rx="5" fill="var(--ac)"/>
-    <rect x="194" y="116" width="54" height="6" rx="3" fill="#dfe3ff"/>
-    <circle cx="262" cy="150" r="22" fill="var(--ac)"/><path d="M252 150l7 7 13-14" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`,
-  teachers: `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <rect x="24" y="30" width="190" height="120" rx="16" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
-    <circle cx="119" cy="90" r="26" fill="var(--ac)"/><path d="M112 77l20 13-20 13z" fill="#fff"/>
-    <rect x="40" y="134" width="158" height="5" rx="2.5" fill="rgba(255,255,255,.2)"/><rect x="40" y="134" width="96" height="5" rx="2.5" fill="var(--ac)"/>
-    <rect x="176" y="96" width="122" height="84" rx="14" fill="#fff"/>
-    <rect x="190" y="110" width="52" height="8" rx="4" fill="#c9cdf8"/>
-    ${[0, 1, 2].map(i => `<rect x="190" y="${128 + i * 13}" width="${92 - i * 18}" height="6" rx="3" fill="#dfe3ff"/>`).join('')}
-    <path d="M268 30l24 24-34 34h-24V64z" fill="var(--ac)" opacity=".9"/><path d="M236 86l8-2" stroke="#fff" stroke-width="3"/>
-  </svg>`,
-  members: `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <rect x="40" y="16" width="96" height="172" rx="20" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.3)"/>
-    <rect x="56" y="40" width="64" height="44" rx="10" fill="var(--ac)"/><rect x="64" y="52" width="40" height="6" rx="3" fill="#fff"/><rect x="64" y="64" width="28" height="6" rx="3" fill="rgba(255,255,255,.7)"/>
-    ${[0, 1, 2].map(i => `<rect x="56" y="${96 + i * 22}" width="64" height="14" rx="7" fill="rgba(255,255,255,.14)"/>`).join('')}
-    <rect x="156" y="44" width="140" height="60" rx="16" fill="#fff"/>
-    <circle cx="180" cy="74" r="12" fill="var(--ac)"/><rect x="200" y="62" width="70" height="8" rx="4" fill="#c9cdf8"/><rect x="200" y="78" width="50" height="6" rx="3" fill="#dfe3ff"/>
-    <rect x="176" y="118" width="120" height="50" rx="14" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.25)"/>
-    <path d="M192 143l8 8 16-16" stroke="var(--ac)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="226" y="138" width="54" height="8" rx="4" fill="rgba(255,255,255,.55)"/>
-  </svg>`,
-  mou: `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <circle cx="150" cy="108" r="74" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.28)"/>
-    <ellipse cx="150" cy="108" rx="30" ry="74" fill="none" stroke="rgba(255,255,255,.22)"/>
-    <path d="M76 108h148M86 72h128M86 144h128" stroke="rgba(255,255,255,.22)"/>
-    <path d="M60 160C110 40 230 40 278 70" stroke="var(--ac)" stroke-width="3" fill="none" stroke-dasharray="2 9" stroke-linecap="round"/>
-    <g transform="translate(262 58) rotate(28)"><path d="M0 0l22 8-22 8 4-8z" fill="#fff"/></g>
-    <circle cx="60" cy="160" r="9" fill="var(--ac)"/><circle cx="60" cy="160" r="3.5" fill="#fff"/>
-    <rect x="196" y="128" width="104" height="54" rx="14" fill="#fff"/><rect x="210" y="142" width="48" height="8" rx="4" fill="#9fe4f2"/><rect x="210" y="158" width="70" height="6" rx="3" fill="#dfe3ff"/>
-  </svg>`,
-  promo: `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <rect x="24" y="28" width="120" height="150" rx="14" fill="#fff"/>
-    <rect x="36" y="40" width="96" height="62" rx="8" fill="var(--ac)"/><circle cx="62" cy="64" r="10" fill="rgba(255,255,255,.7)"/><path d="M36 102l34-26 22 16 14-10 26 20z" fill="rgba(255,255,255,.45)"/>
-    <rect x="36" y="114" width="80" height="8" rx="4" fill="#c9cdf8"/>${[0, 1, 2].map(i => `<rect x="36" y="${130 + i * 12}" width="${92 - i * 16}" height="6" rx="3" fill="#dfe3ff"/>`).join('')}
-    <rect x="160" y="40" width="136" height="80" rx="14" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
-    ${[0, 1, 2, 3, 4].map(i => `<rect x="${176 + i * 22}" y="${100 - [18, 30, 24, 44, 52][i]}" width="12" height="${[18, 30, 24, 44, 52][i]}" rx="3" fill="${i > 2 ? 'var(--ac)' : 'rgba(255,255,255,.4)'}"/>`).join('')}
-    <path d="M178 150l60-24v64l-60-24z" fill="var(--ac)"/><rect x="164" y="140" width="16" height="20" rx="4" fill="#fff"/><path d="M252 140c8 4 8 16 0 20M262 132c14 8 14 28 0 36" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
-  </svg>`
-};
-
-HERO_ART.hire = `<svg viewBox="0 0 320 200" aria-hidden="true">
-    <rect x="24" y="26" width="170" height="150" rx="16" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.25)"/>
-    ${[0, 1, 2].map(i => `<g transform="translate(40 ${44 + i * 42})"><rect width="138" height="32" rx="10" fill="rgba(255,255,255,${i === 1 ? '.22' : '.08'})"/><circle cx="16" cy="16" r="9" fill="${i === 1 ? 'var(--ac)' : 'rgba(255,255,255,.45)'}"/><rect x="32" y="9" width="${70 - i * 10}" height="6" rx="3" fill="rgba(255,255,255,.6)"/><rect x="32" y="19" width="48" height="5" rx="2.5" fill="rgba(255,255,255,.3)"/></g>`).join('')}
-    <rect x="170" y="70" width="128" height="96" rx="14" fill="#fff"/>
-    <circle cx="200" cy="100" r="14" fill="var(--ac)"/><rect x="222" y="92" width="58" height="7" rx="3.5" fill="#c9cdf8"/><rect x="222" y="104" width="40" height="6" rx="3" fill="#dfe3ff"/>
-    <rect x="186" y="128" width="96" height="24" rx="12" fill="var(--ac)"/><path d="M226 140l5 5 10-10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-SITE_AREAS.forEach(a => Object.assign(a, AREA_LOOK[a.id], { partner: PARTNERS[a.id] || null, art: HERO_ART[a.id] }));
+SITE_AREAS.forEach(a => Object.assign(a, AREA_LOOK[a.id], { partner: PARTNERS[a.id] || null }));
 
 /* ---------- 첫 화면: 비용 · 이용 사례 · 자주 묻는 질문 · 운영 정보 ---------- */
 // [이름, 비용, 설명] — 각 상세 페이지 아래 "비용 안내"
