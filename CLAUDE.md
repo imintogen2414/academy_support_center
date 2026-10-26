@@ -40,8 +40,8 @@
   - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
   - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
   - 채용: `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
-  - 제휴: `partner_applications`(원장 신청·확인 전 취소, 관리자가 new→contacted→connected→closed 처리). 제휴처 목록 자체는 `data.js`의 `partners`.
-  - 유학: `abroad_promos`(원장이 학부모에게 안내), `abroad_requests`(학부모·학생 신청 → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
+  - 제휴: `partner_applications`(원장 · 강사 신청, 신청한 사람은 트리거. 강사가 올리면 `owner_review` → 원장이 `decide_partner_request(신청, 승인?, 의견)`으로 승인하면 new, 반려하면 closed. 관리자는 owner_review를 못 보고 new→contacted→connected→closed 처리). 강사 메뉴 `#mou`(제휴처 · 유학 안내 · 내 제휴 신청). 제휴처 목록 자체는 `data.js`의 `partners`.
+  - 유학: `abroad_promos`(원장이 학부모에게 안내, 강사도 봐요), `abroad_requests`(학부모·학생 신청 · 강사가 학부모 대신 신청하면 `via_name`·`via_role` → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
   - 학부모·학생 앱: `student_links`(원생 ↔ 학부모·학생 계정, 원장이 `link_family(원생, 사람, 켬/끔)`으로 연결, 대상은 `list_family_members(학원)`). 학부모·학생은 `my_children()`, 학부모만 `my_child_invoices()`(원장 메모 뺌), 출결은 연결된 아이 것만 바로 읽기.
   - 학부모 공지: `notices`(원장 쓰기, `target_class`가 비면 전체·있으면 그 반 아이와 연결된 가족만), `notice_reads`(읽음은 `mark_notice_read(공지)`로만). 원장은 `notice_report(학원)` 읽음 수, `notice_readers(공지)` 읽은·안 읽은 사람.
   - 홍보 의뢰: `promo_requests`(원장·강사 의뢰, 의뢰한 사람 `requested_by`·이름·역할은 트리거가 채움. 원장은 우리 학원 것 전부, 강사는 내 것만. 접수 단계에서 취소, 관리자가 new→contacted→working→review→done + `admin_memo`).
