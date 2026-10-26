@@ -1,6 +1,6 @@
 // 엑셀(.xlsx) · CSV 읽기와 양식(.xlsx) 만들기 — 바깥 라이브러리 없이 브라우저 기능만 써요.
 // readSheet(file) → 첫 번째 시트의 행 목록 [[칸, 칸, …], …] (칸은 모두 글자, 날짜는 YYYY-MM-DD)
-// downloadXlsx(파일 이름, 행 목록) → 양식 파일 내려받기
+// downloadXlsx(파일 이름, 행 목록, 칸 너비, 옵션) → 보기 좋게 꾸민 .xlsx 내려받기
 
 /* ---------- 읽기 ---------- */
 async function readSheet(file) {
@@ -144,19 +144,87 @@ function zipStore(entries) {
   e.setUint32(0, 0x06054b50, true); e.setUint16(8, entries.length, true); e.setUint16(10, entries.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
   return new Blob([...parts, ...dir, new Uint8Array(e.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
-function downloadXlsx(filename, rows, widths = []) {
+/* 보기 좋게 꾸민 엑셀: 맨 위 제목(크게) · 머리줄(남색 바탕 흰 글씨) · 칸마다 테두리 · 한 줄 건너 옅은 색 · 금액은 숫자로(1,000 쉼표)
+   · 합계 줄 굵게 · "*" 안내 줄은 회색 · 머리줄 아래 틀 고정 + 거르기 · 칸 너비 저절로 · 인쇄는 한 쪽 너비에 맞춤.
+   머리줄 = 칸이 두 개 이상 찬 첫 줄. 그 위 한 칸짜리 줄은 제목(첫 줄) · 부제목.
+   opts.required: 꼭 채울 칸(머리줄 진한 파랑), opts.example: "예시)"로 시작하는 줄은 기울여 회색,
+   opts.guide: [[칸, 설명], …] → 두 번째 시트 "작성 안내" (올리기는 첫 시트만 읽어요), opts.sheet: 시트 이름. */
+function downloadXlsx(filename, rows, widths = [], opts = {}) {
   const x = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const colName = i => { let s = ''; i++; while (i) { s = String.fromCharCode(65 + (i - 1) % 26) + s; i = Math.floor((i - 1) / 26); } return s; };
-  const body = rows.map((r, ri) => `<row r="${ri + 1}">${r.map((v, ci) => `<c r="${colName(ci)}${ri + 1}" t="inlineStr"${ri === 0 ? ' s="1"' : ''}><is><t xml:space="preserve">${x(v)}</t></is></c>`).join('')}</row>`).join('');
-  const cols = widths.length ? `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '';
   const NS = 'http://schemas.openxmlformats.org';
+  // 서식 번호: 0 기본 · 1 제목 · 2 부제목 · 3 머리줄 · 4 칸 · 5 칸(옅은 줄) · 6 금액 · 7 금액(옅은 줄) · 8 합계 글 · 9 합계 금액 · 10 안내 · 11 예시 · 12 꼭 채울 머리줄 · 13 숫자 · 14 숫자(옅은 줄) · 15 가운데 칸 · 16 가운데 칸(옅은 줄)
+  const S = { title: 1, sub: 2, head: 3, cell: 4, cellAlt: 5, money: 6, moneyAlt: 7, sumText: 8, sumMoney: 9, note: 10, example: 11, headReq: 12, num: 13, numAlt: 14, mid: 15, midAlt: 16 };
+  const sheetXml = (rws, wds, o = {}) => {
+    const filled = r => (r || []).filter(v => String(v ?? '').trim() !== '').length;
+    let hi = rws.findIndex(r => filled(r) >= 2); if (hi < 0) hi = 0;
+    const head = rws[hi] || [], ncol = Math.max(1, ...rws.map(r => (r || []).length));
+    const moneyCol = head.map(h => /원\)|원$|금액|합계|세\b|세\(|세액|소득세|지급|수입|지출|매출|이익|수강료|교재비/.test(String(h)) && !/일$|날|번호|연락|전화/.test(String(h)));
+    const numCol = head.map(h => !/번호|연락|전화|코드|학년|날짜|일자|등록일|지급일|^\d+$/.test(String(h)));
+    const midCol = head.map(h => /^\d+$/.test(String(h).trim())); // 출석부 날짜 칸처럼 짧은 칸은 가운데
+    const isNum = v => /^-?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d*)$/.test(String(v).trim());
+    let end = rws.findIndex((r, i) => i > hi && !(r || []).length); if (end < 0) end = rws.length;
+    const out = [];
+    rws.forEach((r, ri) => {
+      r = r || [];
+      const first = String(r[0] ?? '');
+      let kind = 'body';
+      if (ri < hi) kind = ri === 0 ? 'title' : 'sub';
+      else if (ri === hi) kind = 'head';
+      else if (filled(r) === 1 && first.startsWith('*')) kind = 'note';
+      else if (r.some(v => /^(합계|순이익|매출 합계|지출 합계)$/.test(String(v).trim()))) kind = 'sum';
+      else if (o.example && first.startsWith('예시)')) kind = 'example';
+      const alt = kind === 'body' && ri > hi && (ri - hi) % 2 === 0;
+      const cells = [];
+      const len = r.length && ['body', 'sum', 'example', 'head'].includes(kind) ? Math.max(r.length, head.length) : r.length; // [] 줄은 빈 칸(테두리 없음)
+      for (let ci = 0; ci < len; ci++) {
+        const v = r[ci] ?? '', ref = `${colName(ci)}${ri + 1}`;
+        let st = 0;
+        if (kind === 'title') st = S.title; else if (kind === 'sub') st = S.sub; else if (kind === 'note') st = S.note;
+        else if (kind === 'head') st = (o.required || []).includes(ci) ? S.headReq : S.head;
+        else if (kind === 'example') st = S.example;
+        const asNum = (kind === 'body' || kind === 'sum') && ri > hi && numCol[ci] && isNum(v);
+        if (kind === 'body') st = asNum ? (moneyCol[ci] ? (alt ? S.moneyAlt : S.money) : (alt ? S.numAlt : S.num)) : midCol[ci] ? (alt ? S.midAlt : S.mid) : (alt ? S.cellAlt : S.cell);
+        if (kind === 'sum') st = asNum ? S.sumMoney : S.sumText;
+        if (asNum) cells.push(`<c r="${ref}" s="${st}"><v>${String(v).replace(/,/g, '')}</v></c>`);
+        else if (String(v) === '' && !st) continue;
+        else cells.push(`<c r="${ref}" t="inlineStr"${st ? ` s="${st}"` : ''}><is><t xml:space="preserve">${x(v)}</t></is></c>`);
+      }
+      const ht = kind === 'title' ? ' ht="30" customHeight="1"' : kind === 'head' ? ' ht="24" customHeight="1"' : '';
+      out.push(`<row r="${ri + 1}"${ht}>${cells.join('')}</row>`);
+    });
+    // 칸 너비: 정해 준 값이 없으면 글자 길이로 (한글은 두 칸)
+    const wlen = v => [...String(v ?? '')].reduce((a, c) => a + (c.charCodeAt(0) > 255 ? 2 : 1), 0);
+    const auto = [...Array(ncol)].map((_, ci) => Math.min(40, Math.max(8, ...rws.slice(hi).map(r => wlen((r || [])[ci]) + 2))));
+    const cw = auto.map((w, i) => wds[i] ? Math.max(wds[i], Math.min(w, wds[i] * 1.6)) : w);
+    const cols = `<cols>${cw.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.round(w * 1.15 * 10) / 10}" customWidth="1"/>`).join('')}</cols>`;
+    const merges = rws.slice(0, hi).map((r, i) => filled(r) === 1 && ncol > 1 ? `<mergeCell ref="A${i + 1}:${colName(ncol - 1)}${i + 1}"/>` : '').filter(Boolean);
+    rws.forEach((r, i) => { if (i > hi && filled(r) === 1 && String((r || [])[0] ?? '').startsWith('*') && ncol > 1) merges.push(`<mergeCell ref="A${i + 1}:${colName(ncol - 1)}${i + 1}"/>`); });
+    const pane = `<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="${hi + 1}" topLeftCell="A${hi + 2}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
+    const filter = end - hi > 2 && head.length > 1 ? `<autoFilter ref="A${hi + 1}:${colName(head.length - 1)}${end}"/>` : '';
+    return { filter: filter ? `$A$${hi + 1}:$${colName(head.length - 1)}$${end}` : '', xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>${pane}<sheetFormatPr defaultRowHeight="18"/>${cols}<sheetData>${out.join('')}</sheetData>${filter}${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${ncol > 7 ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/></worksheet>` };
+  };
+  // opts.blank: 양식 아래 바로 적을 수 있게 테두리만 있는 빈 줄
+  const body = opts.blank ? [...rows, ...[...Array(opts.blank)].map(() => (rows[0] || []).map(() => ''))] : rows;
+  const sheets = [[opts.sheet || '양식', sheetXml(body, widths, opts)]];
+  if (opts.guide) sheets.push(['작성 안내', sheetXml([['작성 안내'], ['첫 번째 시트에 채워서 그대로 올려 주세요. 칸 이름(첫 줄)은 바꾸지 마세요.'], [], ['칸', '꼭 채우기', '이렇게 적어요'], ...opts.guide], [16, 10, 60])]);
+  const font = (o = '') => `<font>${o}<sz val="${/sz/.test(o) ? '' : '11'}"/><name val="맑은 고딕"/></font>`.replace('<sz val=""/>', '');
+  const fonts = [font(), font('<b/><sz val="16"/><color rgb="FF1B2470"/>'), font('<sz val="10"/><color rgb="FF6B7280"/>'), font('<b/><color rgb="FFFFFFFF"/>'), font('<b/>'), font('<i/><sz val="10"/><color rgb="FF6B7280"/>'), font('<i/><color rgb="FF8A93A6"/>')];
+  const fill = rgb => `<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`;
+  const fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>', fill('FF2A3496'), fill('FFF3F5FC'), fill('FFE3E8FB'), fill('FF101876')];
+  const borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>', `<border>${['left', 'right', 'top', 'bottom'].map(k => `<${k} style="thin"><color rgb="FFD5DAE8"/></${k}>`).join('')}<diagonal/></border>`, `<border>${['left', 'right'].map(k => `<${k} style="thin"><color rgb="FFD5DAE8"/></${k}>`).join('')}<top style="medium"><color rgb="FF2A3496"/></top><bottom style="thin"><color rgb="FFD5DAE8"/></bottom><diagonal/></border>`];
+  const xf = (f, fi, b, n, al = '') => `<xf numFmtId="${n}" fontId="${f}" fillId="${fi}" borderId="${b}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"${al}/></xf>`;
+  const xfs = [xf(0, 0, 0, 0), xf(1, 0, 0, 0), xf(2, 0, 0, 0), xf(3, 2, 1, 0, ' horizontal="center" wrapText="1"'), xf(0, 0, 1, 0), xf(0, 3, 1, 0), xf(0, 0, 1, 164), xf(0, 3, 1, 164), xf(4, 4, 2, 0), xf(4, 4, 2, 164), xf(5, 0, 0, 0, ' wrapText="1"'), xf(6, 0, 1, 0), xf(3, 5, 1, 0, ' horizontal="center" wrapText="1"'), xf(0, 0, 1, 3), xf(0, 3, 1, 3), xf(0, 0, 1, 0, ' horizontal="center"'), xf(0, 3, 1, 0, ' horizontal="center"')];
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts><fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const names = sheets.map((s, i) => s[1].filter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${x(String(s[0]).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31))}'!${s[1].filter}</definedName>` : '').filter(Boolean);
+  const sheetName = n => x(String(n).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
   const blob = zipStore([
-    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
     ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
-    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets><sheet name="양식" sheetId="1" r:id="rId1"/></sheets></workbook>`],
-    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
-    ['xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="맑은 고딕"/></font><font><b/><sz val="11"/><name val="맑은 고딕"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDE4FF"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf xfId="0"/><xf fontId="1" fillId="2" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
-    ['xl/worksheets/sheet1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`]
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${sheetName(s[0])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>${names.length ? `<definedNames>${names.join('')}</definedNames>` : ''}</workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ['xl/styles.xml', styles],
+    ...sheets.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, s[1].xml])
   ]);
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
   document.body.appendChild(a); a.click(); a.remove();
