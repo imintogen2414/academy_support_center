@@ -697,9 +697,9 @@ function realStudentsPage() {
       <div class="tr sv">
         <span><b>${esc(s.name)}</b> <span class="muted small">${esc(s.grade || '')}</span></span>
         <span>${esc(s.class_name || '-')}</span>
-        <span>${esc(s.parent_name || '-')} <span class="muted small">${esc(s.parent_phone || '')}</span></span>
+        <span>${esc(s.parent_name || '-')} <span class="muted small">${esc(s.parent_phone || '')}</span>${canEdit ? appLinked(s.id) : ''}</span>
         <span class="muted small">${esc(s.memo || '')}</span>
-        <span>${canEdit ? `<button class="btn sm" data-edit-student="${s.id}">수정</button>` : ''}</span>
+        <span class="btns">${canEdit ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button><button class="btn sm" data-edit-student="${s.id}">수정</button>` : ''}</span>
       </div>`).join('')}
   </div></section>` : `
   <section class="card empty">
@@ -708,8 +708,46 @@ function realStudentsPage() {
     <p class="muted">원생을 추가하면 여기에 모여요. 학부모님은 초대 코드로 학부모 앱에 들어올 수 있어요.</p>
     ${add}
   </section>`;
-  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.`, list.length ? add : '') + body +
+  const waiting = canEdit ? REAL.family.filter(f => !f.students.length) : [];
+  const wait = waiting.length && list.length ? `
+  <section class="card" style="margin-bottom:16px">
+    <div class="card-head"><h2>앱 연결을 기다리는 가족 ${waiting.length}명</h2></div>
+    <p class="muted small" style="margin:0">학부모·학생용 코드로 가입했지만 아직 아이와 이어지지 않았어요. 아이 줄의 "앱 연결"을 눌러 이어 주면 그 아이의 출결 · 수납 · 반 공지가 앱에 보여요.</p>
+    <div class="needs" style="margin-top:10px">${waiting.map(f => `<span class="chip warn">${esc(f.name)} · ${ROLE_NAMES[f.role]}</span>`).join('')}</div>
+  </section>` : '';
+  return head('원생 명단', `원생 ${list.length}명 · 학생과 학부모 연락처를 한곳에 모아요.${canEdit ? ' "앱 연결"로 학부모·학생 계정을 아이와 이어 주세요.' : ''}`, list.length ? add : '') + wait + body +
     (canEdit ? `<a class="hint" href="#members/invite">${ic('users')}<span>강사님·학부모님을 학원에 초대하려면 초대 코드를 보내 주세요</span><b>초대 코드 →</b></a>` : '');
+}
+
+// 원생과 이어진 학부모·학생 계정
+const linkedFamily = sid => REAL.family.filter(f => f.students.includes(sid));
+const appLinked = sid => {
+  const f = linkedFamily(sid);
+  return `<span class="d small" style="display:block;margin-top:2px;color:${f.length ? 'var(--good)' : 'var(--muted)'}">${f.length ? `앱: ${f.map(x => esc(x.name)).join(', ')}` : '앱 연결 전'}</span>`;
+};
+function linkDialog(s) {
+  const d = dialogEl(), fam = REAL.family;
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="dlgForm" novalidate>
+    <h2>${esc(s.name)} 학생 앱 연결</h2>
+    <p class="muted small" style="margin:0">학부모·학생용 초대 코드로 가입한 사람이에요. 이 아이의 가족을 골라 주세요. 연결하면 앱에서 이 아이의 출결 · 수납 · 반 공지를 볼 수 있어요. (학생 계정에는 수납이 보이지 않아요)</p>
+    ${fam.length ? `<div class="checks">${fam.map(f => {
+      const other = f.students.filter(x => x !== s.id).map(x => (REAL.students.find(y => y.id === x) || {}).name).filter(Boolean);
+      return `<label class="chk"><input type="checkbox" name="fam" value="${f.user_id}" ${f.students.includes(s.id) ? 'checked' : ''}><span><b>${esc(f.name)} · ${ROLE_NAMES[f.role]}</b><small>${md(f.joined_at.slice(0, 10))} 가입${other.length ? ` · ${other.map(esc).join(', ')}와도 연결됨` : ''}</small></span></label>`;
+    }).join('')}</div>` : `<p class="msg">아직 학부모·학생용 코드로 가입한 사람이 없어요. 초대 코드 화면의 학부모·학생용 코드를 먼저 보내 주세요.</p>`}
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">${fam.length ? '취소' : '닫기'}</button>${fam.length ? '<button class="btn primary">저장</button>' : ''}</div>
+  </form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#dlgForm').onsubmit = async e => {
+    e.preventDefault();
+    const want = new Set([...e.target.querySelectorAll('[name=fam]:checked')].map(x => x.value));
+    const changes = fam.filter(f => want.has(f.user_id) !== f.students.includes(s.id));
+    const res = await Promise.all(changes.map(f => SB.rpc('link_family', { p_student: s.id, p_user: f.user_id, p_on: want.has(f.user_id) })));
+    if (res.some(r => r.error)) { const m = $('#dlgMsg'); m.textContent = '일부를 저장하지 못했어요. 다시 시도해 주세요.'; m.hidden = false; await loadFamilyMembers(); return; }
+    d.close(); await loadFamilyMembers(); render(); toast(changes.length ? `${s.name} 학생 앱 연결을 저장했어요` : '바뀐 것이 없어요');
+  };
 }
 
 const CODE_INFO = {
@@ -739,8 +777,8 @@ function invitePage() {
 
 /* ---------- 입력 창 (원생 · 상담 등에서 함께 씀) ----------
    fields: [이름, 라벨, { type, placeholder, max, required, half, options }]
-   half: 두 칸을 한 줄에. type: text(기본) · tel · date · month · number · select · check
-   options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
+   half: 두 칸을 한 줄에. type: text(기본) · tel · date · month · number · select · check · area(여러 줄)
+   options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. blank: 고르지 않았을 때 보이는 글자. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
    academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
 function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText }) {
@@ -751,7 +789,9 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     const v = cur(k, o);
     if (o.type === 'check') return `<label class="chk-line"><input type="checkbox" name="${k}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
     const ctl = o.type === 'select'
-      ? `<select name="${k}"><option value="">선택 안 함</option>${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<option value="${esc(ov)}" ${v === ov ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
+      ? `<select name="${k}"><option value="">${o.blank || '선택 안 함'}</option>${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<option value="${esc(ov)}" ${v === ov ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
+      : o.type === 'area'
+      ? `<textarea name="${k}" rows="${o.rows || 5}" ${o.max ? `maxlength="${o.max}"` : ''} placeholder="${o.placeholder || ''}">${esc(v ?? '')}</textarea>`
       : `<input name="${k}" type="${o.type || 'text'}" value="${esc(v ?? '')}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.type === 'number' ? 'min="0" inputmode="numeric"' : ''} placeholder="${o.placeholder || ''}">`;
     return `<label class="f">${lab}${o.required ? ' *' : ''}${ctl}</label>`;
   };
@@ -826,7 +866,72 @@ function leadDialog(l) {
   });
 }
 
+/* ---------- 실제 데이터: 학부모 공지 (Supabase notices · notice_reads) ---------- */
+const noticeTo = n => n.target_class ? `${esc(n.target_class)} 가족` : '전체 학부모·학생';
+function realNoticesPage() {
+  const list = REAL.notices;
+  const add = `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`;
+  if (!list.length) return head('학부모 공지', '') + `
+  <section class="card empty">
+    <span class="tile-ic">${ic('chat')}</span>
+    <h2>아직 보낸 공지가 없어요</h2>
+    <p class="muted">공지를 쓰면 학부모·학생 앱의 "학원 소식"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 가족에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
+    ${add}
+  </section>`;
+  return head('학부모 공지', '보낸 공지는 학부모·학생 앱 "학원 소식"에 올라가요. 제목을 누르면 누가 읽었는지 볼 수 있어요.', add) + `
+  <section class="card"><div class="list stack">
+    ${list.map(n => {
+      const st = REAL.noticeStats[n.id] || { total: 0, read: 0 };
+      return `
+      <a class="li link" href="#members/notices/${n.id}">
+        <span class="av" style="background:var(--blue-500)">${ic('chat')}</span>
+        <div><div class="t">${esc(n.title)}</div><div class="d">${noticeTo(n)} · ${md(n.created_at.slice(0, 10))}</div>${st.total ? bar(st.read / st.total * 100) : ''}</div>
+        <div class="r"><span class="time">읽음</span><b class="num">${st.read}/${st.total}</b></div>
+      </a>`;
+    }).join('')}
+  </div></section>` + (REAL.family.length ? '' : `<a class="hint" href="#members/invite">${ic('users')}<span>아직 앱에 가입한 가족이 없어요. 학부모·학생용 초대 코드를 먼저 보내 주세요</span><b>초대 코드 →</b></a>`);
+}
+let READERS = {}; // 공지 id → 받는 사람과 읽은 시각 (열 때 불러와요)
+function noticeDetail(id) {
+  const n = REAL.notices.find(x => x.id === id);
+  if (!n) return notFound();
+  if (!(id in READERS)) loadReaders(id);
+  const rs = READERS[id];
+  const read = rs ? rs.filter(r => r.read_at) : [], unread = rs ? rs.filter(r => !r.read_at) : [];
+  const person = r => `<div class="li"><span class="av" style="background:${r.read_at ? 'var(--good)' : 'var(--blue-100)'}">${esc(r.name[0])}</span><div class="t">${esc(r.name)} <span class="muted small">${ROLE_NAMES[r.role]}</span></div><div class="r">${r.read_at ? `<span class="time">${md(r.read_at.slice(0, 10))} ${r.read_at.slice(11, 16)}</span>` : '<span class="chip mute">안 읽음</span>'}</div></div>`;
+  return head(esc(n.title), `${noticeTo(n)} · ${md(n.created_at.slice(0, 10))} 보냄`, `<button class="btn" data-edit-notice="${n.id}">고치기</button>`) + `
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
+    <section class="card">
+      <div class="card-head"><h2>읽음 확인</h2><span class="sub">${rs ? `${read.length}/${rs.length}명` : '불러오는 중'}</span></div>
+      ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? `<p class="muted" style="margin:0">${n.target_class ? `${esc(n.target_class)} 아이와 앱으로 연결된 가족이 아직 없어요. 원생 명단에서 "앱 연결"을 해 주세요.` : '아직 앱에 가입한 가족이 없어요.'}</p>` : `
+      <div class="list">${unread.map(person).join('')}${read.map(person).join('')}</div>`}
+      ${unread.length ? `<button class="btn sm" data-copy-notice="${n.id}" style="margin-top:12px">안 읽은 가족에게 보낼 문구 복사</button>` : ''}
+    </section>
+  </div>`;
+}
+async function loadReaders(id) {
+  READERS[id] = null;
+  const { data } = await SB.rpc('notice_readers', { p_notice: id });
+  READERS[id] = data || [];
+  if (location.hash === `#members/notices/${id}`) render();
+}
+function noticeDialog(n) {
+  const classes = [...new Set(REAL.students.map(s => s.class_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  formDialog({
+    title: n ? '공지 고치기' : '새 공지 쓰기', table: 'notices', row: n, okText: n ? '저장' : '보내기', doneText: '학부모 앱으로 공지를 보냈어요',
+    after: async () => { READERS = {}; await loadNotices(); if (!n) location.hash = '#members/notices'; },
+    label: r => `"${r.title}" 공지를`,
+    fields: [
+      ['title', '제목', { required: true, max: 100, placeholder: '예: 11월 학부모 설명회 안내' }],
+      ['target_class', '받는 사람', { type: 'select', blank: '전체 학부모·학생', options: classes.map(c => [c, `${c} 가족만`]) }],
+      ['body', '내용', { type: 'area', max: 3000, rows: 7, placeholder: '날짜 · 시간 · 준비물처럼 꼭 알아야 할 내용을 적어 주세요.' }]
+    ]
+  });
+}
+
 function noticesPage() {
+  if (REAL) return realNoticesPage();
   return head('학부모 공지', '공지를 보내면 학부모 앱에 알림이 가고, 누가 읽었는지 확인할 수 있어요.', `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`) + `
   <section class="card"><div class="list">
     ${DATA.notices.map(n => `
