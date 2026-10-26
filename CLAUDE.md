@@ -38,7 +38,7 @@
   - `support_requests`: 학원 → 센터 지원 신청. 첫 화면은 `submit_support_request(...)` RPC로 넣어요(필수 항목 · 전화번호 형식 · 개인정보 동의 `privacy_agreed_at` · 연락 받을 시간 `contact_time`을 서버에서도 확인, 접수 번호 8자리를 돌려줌). 읽기는 관리자만.
   - `inquiries`: 문의. 가입 전(`guest`, 이름 · 연락처 · 동의 필수)과 프로그램 사용자(`member`, 학원 · 역할이 저절로)를 `submit_inquiry(이름, 연락처, 분류, 내용, 동의)` 하나로 받아요. 본인 것과 관리자만 읽고, 답변은 관리자 `answer_inquiry(문의, 답변, 상태)`.
   - `profiles`: 아이디·이름·역할·학원. 가입 시 트리거로 자동 생성, 본인 것만 보기·고치기.
-  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
+  - `academies`, `academy_members`(한 학원에 원장 여러 명 가능), `academy_codes`(원장용·강사용·학부모·학생용 초대 코드, 원장만 RPC로 조회), `students`(원장 · 강사 추가 · 수정, 삭제는 원장만, 강사는 담당 반 학생 + 내가 추가한 학생만 — `private.can_see_student` · `private.my_classes`(원장이 정한 `academy_members.classes` + 시간표에서 담당 강사가 나인 반). 출결 · 할 일 · 성장 리포트도 같은 기준. 원장은 강사 관리 → 우리 학원 강사 "강사 담당 반"에서 `list_teacher_classes` · `set_teacher_classes`, 강사 화면 안내는 `my_teacher_classes`, 추가한 사람 `added_by_name` · `added_by_role`은 트리거, 수강료 `tuition_plan_id`).
   - 역할은 스스로 고른 게 아니라 "어떤 초대 코드로 들어왔는지"로 정해진다. 원장은 `create_academy`(지역은 시·도 → 시·군·구 고르기, 꼭 골라야 해요), 나머지는 `join_academy(코드)`.
   - 정책용 도우미 함수는 API에 안 보이는 `private` 스키마(`private.academy_role`).
   - `leads`: 상담·등록(문의→상담→체험수업→등록). 원장·강사 읽기·쓰기, 원장만 삭제. "등록"으로 옮기면 트리거가 `students`에 자동 추가.
@@ -49,12 +49,12 @@
   - 강사 교육: `training_videos`(관리자만 쓰기, 원장·강사는 배부된 것만 보기, 영상은 유튜브·비메오 주소), `training_reflections`(영상당 한 사람 하나, 쓰면 이수 완료). 원장도 듣고 써요. 리플렉션 내용은 본인만 바로 읽고, 원장은 `academy_training_report(학원)`로 우리 강사 것까지 봐요. 관리자는 내용 없이 `admin_training_progress()`(이수 수) · `admin_video_reflections(영상)`(이름·학원·날짜)만.
   - 관리자 신청: `admin_applications`(RPC로만: `apply_center_admin(이름, 소속)` `my_admin_application()` `list_admin_applications()` `decide_admin_application(신청, 수락?)`). 구글로 확인된 이메일이나 센터 아이디만 신청 가능, 수락하면 `center_admins`에 들어가요. 거절돼도 다시 신청할 수 있어요.
   - `support_requests`: 관리자는 보기 + `status`·`admin_memo` 고치기.
-  - 채용: `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
+  - 채용: 공고 게시판(`JOBS_AREA`)은 학원에 아직 연결 안 된 강사(`SEEKER`)만 봐요 — 학원 강사 메뉴에는 없어요. `job_posts`(원장 쓰기, `academy_field` 학원 분야는 `ACADEMY_FIELDS` 예시를 눌러 고르기 → 강사 게시판에서 분야로 거르기, 모집 중 공고는 강사·원장 누구나 보기 — 학원 없는 강사도), `job_applications`(강사 지원·지원 단계에서 취소, 공고 올린 원장이 상태 변경), 원장은 `list_job_applicants(학원)`로 이름·교육 이수 수와 함께 봐요.
   - 제휴: `partner_applications`(원장 · 강사 신청, 신청한 사람은 트리거. 강사가 올리면 `owner_review` → 원장이 `decide_partner_request(신청, 승인?, 의견)`으로 승인하면 new, 반려하면 closed. 관리자는 owner_review를 못 보고 new→contacted→connected→closed 처리). 강사 메뉴 `#mou`(제휴처 · 유학 안내 · 내 제휴 신청). 제휴처 목록 자체는 `data.js`의 `partners`.
   - 유학: `abroad_promos`(원장이 학부모에게 안내, 강사도 봐요), `abroad_requests`(학부모·학생 신청 · 강사가 학부모 대신 신청하면 `via_name`·`via_role` → 원장 confirmed → forwarded → 관리자 done). 관리자는 forwarded·done만 봐요.
   - 학부모·학생 앱: `student_links`(원생 ↔ 학부모·학생 계정, 원장이 `link_family(원생, 사람, 켬/끔)`으로 연결, 대상은 `list_family_members(학원)`). 학부모·학생은 `my_children()`, 학부모만 `my_child_invoices()`(원장 메모 뺌), 출결은 연결된 아이 것만 바로 읽기.
   - 학부모 공지: `notices`(원장 쓰기, `target_class`가 비면 전체·있으면 그 반 아이와 연결된 가족만), `notice_reads`(읽음은 `mark_notice_read(공지)`로만). 원장은 `notice_report(학원)` 읽음 수, `notice_readers(공지)` 읽은·안 읽은 사람.
-  - 홍보 의뢰: `promo_requests`(원장·강사 의뢰, 의뢰한 사람 `requested_by`·이름·역할은 트리거가 채움. 원장은 우리 학원 것 전부, 강사는 내 것만. 접수 단계에서 취소, 관리자가 new→contacted→working→review→done + `admin_memo`).
+  - 홍보 의뢰: `promo_requests`(원장·강사 의뢰, 의뢰한 사람 `requested_by`·이름·역할은 트리거가 채움. 강사가 올리면 `owner_review` → 원장이 "내 의뢰"에서 `decide_promo_request(의뢰, 승인?, 의견)` — 승인하면 new, 반려하면 rejected(`owner_comment`). 관리자는 owner_review · rejected를 못 봐요. 원장은 우리 학원 것 전부, 강사는 내 것만. 접수 단계에서 취소, 관리자가 new→contacted→working→review→done + `admin_memo`).
   - 결재: `approvals`(강사·원장이 올림, 올린 사람은 트리거가 채움, 올린 사람과 원장만 보기, 기다리는 동안 올린 사람이 고치기·취소). 원장은 `decide_approval(결재, 승인?, 의견, 지출 항목|null)` — 항목을 넣으면 `expenses`에 저절로 들어가요. 원장 `#admin/approvals` 결재함, 강사 `#approvals`.
   - 일정 · 시간표: `timetable`(반 · 요일 · 시간 · 과목 + 세부 강의실 · 담당 강사 · 메모, 원장 쓰기), `academy_events`(시험 · 행사 · 휴원 …, 원장 · 강사 쓰기, 강사는 내 것만 고침, 세부는 `detail`). 두 표 모두 원장 · 강사만 바로 읽고, 학부모 · 학생은 세부를 뺀 `family_timetable(학원)` · `family_events(학원, 부터, 까지)`. 화면 `#schedule`(모든 역할, 주간 시간표는 주를 넘기거나 날짜로 고르고 그 주 일정도 함께 · 월간 달력).
   - 학생 할 일: `student_todos`(학생 · 날짜 · 할 일, 만든 사람 · 역할은 트리거가 채움). 원장 · 강사는 반 전체나 학생 한 명에게, 학부모 · 학생은 연결된 아이에게만 넣기. 체크는 `check_todo(할 일, 했음?)`. 만든 사람이 고치고, 만든 사람과 원장이 지워요. 화면: 원장 `#members/todos`, 강사 `#todos`, 학부모 `#kid/todos`, 학생 `#todos`(홈 맨 위에도 카드).
