@@ -33,7 +33,7 @@ nav { display: grid; gap: 2px; }
 .me .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; }
 .me b { display: block; font-size: 13px; line-height: 1.2; }
 .me span { color: var(--muted); font-size: 11px; }
-.me a { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.me > a:not(.me-link) { color: var(--muted); font-size: 12px; margin-left: 6px; }
 .menu-btn { display: none; border: 0; background: var(--surface); width: 40px; height: 40px; border-radius: 50%; place-items: center; }
 
 @media (max-width: 960px) {
@@ -44,7 +44,7 @@ nav { display: grid; gap: 2px; }
   .topbar { padding: 12px 16px; }
   .search { padding: 8px 12px; min-width: 0; }
   .topbar { gap: 8px; }
-  .me span, .me a { display: none; }
+  .me span, .me > a:not(.me-link) { display: none; }
 }
 
 /* ---------- 본문 ---------- */
@@ -792,3 +792,27 @@ a.plan-card:hover, a.plan-card.on { background: rgba(255,255,255,.14); border-co
 .me-link:hover b { color: var(--blue-600); }
 @media (max-width: 900px) { .set-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .set-line { flex-wrap: wrap; } .set-line > div:first-child { flex: 1 1 60%; } .seg button { padding: 6px 10px; } }
+
+/* 학생 한 명 보기 */
+.stu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.stu-grid .card { margin: 0; }
+.stu-call { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.stu-call > div:first-child { display: grid; gap: 2px; }
+.stu-call b { font-size: 16px; }
+.stu-call .num { font-size: 18px; font-weight: 700; }
+.stu-call .btn .icon { width: 16px; height: 16px; }
+.stats.mini { margin-bottom: 10px; }
+.stats.mini .stat { padding: 10px 12px; }
+.stats.mini .stat b { font-size: 18px; }
+a.tel { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+a.tel:hover { color: var(--blue-600); }
+@media (max-width: 560px) { .stu-grid { grid-template-columns: 1fr; } }
+
+/* 수강료 내기 */
+.pay-sum { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; background: var(--blue-50); border-radius: 14px; padding: 12px 14px; }
+.pay-sum b { font-size: 20px; }
+.pay-acct { display: grid; gap: 6px; justify-items: start; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.pay-acct b { font-size: 15px; word-break: break-all; }
+
+/* 센터 관리: 회원 */
+.mem-list .li .d { word-break: break-all; }

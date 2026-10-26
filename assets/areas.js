@@ -33,7 +33,7 @@ const SITE_AREAS = [
       ['재정은 세무사에게 넘길 수 있나요?', '기간을 골라 매출 · 지출 · 거래 내역을 엑셀로 내려받을 수 있어요. 원천세 계산표 · 사업장현황 수입 요약도 만들어 드려요.'],
       ['강사도 출결을 입력할 수 있나요?', '네. 강사님은 담당 반 학생의 출결을 수업 중에 휴대폰으로 바로 넣고, 원장님은 전체를 함께 봐요.']
     ],
-    demo: 'app.html?role=owner#admin' },
+    demo: '/app.html?demo=1&role=owner#admin' },
 
   { id: 'teachers', name: '강사 관리', icon: 'grad',
     short: '센터 본부의 강사 교육 영상과 리플렉션, 강사 채용까지 함께해요.',
@@ -54,7 +54,7 @@ const SITE_AREAS = [
       ['채용 공고에 비용이 드나요?', '공고 올리기와 지원자 관리는 프로그램 안에서 할 수 있어요. 채용 대행이 필요하면 상담 후 견적을 드려요.'],
       ['필수 교육도 들을 수 있나요?', '아동학대 예방 같은 학원 종사자 필수 교육 영상도 함께 배부해요.']
     ],
-    demo: 'app.html?role=owner#teachers' },
+    demo: '/app.html?demo=1&role=owner#teachers' },
 
   { id: 'members', name: '학생·학부모 관리', icon: 'users',
     short: '상담·등록부터 원생 명단, 학부모 공지, 학부모·학생 앱까지.',
@@ -75,7 +75,7 @@ const SITE_AREAS = [
       ['공지를 반별로 보낼 수 있나요?', '네. 전체 또는 반을 골라 보내고, 누가 읽었는지 · 안 읽었는지 확인할 수 있어요.'],
       ['성장 리포트도 보낼 수 있나요?', '과목 점수 · 학습 태도 · 선생님 의견을 담아 발급하면 학부모 앱에서 보고 PDF로 저장할 수 있어요.']
     ],
-    demo: 'app.html?role=owner#members' },
+    demo: '/app.html?demo=1&role=owner#members' },
 
   { id: 'mou', name: '제휴(MOU)', icon: 'handshake',
     short: '유학 전문 인투유학과 맺은 제휴로 캠프·조기유학·어학연수를 연결해요.',
@@ -97,7 +97,7 @@ const SITE_AREAS = [
       ['강사도 학부모에게 안내할 수 있나요?', '네. 강사님도 제휴와 유학 안내를 보고 학부모 대신 상담을 신청할 수 있어요. 센터로 넘어가기 전에 원장님이 확인해요.']
     ],
     link: ['인투유학 바로가기', 'https://intoabroad.com'],
-    demo: 'app.html?role=owner#mou' },
+    demo: '/app.html?demo=1&role=owner#mou' },
 
   { id: 'promo', name: '홍보 지원', icon: 'megaphone',
     short: '블로그·디자인·영상 홍보를 공식 파트너 인투마케팅이 지원해요.',
@@ -119,7 +119,7 @@ const SITE_AREAS = [
       ['강사도 의뢰할 수 있나요?', '강사님도 특강 · 설명회 홍보를 올릴 수 있어요. 원장님이 결재해야 센터로 넘어가요.']
     ],
     link: ['인투마케팅 바로가기', MARKETING_URL],
-    demo: 'app.html?role=owner#promo' }
+    demo: '/app.html?demo=1&role=owner#promo' }
 ];
 
 /* ---------- 상세페이지 꾸미기: 분야마다 색 · 핵심 포인트 · 지원 내용 아이콘 · 그림 · 파트너 소개 ---------- */
@@ -165,10 +165,10 @@ const AREA_LOOK = {
 
 // 제휴 파트너 소개 (logo가 없으면 글자 로고로 보여 줘요)
 const PARTNERS = {
-  mou: { name: '인투유학', logo: 'assets/brand/intoyuhak-logo.png', tagline: '유학 전문 · 공식 제휴 파트너', sub: '센터가 미리 MOU를 맺어 두어서, 원장님은 신청만 하면 연결돼요', url: 'https://intoabroad.com', cta: '인투유학 바로가기',
+  mou: { name: '인투유학', logo: '/assets/brand/intoyuhak-logo.png', tagline: '유학 전문 · 공식 제휴 파트너', sub: '센터가 미리 MOU를 맺어 두어서, 원장님은 신청만 하면 연결돼요', url: 'https://intoabroad.com', cta: '인투유학 바로가기',
     desc: '인투유학은 방학 영어캠프부터 조기유학, 어학연수, 해외 대학 진학까지 학생 한 명 한 명의 유학을 처음부터 끝까지 함께하는 유학 전문 기업이에요. 학원지원센터 회원 학원은 따로 계약하지 않아도 인투유학의 프로그램과 상담사를 바로 연결받아요.',
     flow: [['users', '학부모가 앱에서 신청', '학원이 안내한 프로그램에 상담 신청'], ['check', '원장님 확인', '학부모와 통화하고 "연결 요청"'], ['globe', '인투유학 상담사 연결', '센터가 1일 안에 전문 상담사 배정'], ['plane', '상담 · 출국 준비', '진행 상황은 학원 화면에서 함께 봐요']] },
-  promo: { name: '인투마케팅', logo: 'assets/brand/intomarketing-logo.png', tagline: '학원 홍보 전문 · 공식 홍보 파트너', sub: '의뢰하면 센터가 담당자를 연결하고 학원 정보를 함께 전달해요', url: MARKETING_URL, cta: '인투마케팅 바로가기',
+  promo: { name: '인투마케팅', logo: '/assets/brand/intomarketing-logo.png', tagline: '학원 홍보 전문 · 공식 홍보 파트너', sub: '의뢰하면 센터가 담당자를 연결하고 학원 정보를 함께 전달해요', url: MARKETING_URL, cta: '인투마케팅 바로가기',
     desc: '인투마케팅은 학원 홍보를 전문으로 하는 마케팅 파트너예요. 지역 학부모가 실제로 찾아보는 블로그 · 플레이스 · SNS를 중심으로, 학원 이미지에 맞는 디자인과 영상까지 한 팀이 맡아요.',
     flow: [['megaphone', '프로그램에서 의뢰', '필요한 서비스를 골라 내용을 적어요'], ['users', '인투마케팅 연결', '센터가 담당자를 연결하고 학원 정보를 전달'], ['image', '시안 확인', '시안을 보고 고칠 점을 전달해요'], ['check', '게시 · 리포트', '진행 상황은 "내 의뢰"에서 확인']] }
 };
@@ -252,14 +252,19 @@ const SITE_FAQ = [
   ['그만두고 싶으면 어떻게 하나요?', '언제든 담당 매니저에게 말씀해 주세요. 원하시면 학원 자료를 엑셀로 내려받은 뒤 정리해 드려요.']
 ];
 // 운영 주체 · 연락처 (예시 — 실제 정보가 정해지면 여기만 바꿔요)
+// 운영 정보 · 사업자 정보 — 정식 오픈 전에 실제 정보로 바꿔 주세요(지금은 예시). ready를 true로 바꾸면 "예시" 표시가 사라져요.
+// 빈 칸('')은 화면에 "오픈 전 입력"으로 보여요. 첫 화면 운영 정보 · 아래쪽 사업자 정보 · 접수 완료 화면 전화번호가 모두 여기서 나와요.
 const SITE_ORG = {
+  ready: false,
   name: '학원지원센터', tel: '1600-0000', mail: 'help@academysupportcenter.app', hours: '평일 9:30~18:30',
   rows: [
-    ['운영', '학원지원센터 (주식회사 예시)'],
-    ['대표', '홍길동'],
+    ['상호', '학원지원센터 (주식회사 예시)'],
+    ['대표자', '홍길동'],
     ['사업자등록번호', '000-00-00000'],
+    ['통신판매업 신고번호', ''],
     ['주소', '경기도 수원시 영통구 예시로 123, 4층'],
     ['고객센터', '1600-0000 · 평일 9:30~18:30 (점심 12:30~13:30)'],
-    ['이메일', 'help@academysupportcenter.app']
+    ['이메일', 'help@academysupportcenter.app'],
+    ['개인정보 보호책임자', '']
   ]
 };
