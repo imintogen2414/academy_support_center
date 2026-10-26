@@ -361,3 +361,36 @@ dialog:has(.dlg.wide) { width: min(860px, calc(100vw - 32px)); }
 .ftable .tr > :not(:first-child) { text-align: right; }
 .ftable .th { color: var(--muted); font-weight: 600; border-top: 0; }
 @media (max-width: 560px) { .fchart { height: 140px; } .ftable { font-size: 12px; } }
+
+/* 입력 창: 눌러서 채우는 예시 */
+.f-chips { display: grid; gap: 8px; }
+.pick-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick-chips button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.pick-chips button:hover { border-color: var(--blue-400); color: var(--blue-600); }
+.pick-chips button.on { background: var(--blue-600); border-color: var(--blue-600); color: #fff; }
+
+/* 분야 설명 (제휴 · 홍보) */
+.card.intro { margin-bottom: 16px; display: grid; gap: 16px; }
+.intro-lead { margin: 0; font-size: 15px; }
+.intro h3 { margin: 4px 0 2px; font-size: 18px; }
+.intro h4 { margin: 4px 0 0; font-size: 14.5px; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.flow li { background: var(--sunk); border-radius: 14px; padding: 14px; display: grid; gap: 2px; align-content: start; }
+.flow .n { width: 24px; height: 24px; border-radius: 50%; background: var(--blue-600); color: #fff; font-size: 12.5px; font-weight: 700; display: grid; place-items: center; margin-bottom: 6px; }
+.flow b { font-size: 14px; }
+.flow li > span:last-child { font-size: 12.5px; color: var(--muted); }
+.p-head { display: flex; gap: 16px; align-items: center; }
+.p-head .p-logo { width: 88px; height: 88px; object-fit: contain; border-radius: 18px; background: var(--blue-50); padding: 10px; flex: none; }
+.p-head .p-word { width: 88px; height: 88px; border-radius: 18px; background: linear-gradient(135deg, #ff8a8a, #ff5f6d); color: #fff; display: grid; place-items: center; text-align: center; font-size: 15px; font-weight: 600; line-height: 1.2; flex: none; padding: 8px; }
+.p-head p { margin: 0; }
+.prog { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.prog > div { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 2px; }
+.prog .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--blue-50); color: var(--blue-600); display: grid; place-items: center; margin-bottom: 4px; }
+.prog .ic .icon { width: 18px; height: 18px; }
+.prog b { font-size: 13.5px; }
+.prog > div > span:last-child { font-size: 12px; color: var(--muted); }
+.qa { display: grid; gap: 8px; margin-bottom: 16px; }
+.qa details { background: var(--surface); border-radius: 14px; padding: 14px 18px; }
+.qa summary { font-weight: 700; cursor: pointer; font-size: 14px; }
+.qa p { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; }
+@media (max-width: 560px) { .p-head { align-items: flex-start; } .p-head .p-logo, .p-head .p-word { width: 64px; height: 64px; } }
