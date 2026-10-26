@@ -505,3 +505,13 @@ button.tt-blk:hover { background: var(--blue-100); }
   .report { box-shadow: none; padding: 0; max-width: none; }
   .rp-stats > div, .rp-rates > div { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* 자료실 */
+.vis-pick { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.vis-pick legend { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.vis-pick > label:not(.f) { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.vis-pick > label:has(input:checked) { border-color: var(--blue-500); background: var(--blue-50); }
+.vis-pick input[type=radio] { margin-top: 3px; accent-color: var(--blue-600); }
+.vis-pick span { display: grid; font-size: 13.5px; }
+.vis-pick small { color: var(--muted); font-size: 12px; }
+@media (max-width: 560px) { .li.lib { grid-template-columns: 40px 1fr; } .li.lib .r { grid-column: 1 / -1; justify-items: start; } }

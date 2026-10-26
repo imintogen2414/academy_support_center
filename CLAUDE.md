@@ -47,6 +47,7 @@
   - 일정 · 시간표: `timetable`(반 · 요일 · 시간 · 과목 + 세부 강의실 · 담당 강사 · 메모, 원장 쓰기), `academy_events`(시험 · 행사 · 휴원 …, 원장 · 강사 쓰기, 강사는 내 것만 고침, 세부는 `detail`). 두 표 모두 원장 · 강사만 바로 읽고, 학부모 · 학생은 세부를 뺀 `family_timetable(학원)` · `family_events(학원, 부터, 까지)`. 화면 `#schedule`(모든 역할, 주간 시간표 · 월간 달력).
   - 학생 할 일: `student_todos`(학생 · 날짜 · 할 일, 만든 사람 · 역할은 트리거가 채움). 원장 · 강사는 반 전체나 학생 한 명에게, 학부모 · 학생은 연결된 아이에게만 넣기. 체크는 `check_todo(할 일, 했음?)`. 만든 사람이 고치고, 만든 사람과 원장이 지워요. 화면: 원장 `#members/todos`, 강사 `#todos`, 학부모 `#kid/todos`, 학생 `#todos`(홈 맨 위에도 카드).
   - 성장 리포트: `growth_reports`(학생 · 기간 · 과목 점수 `scores` · 학습 태도 `ratings` · 잘하는 점 · 노력할 점 · 종합 의견 · 다음 목표, 출결 · 할 일 수행 `stats`는 저장할 때 화면이 계산). 원장 · 강사가 쓰고 `status`를 issued로 바꾸면 연결된 가족이 봐요(발급 시각은 트리거). 인쇄 · PDF는 브라우저 인쇄(`@media print`). 화면: 원장 `#members/reports`, 강사 `#reports`, 학부모 `#kid/reports`, 학생 `#reports`.
+  - 자료실: `library_items`(제목 · 분류 · 파일 또는 링크 · 공유 범위 `visibility` private 나만 / staff 원장·강사 / class 반 가족 / everyone 모두, 올린 사람은 트리거). 판정은 `private.can_see_library` — 원장은 전부(강사 비공개 포함). 파일은 Storage 비공개 버킷 `library`(50MB, 경로 `학원 id/무작위/file.확장자`), 읽기는 그 자료를 볼 수 있을 때만, 올리기는 원장·강사만. 열기 · 내려받기는 10분짜리 서명 주소. 화면 `#library`(모든 역할).
   - `academy_name`은 트리거가 채워요(학원 표는 그 학원 사람만 읽을 수 있어서).
 - 실제 데이터로 연결된 화면: 행정 지원 전체(`#admin/*`, 강사는 `#attend`), 강사 관리 전체(`#teachers/staff` `training` `hire`, 강사 `#learn` `#jobs`), 제휴 전체(`#mou/partners` `abroad` `mine`), 학부모 `#abroad`, 센터 관리(`#center/videos` `requests` `partners` `abroad` `admins`), 원장 홈 "오늘 챙길 일", 학생·학부모 관리 전체(상담·등록, 원생 명단 + 앱 연결, 초대 코드, 학부모 공지 `#members/notices/공지`), 홍보 지원(`#promo/*`, 센터 `#center/promo`). 학부모 `#kid/attend` `#kid/bills` `#news/공지` `#abroad`, 학생 `#attend` `#news`. 데모에만 있는 것: 학부모·학생 일정·숙제·기록(실제 로그인에선 메뉴에서 빠져요).
 - 학원 코드가 없는 강사: 학원 연결 화면의 "채용 공고 먼저 보기" → `SEEKER` 모드(채용 공고만).
@@ -75,7 +76,7 @@
 12. ~~학원 일정 · 시간표~~ (완료)
 13. ~~학생 오늘 할 일~~ (완료)
 14. ~~성장 리포트 발급~~ (완료)
-15. 자료실 (공유 대상 · 비공개, 원장은 모두 보기)
+15. ~~자료실~~ (완료)
 16. 서류·행정 자동 처리
 17. 메신저 (원장↔관리자·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생)
 18. 새 소식 빨간 점 (확인하면 사라짐)

@@ -1100,6 +1100,114 @@ async function saveReport(r, status) {
   toast(status === 'issued' ? (r.status === 'draft' ? '발급했어요 · 학부모 · 학생 앱에 보여요' : '고쳤어요') : '임시 저장했어요');
 }
 
+/* ================= 자료실 (Supabase library_items + Storage 'library') =================
+   원장 · 강사가 파일이나 링크를 올리고 누구에게 보일지 골라요. 원장은 모든 자료를 봐요(강사의 비공개 포함). */
+const LIB_CATS = ['수업 자료', '교재 · 문제', '학부모 안내', '행정 서식', '강사 공유', '기타'];
+const LIB_VIS = {
+  private: ['🔒 나만 보기', 'mute', '올린 사람만 봐요 (원장님은 볼 수 있어요)'],
+  staff: ['원장 · 강사', 'info', '원장님과 강사님만 봐요'],
+  class: ['반 가족', 'warn', '원장 · 강사 + 고른 반 아이의 학부모 · 학생'],
+  everyone: ['학원 모두', 'good', '원장 · 강사 · 학부모 · 학생 모두']
+};
+const LIB_MAX = 50 * 1024 * 1024;
+let libCat = '전체', libVis = 'all';
+const fileSize = n => n == null ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`;
+const fileIcon = it => it.link_url && !it.file_path ? 'ext' : /pdf/.test(it.mime || '') ? 'doc' : /image/.test(it.mime || '') ? 'page' : /video/.test(it.mime || '') ? 'video' : 'doc';
+const visChip = it => { const [l, c] = LIB_VIS[it.visibility]; return `<span class="chip ${c}">${l}${it.visibility === 'class' ? ` · ${esc(it.target_class)}` : ''}</span>`; };
+const libData = () => REAL ? REAL.library : DATA.library;
+const canEditLib = it => REAL && (ROLE === 'owner' || it.uploaded_by === USER.id);
+
+function libraryPage() {
+  const all = libData(), staff = isStaff();
+  const list = all.filter(it => (libCat === '전체' || it.category === libCat) && (libVis === 'all' || it.visibility === libVis));
+  const cats = ['전체', ...LIB_CATS.filter(c => all.some(it => it.category === c))];
+  const add = staff ? `<button class="btn primary" data-act="addLib">${ic('plus')}자료 올리기</button>` : '';
+  const desc = ROLE === 'owner' ? '학원 자료를 한곳에 모아요. 올릴 때 누구에게 보일지 고를 수 있어요. 원장님은 강사님의 비공개 자료까지 모두 볼 수 있어요.'
+    : ROLE === 'teacher' ? '수업 자료 · 서식을 올리고 함께 써요. "나만 보기"로 올린 자료는 나와 원장님만 볼 수 있어요.'
+    : '학원에서 학부모 · 학생에게 공유한 자료예요. 눌러서 열거나 내려받을 수 있어요.';
+  return head('자료실', desc, add) + `
+  ${cats.length > 2 ? `<div class="filters">${cats.map(c => `<button class="${c === libCat ? 'on' : ''}" data-lib-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
+  ${staff && all.length ? `<div class="filters">${[['all', '공유 범위 전체'], ...Object.entries(LIB_VIS).map(([k, v]) => [k, v[0]])].map(([k, l]) => `<button class="${k === libVis ? 'on' : ''}" data-lib-vis="${k}">${l} ${k === 'all' ? '' : all.filter(it => it.visibility === k).length}</button>`).join('')}</div>` : ''}
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(it => `
+    <div class="li lib">
+      <span class="av" style="background:var(--blue-50);color:var(--blue-600)">${ic(fileIcon(it))}</span>
+      <div><div class="t">${canEditLib(it) ? `<span class="nm-link" data-edit-lib="${it.id}" role="button" tabindex="0">${esc(it.title)}</span>` : esc(it.title)} ${staff ? visChip(it) : ''}</div>
+        <div class="d">${esc(it.category)} · ${esc(it.uploader_name || '학원')}${it.uploader_role === 'teacher' ? ' 선생님' : it.uploader_role === 'owner' ? ' 원장님' : ''} · ${md(it.created_at.slice(0, 10))}${it.file_name ? ` · ${esc(it.file_name)} ${fileSize(it.file_size)}` : ''}</div>
+        ${it.description ? `<div class="d pre">${esc(it.description)}</div>` : ''}</div>
+      <div class="r"><span class="btns">${it.file_path ? `<button class="btn sm" data-lib-open="${it.id}">열기</button><button class="btn sm primary" data-lib-down="${it.id}">내려받기</button>` : ''}${it.link_url ? `<a class="btn sm ${it.file_path ? '' : 'primary'}" href="${esc(it.link_url)}" target="_blank" rel="noopener">링크 열기 ${ic('ext')}</a>` : ''}</span></div>
+    </div>`).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>${all.length ? '고른 조건에 맞는 자료가 없어요' : '아직 자료가 없어요'}</h2>
+    <p class="muted">${staff ? '수업 자료 · 학부모 안내문 · 행정 서식을 올려 두면 필요한 사람만 볼 수 있어요. 파일은 50MB까지, 큰 영상은 링크로 넣어 주세요.' : '학원에서 자료를 공유하면 여기에 보여요.'}</p>${all.length ? '' : add}</section>`}`;
+}
+
+function libDialog(it) {
+  if (!REAL) { toast('예시 계정에서는 올릴 수 없어요'); return; }
+  const classes = allClasses(), d = dialogEl(), v = it ? it.visibility : 'staff';
+  d.innerHTML = `
+  <form method="dialog" class="dlg" id="libForm" novalidate>
+    <h2>${it ? '자료 고치기' : '자료 올리기'}</h2>
+    <label class="f">제목 *<input name="title" maxlength="100" value="${esc(it ? it.title : '')}" placeholder="예: 11월 초등 B반 단어장"></label>
+    ${it ? (it.file_name ? `<p class="muted small" style="margin:0">파일: ${esc(it.file_name)} ${fileSize(it.file_size)} · 파일을 바꾸려면 지우고 다시 올려 주세요.</p>` : '') : `
+    <label class="f">파일 (50MB까지)<input type="file" name="file"></label>`}
+    <label class="f">${it ? '링크' : '또는 링크'}<input name="link" type="url" maxlength="500" value="${esc(it && it.link_url || '')}" placeholder="https:// (유튜브 · 구글 드라이브 등)"></label>
+    <label class="f">분류<select name="cat">${LIB_CATS.map(c => `<option ${(it ? it.category : '수업 자료') === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+    <fieldset class="vis-pick"><legend>누구에게 보일까요?</legend>${Object.entries(LIB_VIS).map(([k, [l, , dsc]]) => `
+      <label><input type="radio" name="vis" value="${k}" ${v === k ? 'checked' : ''}><span><b>${l}</b><small>${k === 'private' && ROLE === 'owner' ? '나만 봐요' : dsc}</small></span></label>`).join('')}
+      <label class="f" id="libClass" ${v === 'class' ? '' : 'hidden'}>어느 반?<select name="cls">${classes.map(c => `<option ${it && it.target_class === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+    </fieldset>
+    <label class="f">설명<textarea name="desc" rows="3" maxlength="1000" placeholder="예: 매주 월요일 단어 시험 범위">${esc(it && it.description || '')}</textarea></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts">${it ? '<button type="button" class="btn danger" id="dlgDel">삭제</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${it ? '저장' : '올리기'}</button></div>
+  </form>`;
+  d.showModal();
+  const f = $('#libForm'), fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  $('#dlgCancel').onclick = () => d.close();
+  f.querySelectorAll('[name="vis"]').forEach(r => r.onchange = () => { $('#libClass').hidden = f.elements.vis.value !== 'class'; });
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const el = f.elements, title = el.title.value.trim(), link = el.link.value.trim(), file = !it && el.file.files[0], vis = el.vis.value;
+    if (!title) return fail('제목을 적어 주세요.');
+    if (!it && !file && !link) return fail('파일을 고르거나 링크를 넣어 주세요.');
+    if (it && !it.file_path && !link) return fail('링크를 넣어 주세요.');
+    if (link && !/^https:\/\/\S+$/.test(link)) return fail('링크는 https:// 로 시작해야 해요.');
+    if (file && file.size > LIB_MAX) return fail('파일이 50MB보다 커요. 큰 파일은 구글 드라이브 같은 곳에 올리고 링크로 넣어 주세요.');
+    if (vis === 'class' && !el.cls.value) return fail('반을 골라 주세요. 반이 없으면 원생 명단에서 반을 먼저 정해 주세요.');
+    const row = { title, category: el.cat.value, visibility: vis, target_class: vis === 'class' ? el.cls.value : null, description: el.desc.value.trim() || null, link_url: link || null };
+    const btn = f.querySelector('button.primary'); btn.disabled = true; btn.textContent = file ? '올리는 중…' : '저장 중…';
+    if (it) {
+      const { error } = await SB.from('library_items').update(row).eq('id', it.id);
+      btn.disabled = false; btn.textContent = '저장';
+      if (error) return fail('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } else {
+      let path = null;
+      if (file) {
+        const ext = (file.name.match(/\.([a-z0-9]{1,8})$/i) || [])[1];
+        path = `${REAL.academy.id}/${crypto.randomUUID()}/file${ext ? `.${ext.toLowerCase()}` : ''}`;
+        const up = await SB.storage.from('library').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+        if (up.error) { btn.disabled = false; btn.textContent = '올리기'; return fail('파일을 올리지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+      }
+      const { error } = await SB.from('library_items').insert({ ...row, academy_id: REAL.academy.id, file_path: path, file_name: file ? file.name.slice(0, 200) : null, file_size: file ? file.size : null, mime: file ? (file.type || '').slice(0, 100) || null : null });
+      if (error) { if (path) await SB.storage.from('library').remove([path]); btn.disabled = false; btn.textContent = '올리기'; return fail('저장하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+    }
+    d.close(); await loadLibrary(); render(); toast(it ? '고쳤어요' : `자료를 올렸어요 · ${LIB_VIS[vis][2]}`);
+  };
+  if (it) $('#dlgDel').onclick = async () => {
+    if (!confirm(`${it.title} 자료를 삭제할까요?`)) return;
+    const { error } = await SB.from('library_items').delete().eq('id', it.id);
+    if (error) { toast('삭제하지 못했어요'); return; }
+    if (it.file_path) await SB.storage.from('library').remove([it.file_path]);
+    d.close(); await loadLibrary(); render(); toast('삭제했어요');
+  };
+}
+// 비공개 버킷이라 잠깐 쓰는 주소(10분)를 받아서 열어요
+async function openLib(id, download) {
+  const it = REAL.library.find(x => x.id === id);
+  const w = download ? null : window.open('about:blank', '_blank');
+  const { data, error } = await SB.storage.from('library').createSignedUrl(it.file_path, 600, download ? { download: it.file_name || true } : undefined);
+  if (error || !data) { if (w) w.close(); toast('파일을 열지 못했어요'); return; }
+  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+}
+
 /* ================= 결재: 강사 → 원장 (Supabase approvals) =================
    강사가 물품 · 재정 지출을 올리면 원장이 승인 · 반려. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요. */
 const APV_KINDS = ['물품 구입', '재정 지출', '기타'];
@@ -2487,6 +2595,7 @@ function attendStat() {
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
+const LIBRARY_AREA = { name: '자료실', icon: 'doc', desc: '학원 자료 · 서식 · 안내문 모아 보기', stat: () => `자료 ${libData().length}개`, render: libraryPage };
 const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록부처럼 쓰고 발급하기', stat: () => { const l = reportsData(); return isStaff() ? `작성 중 ${l.filter(r => r.status === 'draft').length}개 · 발급 ${l.filter(r => r.status === 'issued').length}개` : `발급 ${l.length}개`; }, render: reportsPage, detail: reportDetail, title: id => (reportsData().find(r => r.id === id) || {}).title };
 const SCHEDULE_AREA = { name: '일정 · 시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
@@ -2521,6 +2630,7 @@ const AREAS = {
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title }
       } },
     schedule: SCHEDULE_AREA,
+    library: LIBRARY_AREA,
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
         ? `진행 중 제휴 ${REAL.partnerApps.filter(a => a.status !== 'closed').length}건 · 유학 상담 새 신청 ${REAL.abroad.requests.filter(r => r.status === 'new').length}건`
         : `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
@@ -2540,6 +2650,7 @@ const AREAS = {
     schedule: SCHEDULE_AREA,
     todos: { name: '학생 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
     reports: REPORT_AREA,
+    library: LIBRARY_AREA,
     learn: { name: '강사 교육', icon: 'video', desc: '본부 교육 영상 시청과 리플렉션', stat: () => `남은 교육 ${DATA.training.filter(t => t.status[ME.name] !== 'done').length}개`,
       render: () => head('강사 교육', '학원지원센터 본부에서 배부한 교육 영상이에요. 시청하고 리플렉션을 쓰면 이수 완료돼요.') + trainingList('learn'), detail: id => trainingDetail(id, 'learn') },
     jobs: { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${JOBS ? JOBS.posts.length : DATA.jobs.length}건`, render: jobsPage },
@@ -2556,6 +2667,7 @@ const AREAS = {
       } },
     schedule: SCHEDULE_AREA,
     news: { name: '학원 소식', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
+    library: LIBRARY_AREA,
     abroad: { name: '유학 프로그램', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
   },
   student: { todos: { name: '오늘 할 일', icon: 'check', desc: '할 일 체크하기', stat: todoStat, render: todosPage }, schedule: SCHEDULE_AREA, reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' } }
@@ -2577,6 +2689,7 @@ const FAMILY_AREAS = {
       } },
     schedule: SCHEDULE_AREA,
     news: newsArea,
+    library: LIBRARY_AREA,
     abroad: AREAS.parent.abroad
   },
   student: {
@@ -2584,7 +2697,8 @@ const FAMILY_AREAS = {
     schedule: SCHEDULE_AREA,
     reports: { ...REPORT_AREA, desc: '선생님이 발급한 내 성장 기록' },
     attend: { name: '내 출결', icon: 'attend', desc: '날짜별 출석 · 지각 · 결석', stat: () => `${+MONTH.slice(5)}월 ${REAL.kidAttend.filter(a => a.day.startsWith(MONTH)).length}일 기록`, render: kidAttendPage },
-    news: newsArea
+    news: newsArea,
+    library: LIBRARY_AREA
   }
 };
 let MY = AREAS[ROLE];
@@ -2780,8 +2894,8 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}" data-up>${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav></div>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'mou', 'promo', 'center'],
-    teacher: ['home', 'attend', 'schedule', 'todos', 'reports', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'reports', 'attend', 'news', 'center'], admin: ['home', 'center']
+    owner: ['home', 'admin', 'teachers', 'members', 'schedule', 'library', 'mou', 'promo', 'center'],
+    teacher: ['home', 'attend', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'promo', 'center'], parent: ['home', 'kid', 'schedule', 'news', 'library', 'abroad', 'center'], student: ['home', 'todos', 'schedule', 'reports', 'attend', 'news', 'library', 'center'], admin: ['home', 'center']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -2953,6 +3067,13 @@ function bind() {
   });
   on('[data-mk-filter]', b => { mkFilter = b.dataset.mkFilter; render(); });
   on('[data-mk-who]', b => { mkWho = b.dataset.mkWho; render(); });
+  // 자료실
+  on('[data-act="addLib"]', () => libDialog(null));
+  on('[data-edit-lib]', b => libDialog(REAL.library.find(x => x.id === b.dataset.editLib)));
+  on('[data-lib-cat]', b => { libCat = b.dataset.libCat; render(); });
+  on('[data-lib-vis]', b => { libVis = b.dataset.libVis; render(); });
+  on('[data-lib-open]', b => REAL ? openLib(b.dataset.libOpen, false) : toast('예시 자료예요'));
+  on('[data-lib-down]', b => REAL ? openLib(b.dataset.libDown, true) : toast('예시 자료예요'));
   // 성장 리포트
   on('[data-act="newReport"]', newReportDialog);
   on('[data-act="printReport"]', () => window.print());
@@ -3224,6 +3345,7 @@ const loadInvoices = () => loadRows('invoices', 'created_at');
 const loadExpenses = () => loadRows('expenses', 'day', false);
 const loadIncomes = () => loadRows('incomes', 'day', false);
 const loadApprovals = () => loadRows('approvals', 'created_at', false);
+const loadLibrary = () => loadRows('library_items', 'created_at', false).then(() => { REAL.library = REAL.library_items; });
 const loadReports = () => loadRows('growth_reports', 'created_at', false).then(() => { REAL.reports = REAL.growth_reports; });
 // 학생 할 일: 보고 있는 날 하나씩 (원장 · 강사는 학원 전체, 가족은 연결된 아이 것만 RLS가 걸러 줘요)
 async function loadTodos(day = TODAY) {
@@ -3460,14 +3582,14 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] },
-      approvals: [], reports: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], reports: [], library: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
     useAcademy();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals()]);
     if (ROLE === 'owner') await Promise.all([loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs()]);
     if (ROLE === 'teacher') await Promise.all([loadJobBoard(), loadPromoReqs()]);
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = FAMILY_AREAS[ROLE]; }
-    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports()]);
+    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary()]);
     if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   }
   render();
