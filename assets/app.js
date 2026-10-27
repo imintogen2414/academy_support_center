@@ -40,7 +40,13 @@ const ICON = {
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 19h16"/>',
   upload: '<path d="M12 16V5M7 10l5-5 5 5"/><path d="M4 19h16"/>',
   sheet: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/>',
-  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>'
+  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
+  move: '<path d="M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
 };
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
 
@@ -941,7 +947,7 @@ function finXlsx() {
     [], ['', '', '매출 합계', String(t.inc), ''], ['', '', '지출 합계', String(t.out), ''], ['', '', '순이익', String(t.net), '']];
   const acad = REAL ? REAL.academy.name : DATA.academy.name;
   downloadXlsx(`finance_${r.from}_${r.to}.xlsx`, [[`${acad} 거래 내역`], [`${r.from} ~ ${r.to} · 만든 날 ${TODAY}`], [], ...rows], [12, 8, 14, 14, 30], { sheet: '거래 내역' });
-  toast('거래 내역을 내려받았어요');
+  toast('거래 내역을 다운로드했어요');
 }
 
 const finDay = () => FIN === 'month' ? (MONTH === TODAY.slice(0, 7) ? TODAY : `${MONTH}-01`) : TODAY;
@@ -1060,7 +1066,7 @@ function supXlsx() {
   const all = supData(), acad = REAL ? REAL.academy.name : DATA.academy.name;
   downloadXlsx(`supplies_${TODAY}.xlsx`, [[`${acad} 비품 · 교재`], [`만든 날 ${TODAY}`], [], ['종류', '이름', '지금 수', '단위', '빌려줌', '알림 수', '모자람', '둔 곳', '하나 값(원)', '메모'],
     ...all.map(x => [x.category, x.name, String(x.qty), x.unit, String(x.lent || 0), String(x.min_qty || 0), supLow(x) ? '모자람' : '', x.place || '', x.price ? String(x.price) : '', x.memo || ''])], [12, 26, 8, 6, 7, 8, 8, 16, 11, 22], { sheet: '비품 · 교재' });
-  toast('비품 · 교재 목록을 내려받았어요');
+  toast('비품 · 교재 목록을 다운로드했어요');
 }
 async function loadSupplies() {
   if (!REAL || !isStaff()) return;
@@ -1151,7 +1157,7 @@ function incomeDialog(x) {
 }
 
 /* ---------- 엑셀로 한꺼번에 올리기 (원생 · 지출) ----------
-   양식 내려받기 → 채워서 올리기(.xlsx · .csv) → 미리보기에서 확인 → 저장. 읽기·양식 만들기는 assets/sheet.js */
+   양식 다운로드 → 채워서 올리기(.xlsx · .csv) → 미리보기에서 확인 → 저장. 읽기·양식 만들기는 assets/sheet.js */
 const IMPORTS = {
   students: {
     title: '원생 엑셀 파일로 넣기', what: '원생', file: 'students_template.xlsx', table: 'students', after: () => loadStudents(),
@@ -1232,7 +1238,7 @@ function checkRows(cfg, rows) {
   const names = cfg.cols.map(([, lab, o]) => [lab, ...(o.alias || [])].map(normHead));
   let headAt = -1, best = 0;
   rows.slice(0, 5).forEach((r, i) => { const n = r.filter(c => names.some(ns => ns.includes(normHead(c)))).length; if (n > best) { best = n; headAt = i; } });
-  if (headAt < 0) return { error: `첫 줄에 ${cfg.cols.filter(c => c[2].required).map(c => `"${c[1]}"`).join(', ')} 같은 칸 이름이 있어야 해요. 양식을 내려받아 써 주세요.` };
+  if (headAt < 0) return { error: `첫 줄에 ${cfg.cols.filter(c => c[2].required).map(c => `"${c[1]}"`).join(', ')} 같은 칸 이름이 있어야 해요. 양식을 다운로드해 써 주세요.` };
   const head = rows[headAt].map(normHead);
   const idx = names.map(ns => head.findIndex(h => h && ns.includes(h)));
   const missing = cfg.cols.filter((c, i) => c[2].required && idx[i] < 0).map(c => c[1]);
@@ -1379,6 +1385,128 @@ async function hydrateImgs(root = document) {
   for (const [b, set] of Object.entries(by)) { const { data } = await SB.storage.from(b).createSignedUrls([...set], 3600); (data || []).forEach(x => { if (x.signedUrl) IMG_URLS[`${b}:${x.path}`] = x.signedUrl; }); }
   els.forEach(i => { const u = IMG_URLS[`${i.dataset.bucket}:${i.dataset.bucketImg}`]; if (u && i.src !== u) i.src = u; });
 }
+/* ---------- 큰 파일 올리기 (자료실 · 공지 · 채팅 · 센터 공지): 하나에 2GB까지 ----------
+   6MB가 넘으면 Supabase 이어 올리기(TUS)로 6MB씩 보내요. 중간에 끊기면 올라간 곳부터 다시 보내요.
+   실제 한도는 Supabase 저장 공간 설정(프로젝트 전체 업로드 한도)도 2GB 이상이어야 해요. */
+const FILE_MAX = 2 * 1024 * 1024 * 1024, TUS_CHUNK = 6 * 1024 * 1024;
+const sizeText = n => n == null ? '' : n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)}GB` : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`;
+const safeName = (name, i = 0) => (name || '').replace(/[^\w.\-가-힣]+/g, '_').slice(-80) || `file${i}`;
+const upErr = (e, name) => /too_large|exceeded|maximum allowed size|Payload too large/i.test((e && (e.message || e.error)) || '') || (e && (e.status === 413 || e.statusCode === '413'))
+  ? `${name || '파일'}이(가) 지금 저장 공간 한도보다 커요. 센터에 문의해 주세요.` : dbErr(e, `${name || '파일'}을(를) 올리지`);
+async function putFile(bucket, path, file, onProg) {
+  const type = file.type || 'application/octet-stream';
+  if (file.size <= TUS_CHUNK || !(window.ENV && ENV.SUPABASE_URL)) {
+    const r = await SB.storage.from(bucket).upload(path, file, { contentType: type });
+    if (onProg && !r.error) onProg(1);
+    return r;
+  }
+  const url = `${ENV.SUPABASE_URL}/storage/v1/upload/resumable`, b64 = v => btoa(unescape(encodeURIComponent(v)));
+  // 오래 걸리는 파일도 있어서 조각마다 새 로그인 토큰을 받아요
+  const head = async () => { const { data } = await SB.auth.getSession(); return { authorization: `Bearer ${data.session ? data.session.access_token : ENV.SUPABASE_KEY}`, apikey: ENV.SUPABASE_KEY, 'tus-resumable': '1.0.0' }; };
+  const fail = async r => { const t = r ? await r.text().catch(() => '') : ''; return { error: { message: !r ? '인터넷 연결이 끊겼어요' : r.status === 413 || /too large|exceeded|maximum/i.test(t) ? 'too_large' : (t.match(/"message"\s*:\s*"([^"]+)"/) || [])[1] || t || `HTTP ${r.status}`, status: r && r.status } }; };
+  try {
+    const meta = [['bucketName', bucket], ['objectName', path], ['contentType', type], ['cacheControl', '3600']].map(([k, v]) => `${k} ${b64(v)}`).join(',');
+    const c = await fetch(url, { method: 'POST', headers: { ...(await head()), 'upload-length': String(file.size), 'upload-metadata': meta, 'x-upsert': 'false' } }).catch(() => null);
+    if (!c || c.status !== 201) return fail(c);
+    const loc = new URL(c.headers.get('location'), url).href;
+    let off = 0, tries = 0;
+    while (off < file.size) {
+      const r = await fetch(loc, { method: 'PATCH', headers: { ...(await head()), 'upload-offset': String(off), 'content-type': 'application/offset+octet-stream' }, body: file.slice(off, off + TUS_CHUNK) }).catch(() => null);
+      if (r && r.status === 204) { tries = 0; off = +r.headers.get('upload-offset') || Math.min(file.size, off + TUS_CHUNK); if (onProg) onProg(off / file.size); continue; }
+      if (r && r.status >= 400 && r.status < 500 && r.status !== 409) return fail(r);
+      if (++tries > 5) return fail(r);
+      await new Promise(ok => setTimeout(ok, 1000 * 2 ** tries));
+      // 어디까지 올라갔는지 다시 물어보고 거기부터
+      const h = await fetch(loc, { method: 'HEAD', headers: await head() }).catch(() => null);
+      if (h && h.ok) off = +h.headers.get('upload-offset') || off;
+    }
+    return { data: { path }, error: null };
+  } catch (e) { return { error: e }; }
+}
+
+/* ---------- 파일 미리보기: 새 창으로 가지 않고 웹 안에서 보고 "다운로드" ----------
+   items: [{ bucket, path, name, mime, size }] 또는 링크 [{ link, name }]
+   사진 · PDF · 영상 · 소리 · 글 파일(txt · csv)은 바로, 유튜브 · 비메오 링크는 화면 안에서 재생해요. */
+// 올리는 중 표시 (화면 아래 띠) — 글 없이 부르면 숨겨요
+function upProgress(text, frac) {
+  let b = $('#upProg');
+  if (!text) { if (b) b.remove(); return; }
+  if (!b) { document.body.insertAdjacentHTML('beforeend', '<div id="upProg" class="up-prog" role="status"><span></span><i><b></b></i></div>'); b = $('#upProg'); }
+  b.querySelector('span').textContent = text; b.querySelector('b').style.width = `${Math.round((frac || 0) * 100)}%`;
+}
+const extOf = n => ((n || '').match(/\.([a-z0-9]{1,8})$/i) || [])[1]?.toLowerCase() || '';
+function fileKind(it) {
+  if (it.link) return embedUrl(it.link) ? 'embed' : 'link';
+  const m = it.mime || '', e = extOf(it.name || it.path);
+  if (/^image\//.test(m) || /^(jpe?g|png|gif|webp|bmp|svg|heic)$/.test(e)) return e === 'heic' ? 'none' : 'image';
+  if (/pdf/.test(m) || e === 'pdf') return 'pdf';
+  if (/^video\//.test(m) || /^(mp4|webm|mov|m4v|ogv)$/.test(e)) return 'video';
+  if (/^audio\//.test(m) || /^(mp3|wav|m4a|aac|ogg|flac)$/.test(e)) return 'audio';
+  if (/^text\//.test(m) || /json/.test(m) || /^(txt|csv|md|json|log|tsv)$/.test(e)) return 'text';
+  if (/^(docx?|xlsx?|pptx?)$/.test(e)) return 'office';
+  return 'none';
+}
+async function signedUrl(it, download) {
+  const k = `${it.bucket}:${it.path}`;
+  if (!download && IMG_URLS[k]) return IMG_URLS[k];
+  if (!download && it.bucket === 'chat' && MSG.urls[it.path]) return MSG.urls[it.path];
+  const { data } = await SB.storage.from(it.bucket).createSignedUrl(it.path, download ? 600 : 3600, download ? { download: it.name || true } : undefined);
+  if (data && !download) IMG_URLS[k] = data.signedUrl;
+  return data ? data.signedUrl : null;
+}
+async function downloadFile(it) {
+  if (!SB || !USER) return toast('예시 파일이에요');
+  const u = await signedUrl(it, true);
+  if (!u) return toast('다운로드하지 못했어요');
+  const a = document.createElement('a'); a.href = u; a.download = it.name || ''; document.body.appendChild(a); a.click(); a.remove();
+}
+function fileViewer(items, at = 0) {
+  let v = $('#imgView');
+  if (!v) { document.body.insertAdjacentHTML('beforeend', '<dialog id="imgView" class="img-view" aria-label="미리보기"></dialog>'); v = $('#imgView'); }
+  let i = at, tok = 0;
+  const draw = async () => {
+    const it = items[i], many = items.length > 1, kind = fileKind(it), my = ++tok;
+    v.innerHTML = `<div class="iv-top"><b>${esc(it.name || '파일')}</b>${it.size ? `<span class="iv-n">${sizeText(it.size)}</span>` : ''}${many ? `<span class="iv-n">${i + 1} / ${items.length}</span>` : ''}<span style="flex:1"></span>
+      ${it.link ? `<a class="btn sm" href="${esc(it.link)}" target="_blank" rel="noopener">${ic('ext')}새 창에서 열기</a>` : `<button type="button" class="btn sm primary" data-iv-down>${ic('download')}다운로드</button>`}<button type="button" class="iv-x" data-iv-close aria-label="닫기">×</button></div>
+      <div class="iv-stage">${many ? '<button type="button" class="iv-nav prev" data-iv-go="-1" aria-label="이전">‹</button>' : ''}<div class="iv-body"><span class="iv-load">불러오는 중…</span></div>${many ? '<button type="button" class="iv-nav next" data-iv-go="1" aria-label="다음">›</button>' : ''}</div>`;
+    v.querySelector('[data-iv-close]').onclick = () => v.close();
+    v.querySelectorAll('[data-iv-go]').forEach(b => b.onclick = () => { i = (i + +b.dataset.ivGo + items.length) % items.length; draw(); });
+    const dn = v.querySelector('[data-iv-down]'); if (dn) dn.onclick = () => downloadFile(it);
+    const body = v.querySelector('.iv-body'), put = h => { if (my === tok) body.innerHTML = h; };
+    const none = why => put(`<div class="iv-none">${ic('doc', 'icon big')}<b>${esc(it.name || '파일')}</b><p>${why}</p>${it.link ? `<a class="btn primary" href="${esc(it.link)}" target="_blank" rel="noopener">${ic('ext')}새 창에서 열기</a>` : `<button type="button" class="btn primary" data-iv-down2>${ic('download')}다운로드</button>`}</div>`);
+    if (kind === 'embed') return put(`<iframe class="iv-frame" src="${esc(embedUrl(it.link))}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(it.name || '영상')}"></iframe>`);
+    if (kind === 'link') return none('이 링크는 웹 안에서 미리 볼 수 없어요. 새 창에서 열어 주세요.');
+    if (!SB || !USER) return none('예시 파일이라 미리보기가 없어요. 실제 계정에서는 여기에 바로 보여요.');
+    const u = await signedUrl(it);
+    if (my !== tok) return;
+    if (!u) return none('파일을 열지 못했어요. 잠시 후 다시 시도해 주세요.');
+    if (kind === 'image') put(`<img src="${esc(u)}" alt="${esc(it.name || '사진')}">`);
+    else if (kind === 'pdf') put(`<iframe class="iv-frame doc" src="${esc(u)}#view=FitH" title="${esc(it.name || 'PDF')}"></iframe>`);
+    else if (kind === 'video') put(`<video src="${esc(u)}" controls playsinline preload="metadata"></video>`);
+    else if (kind === 'audio') put(`<div class="iv-none">${ic('play', 'icon big')}<b>${esc(it.name || '')}</b><audio src="${esc(u)}" controls preload="metadata"></audio></div>`);
+    else if (kind === 'text' && (it.size || 0) <= 2 * 1024 * 1024) { const t = await fetch(u).then(r => r.text()).catch(() => null); if (t == null) none('파일을 열지 못했어요.'); else put(`<pre class="iv-text">${esc(t.slice(0, 200000))}</pre>`); }
+    else if (kind === 'office') none(`워드 · 엑셀 · 파워포인트 파일은 웹에서 바로 보이지 않아요. 다운로드해서 열어 주세요.${it.size ? ` (${sizeText(it.size)})` : ''}`);
+    else none(`${extOf(it.name) ? `.${extOf(it.name)} ` : ''}파일은 미리보기가 안 돼요. 다운로드해서 열어 주세요.`);
+    const d2 = v.querySelector('[data-iv-down2]'); if (d2) d2.onclick = () => downloadFile(it);
+  };
+  v.onclick = e => { if (e.target === v || e.target.classList.contains('iv-stage')) v.close(); };
+  v.onkeydown = e => { if (items.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { i = (i + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length; draw(); } };
+  v.onclose = () => { tok++; v.innerHTML = ''; }; // 영상 · 소리는 닫으면 멈춰요
+  draw(); if (!v.open) v.showModal();
+}
+// 사진 크게 보기 (채팅 · 공지 사진) — 같은 미리보기 창
+const imgViewer = (items, at = 0) => fileViewer(items.map(x => ({ mime: 'image/jpeg', ...x })), at);
+// 첨부 파일 목록: 누르면 미리보기, 옆 버튼은 바로 다운로드 (공지 · 센터 공지)
+const fileChips = (files, bucket) => (files || []).length ? `<div class="att-list">${files.map(f => `<div class="att">
+  <button type="button" class="att-main" data-fv="${esc(f.path)}" data-fv-b="${bucket}" data-fv-n="${esc(f.name)}" data-fv-m="${esc(f.mime || '')}" data-fv-s="${f.size || ''}">${ic(fileKind(f) === 'image' ? 'image' : fileKind(f) === 'video' ? 'video' : 'doc')}<span><b>${esc(f.name)}</b><small>${sizeText(f.size)} · 눌러서 미리보기</small></span></button>
+  <button type="button" class="btn sm" data-fv-down="${esc(f.path)}" data-fv-b="${bucket}" data-fv-n="${esc(f.name)}">${ic('download')}다운로드</button></div>`).join('')}</div>` : '';
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-fv], [data-fv-down]'); if (!b) return;
+  const it = x => ({ bucket: x.dataset.fvB, path: x.dataset.fv || x.dataset.fvDown, name: x.dataset.fvN, mime: x.dataset.fvM, size: +x.dataset.fvS || null });
+  if (b.dataset.fvDown) { downloadFile(it(b)); return; }
+  const list = [...b.closest('.att-list').querySelectorAll('[data-fv]')];
+  fileViewer(list.map(it), list.indexOf(b));
+});
 const noticeImgs = n => (n.images || []).length ? `<div class="n-imgs n${Math.min(n.images.length, 3)}">${n.images.map(p => `<a class="n-img" href="#" data-open-img="${esc(p)}" data-bucket="notices"><img data-bucket-img="${esc(p)}" data-bucket="notices" alt="공지 사진"></a>`).join('')}</div>` : '';
 function shrinkPhoto(file) {
   return new Promise((ok, no) => {
@@ -1547,31 +1675,31 @@ function paperSuggestions() {
   [last, cur].forEach(m => {
     const pay = sum(REAL.expenses.filter(x => x.category === '강사 급여' && ymOf(x.day) === m), x => x.amount);
     if (pay > 0) out.push([`wht:${m}`, `${+m.slice(5)}월분 원천세 신고·납부`, '세무서', nextMonthDay(m, 10),
-      `${+m.slice(5)}월 강사 급여 ${won(pay)} · 예상 세액 ${won(Math.round(pay * WHT / 10) * 10)}(3.3%) · "원천세 계산표"를 내려받아 홈택스에서 신고해요.`]);
+      `${+m.slice(5)}월 강사 급여 ${won(pay)} · 예상 세액 ${won(Math.round(pay * WHT / 10) * 10)}(3.3%) · "원천세 계산표"를 다운로드해 홈택스에서 신고해요.`]);
   });
   // 2) 새로 합류한 강사 → 채용 통보 · (근로계약이면) 4대보험 취득
   REAL.members.filter(x => x.role === 'teacher' && dday(x.joined_at.slice(0, 10)) >= -60).forEach(x => {
     const d = x.joined_at.slice(0, 10);
-    out.push([`hire:${x.name}:${d}`, `강사 채용 통보 · ${x.name}`, '교육청', null, `${md(d)}에 합류한 강사예요. 관할 교육청에 채용 사실을 알려요. "강사 명단"을 내려받아 쓰세요.`]);
+    out.push([`hire:${x.name}:${d}`, `강사 채용 통보 · ${x.name}`, '교육청', null, `${md(d)}에 합류한 강사예요. 관할 교육청에 채용 사실을 알려요. "강사 명단"을 다운로드해 쓰세요.`]);
     out.push([`ins:${x.name}:${d}`, `4대보험 취득 신고 · ${x.name}`, '4대보험 공단', nextMonthDay(ymOf(d), 15), '근로계약을 맺은 강사라면 다음 달 15일까지 신고해요. 프리랜서(3.3%)라면 넘겨도 돼요.']);
   });
   // 3) 반 수강료가 지난달과 달라졌으면 → 교습비 변경 신고
   const fee = m => { const o = {}; REAL.invoices.filter(i => i.month === m && i.title === '수강료').forEach(i => { o[i.class_name || '반 미지정'] = i.amount; }); return o; };
   const a = fee(last), b = fee(cur);
   Object.keys(b).filter(c => a[c] != null && a[c] !== b[c]).forEach(c => out.push([`fee:${c}:${cur}`, `교습비 변경 신고 · ${c}`, '교육청', null,
-    `${c} 수강료가 ${won(a[c])} → ${won(b[c])}로 바뀌었어요. 교습비를 바꿀 땐 교육청에 미리 신고해요. "교습비 표"를 내려받아 쓰세요.`]));
+    `${c} 수강료가 ${won(a[c])} → ${won(b[c])}로 바뀌었어요. 교습비를 바꿀 땐 교육청에 미리 신고해요. "교습비 표"를 다운로드해 쓰세요.`]));
   // 4) 1월 1일 ~ 2월 10일: 지난해 수입으로 사업장현황신고
   const y = +TODAY.slice(0, 4) - 1;
   if (TODAY <= `${y + 1}-02-10`) {
     const inc = sum(ledger().filter(e => e.kind === 'in' && e.day.startsWith(String(y))), e => e.amount);
-    out.push([`biz:${y}`, `${y}년 사업장현황신고`, '세무서', `${y + 1}-02-10`, `${y}년 수입 ${won(inc)} · "사업장현황 수입 요약"을 내려받아 홈택스에서 신고해요.`]);
+    out.push([`biz:${y}`, `${y}년 사업장현황신고`, '세무서', `${y + 1}-02-10`, `${y}년 수입 ${won(inc)} · "사업장현황 수입 요약"을 다운로드해 홈택스에서 신고해요.`]);
   }
   // 같은 마감의 같은 서류가 이미 목록에 있으면(예: 직접 넣은 원천세) 빼요
   const same = (t, due) => due && REAL.paperwork.some(p => p.due === due && ['원천세', '사업장현황'].some(w => t.includes(w) && p.title.includes(w)));
   return out.filter(([k, t, , due]) => !have.has(k) && !same(t, due));
 }
 
-// 서류 바로 만들기: 학원 데이터로 엑셀을 채워 내려받아요
+// 서류 바로 만들기: 학원 데이터로 엑셀을 채워 다운로드해요
 const PAPER_DOCS = [
   ['roster', '원생 명부', '이름 · 학년 · 반 · 학부모 연락처', 'users'],
   ['attend', '출석부', '보고 있는 달의 날짜별 출결', 'attend'],
@@ -1635,7 +1763,7 @@ async function makePaperDoc(kind) {
   sheetEditor(doc ? doc[1] : '서류', rows, file, widths, ['fees', 'wht', 'biz'].includes(kind));
 }
 
-/* ---------- 웹에서 고치고 엑셀로 받기: 만든 서류를 바로 내려받지 않고 화면에서 칸을 고치고 줄을 더한 뒤 받아요 ----------
+/* ---------- 웹에서 고치고 엑셀로 받기: 만든 서류를 바로 다운로드하지 않고 화면에서 칸을 고치고 줄을 더한 뒤 받아요 ----------
    줄마다 카드로 보여 줘서 옆으로 밀지 않아도 돼요. 합계 줄은 받을 때 다시 계산해요(totals). */
 function sheetEditor(name, rows, file, widths, totals) {
   const hi = 3, header = rows[hi] || [], cols = header.length;
@@ -1991,7 +2119,7 @@ function realPaperPage() {
   const list = [...REAL.paperwork].sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.due || '9999').localeCompare(b.due || '9999'));
   const sug = paperSuggestions();
   const acts = `<button class="btn" data-act="presetPaper">자주 내는 서류 넣기</button><button class="btn primary" data-act="addPaper">${ic('plus')}서류 추가</button>`;
-  return head('서류·행정', '학원 데이터로 챙길 서류를 저절로 찾아 주고, 명부 · 출석부 · 원천세 계산표 같은 서류는 바로 만들어 내려받을 수 있어요. 직접 넣는 것도 그대로 돼요.', acts) + `
+  return head('서류·행정', '학원 데이터로 챙길 서류를 저절로 찾아 주고, 명부 · 출석부 · 원천세 계산표 같은 서류는 바로 만들어 다운로드할 수 있어요. 직접 넣는 것도 그대로 돼요.', acts) + `
   ${sug.length ? `<section class="card auto-sug">
     <div class="card-head"><div><h2>${ic('star')} 자동으로 찾은 서류 ${sug.length}건</h2><span class="sub">강사 급여 · 새 강사 · 수강료 변경 · 연간 신고를 살펴봤어요</span></div><button class="btn sm primary" data-act="addAllSug">모두 넣기</button></div>
     <div class="list">${sug.map(([k, t, org, due, memo]) => `
@@ -2074,6 +2202,10 @@ const demoLate = () => DATA.unpaid.filter(u => u.days > 0).sort((a, b) => b.days
 // 원장 홈 "오늘 챙길 일" — 실제 데이터에서 골라요
 function realOwnerTodo() {
   const items = [];
+  const cn = cnUnread();
+  if (cn.length) items.push([`센터 공지 ${cn.length}건 읽기`, cn.slice(0, 2).map(n => esc(n.title)).join(' · '), cn.length === 1 ? `#cnews/${cn[0].id}` : '#cnews', '<span class="chip info">센터 공지</span>']);
+  const ttEnd = REAL.timetable.filter(t => !t.week_of && t.to_week && t.to_week >= mondayOf(TODAY) && t.to_week <= addDays(mondayOf(TODAY), 7));
+  if (ttEnd.length) items.push([`시간표 ${ttEnd.length}칸이 곧 끝나요`, `${[...new Set(ttEnd.map(t => t.class_name))].slice(0, 3).map(esc).join(' · ')} · ~${md(ttEnd.map(ttLastDay).sort().pop())} · "이어가기"로 늘려요`, '#schedule', '<span class="chip warn">이어가기</span>']);
   REAL.paperwork.filter(p => p.status !== 'done' && p.due && dday(p.due) <= 14).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3)
     .forEach(p => items.push([`${esc(p.title)} 제출`, `${esc(p.org || '서류·행정')} · 마감 ${md(p.due)}`, '#admin/paper', ddChip(p.due)]));
   const sug = paperSuggestions();
@@ -2126,7 +2258,11 @@ const COLORS = [['blue', '파랑'], ['sky', '하늘'], ['teal', '청록'], ['gre
 // 일정 칩: 고른 색이 있으면 그 색, 없으면 종류 색
 const evChip = (e, cls = '') => e.color ? `chip tint col-${e.color} ${cls}` : `chip ${EV_COLOR[e.kind]} ${cls}`;
 // 주마다 다른 시간표: week_of(그 주 월요일)가 있으면 그 주에만, 없으면 매주(skip_weeks에 든 주는 빠짐)
-const ttOn = (t, mon) => !ttCanceled(t, mon) && (t.week_of ? t.week_of === mon : !(t.skip_weeks || []).includes(mon));
+// 기간: 매주 수업도 from_week ~ to_week(그 주 월요일) 안에서만 — 비어 있으면 끝 없이
+const ttInRange = (t, mon) => (!t.from_week || mon >= t.from_week) && (!t.to_week || mon <= t.to_week);
+const ttOn = (t, mon) => !ttCanceled(t, mon) && (t.week_of ? t.week_of === mon : !(t.skip_weeks || []).includes(mon) && ttInRange(t, mon));
+// 이 수업이 마지막으로 있는 날 (기간이 있을 때)
+const ttLastDay = t => t.to_week ? addDays(t.to_week, (+t.weekday + 6) % 7) : null;
 // 휴강: 그 주만 쉬는 수업 (cancels { 그 주 월요일: 이유 }) — 지우지 않고 "휴강"으로 보여 줘요
 const ttCanceled = (t, mon) => !!t.cancels && Object.prototype.hasOwnProperty.call(t.cancels, mon) && (t.week_of ? t.week_of === mon : true);
 const wkLabel = mon => `${+mon.slice(5, 7)}/${+mon.slice(8)} 주`;
@@ -2183,7 +2319,11 @@ function schedulePage() {
   const { tt, ev } = schData(), staff = isStaff(), c = schClass();
   const classes = [...new Set([...tt.map(t => t.class_name)])].sort();
   const opts = [...(myClasses().length ? [['mine', ROLE === 'student' ? '내 반' : '우리 아이 반']] : []), ['all', '전체'], ...(staff ? classes.map(x => [x, x]) : [])];
-  const acts = [staff ? `${ROLE === 'owner' ? `<button class="btn" data-photo="timetable">${ic('image')}사진으로 올리기</button>` : ''}<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>${tt.length ? '<button class="btn" data-act="cleanTT">시간표 정리</button>' : ''}` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
+  // 위쪽 버튼은 둘만: 수업 넣기 · 일정 넣기, 나머지는 "더 보기" 안에
+  const more = [ROLE === 'owner' ? `<button type="button" data-photo="timetable">${ic('image')}종이 시간표 사진으로 올리기</button>` : '', `<button type="button" data-act="ttMakeup">${ic('plus')}보강 넣기</button>`,
+    `<button type="button" data-act="ttCopyWeek">${ic('cal')}다른 주 시간표 가져오기</button>`, tt.length ? `<button type="button" data-act="cleanTT">${ic('trash')}시간표 정리 · 여러 칸 지우기</button>` : ''].filter(Boolean);
+  const acts = staff ? `<button class="btn ${SCH_VIEW === 'week' ? 'primary' : ''}" data-act="addTT">${ic('plus')}수업 넣기</button><button class="btn ${SCH_VIEW === 'month' ? 'primary' : ''}" data-act="addEv">${ic('plus')}일정 넣기</button>
+    <details class="more-menu"><summary class="btn">더 보기 ▾</summary><div class="mm-pop">${more.join('')}</div></details>` : '';
   const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && ttOn(t, mondayOf(TODAY)) && classOk(t.class_name)).sort(ttSort);
   const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
   const todayOff = tt.filter(t => +t.weekday === day0(TODAY).getDay() && ttCanceled(t, mondayOf(TODAY)) && classOk(t.class_name));
@@ -2204,21 +2344,36 @@ function weekView(tt, staff) {
   const list = tt.filter(t => classOk(t.class_name) && ttOn(t, mon)), off0 = tt.filter(t => classOk(t.class_name) && ttCanceled(t, mon));
   if (!tt.length) return `
   <section class="card empty"><span class="tile-ic">${ic('cal')}</span><h2>아직 시간표가 없어요</h2>
-    <p class="muted">${staff ? '반마다 요일 · 시간을 넣으면 원장 · 강사 · 학부모 · 학생 모두에게 같은 시간표가 보여요.' : '학원에서 시간표를 넣으면 여기에 보여요.'}</p>
-    ${ROLE === 'owner' ? `<div class="btns" style="justify-content:center"><button class="btn primary" data-photo="timetable">${ic('image')}시간표 사진으로 올리기</button><button class="btn" data-act="addTT">직접 넣기</button></div><p class="muted small">종이 시간표를 찍어 올리면 반 · 요일 · 시간을 읽어 먼저 채워 드려요.</p>` : staff ? '<div class="btns" style="justify-content:center"><button class="btn primary" data-act="addTT">시간표 넣기</button></div>' : ''}</section>`;
+    <p class="muted">${staff ? '반마다 요일 · 시간을 넣으면 원장 · 강사 · 학부모 · 학생 모두에게 같은 시간표가 보여요. 한 달 · 3개월처럼 기간을 정해 넣고, 끝날 때 "이어가기"로 늘려요.' : '학원에서 시간표를 넣으면 여기에 보여요.'}</p>
+    ${ROLE === 'owner' ? `<div class="btns" style="justify-content:center"><button class="btn primary" data-act="addTT">${ic('plus')}수업 넣기</button><button class="btn" data-photo="timetable">${ic('image')}종이 시간표 사진으로 올리기</button></div><p class="muted small">종이 시간표를 찍어 올리면 반 · 요일 · 시간을 읽어 먼저 채워 드려요.</p>` : staff ? `<div class="btns" style="justify-content:center"><button class="btn primary" data-act="addTT">${ic('plus')}수업 넣기</button></div>` : ''}</section>`;
   const evs = schData().ev.filter(e => classOk(e.target_class) && e.day <= sun && (e.end_day || e.day) >= mon);
-  const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d) || off0.some(t => +t.weekday === d) || evs.some(e => evOn(e, dateOf(d))));
-  const weekly = tt.filter(t => !t.week_of).length, only = tt.filter(t => t.week_of === mon && t.kind !== 'makeup');
-  const tools = staff ? `
-  <div class="tt-tools">
-    <button class="btn sm ${TT_PICK ? 'primary' : ''}" data-act="ttPick">${ic('check')}${TT_PICK ? '고르기 끝내기' : '여러 칸 골라 옮기기 · 휴강'}</button>
-    <button class="btn sm" data-act="ttMakeup">${ic('plus')}보강 넣기</button>
-    <button class="btn sm" data-act="ttCopyWeek">${ic('cal')}다른 주 시간표 가져오기</button>
-    ${only.length ? `<button class="btn sm" data-act="ttOnlyNext">이 주만 칸 ${only.length}개 → 다음 주에도</button><button class="btn sm" data-act="ttOnlyFix">→ 매주로 바꾸기</button>` : ''}
-  </div>
-  <p class="muted small tt-tip">${weekly ? `매주 반복하는 수업 ${weekly}칸은 한 번만 넣어 두면 1년 내내 매주 그대로 나와요. 바뀌는 주만 <b>휴강 · 보강</b>으로 고치세요.` : '"매주"로 넣은 수업은 한 번만 넣으면 매주 그대로 나와요.'} 칸을 끌어 다른 요일에 놓으면 옮겨지고, Shift를 누른 채 누르면 여러 칸을 함께 골라요.</p>
-  ${TT_SEL.size ? `<div class="tt-selbar"><b>${TT_SEL.size}칸 골랐어요</b><button class="btn sm primary" data-act="ttMoveSel">다른 요일 · 시간으로 옮기기</button><button class="btn sm" data-act="ttCancelSel">이 주 휴강</button><button class="btn sm danger" data-act="ttDelSel">지우기</button><button class="btn sm ghost" data-act="ttSelNone">다 풀기</button></div>` : ''}` : '';
+  const days = WEEK.filter(d => d >= 1 && d <= 5 || list.some(t => +t.weekday === d) || off0.some(t => +t.weekday === d) || evs.some(e => evOn(e, dateOf(d))) || (staff && TT_CLIP && TT_CLIP.some(c => c.weekday === d)));
   const thisWeek = mon === mondayOf(TODAY), wk = Math.round(daysBetween(mondayOf(TODAY), mon) / 7);
+  // 기간이 곧 끝나거나 막 끝난 수업: 한 줄로 "이어가기"
+  const ending = staff ? tt.filter(t => !t.week_of && t.to_week && t.to_week >= addDays(mon, -28) && t.to_week <= addDays(mon, 7) && classOk(t.class_name)) : [];
+  const endLast = ending.length ? ending.map(ttLastDay).sort().pop() : null, ended = ending.length && ending.every(t => t.to_week < mon);
+  const bars = staff ? `
+  ${ending.length ? `<div class="tt-note ${ended ? 'warn' : ''}">${ic('cal')}<span><b>${ended ? `기간이 끝난 수업 ${ending.length}칸` : `곧 끝나는 수업 ${ending.length}칸`}</b> · ${[...new Set(ending.map(t => t.class_name))].slice(0, 4).map(esc).join(' · ')} (~${md(endLast)})</span>
+    <button class="btn sm primary" data-tt-extend="4">한 달 더 이어가기</button><button class="btn sm" data-tt-extend="12">3개월 더</button><button class="btn sm" data-tt-extend="0">끝 없이 계속</button></div>` : ''}
+  ${TT_SEL.size ? `<div class="tt-selbar"><b>${TT_SEL.size}칸 골랐어요</b>
+    <button class="btn sm primary" data-act="ttCopySel">${ic('copy')}복사</button><button class="btn sm" data-act="ttMoveSel">${ic('move')}옮기기</button><button class="btn sm" data-act="ttCancelSel">${ic('pause')}이 주 휴강</button><button class="btn sm danger" data-act="ttDelSel">${ic('trash')}지우기</button>
+    <span class="sp"></span><button class="btn sm ghost" data-act="ttSelAll">이 주 모두 고르기</button><button class="btn sm ghost" data-act="ttSelNone">다 풀기</button></div>`
+  : TT_CLIP ? `<div class="tt-selbar clip"><b>${ic('paste')}${TT_CLIP.length}칸 복사해 뒀어요</b><span class="muted small">붙일 요일의 "여기에 붙여넣기"를 누르세요 · 다른 주로 넘어가서 붙여도 돼요</span>
+    <span class="sp"></span><button class="btn sm primary" data-act="ttPaste">붙여넣기…</button><button class="btn sm ghost" data-act="ttClipNone">그만두기</button></div>`
+  : `<p class="muted small tt-tip">칸을 누르면 고치기 · <b>○</b>를 누르면 여러 칸을 골라 <b>복사 · 옮기기 · 휴강 · 지우기</b>${matchMedia('(pointer: fine)').matches ? ' · 끌어서 다른 요일에 놓으면 옮기기 · Ctrl+C / Ctrl+V도 돼요' : ''}</p>`}` : '';
+  const blk = t => {
+    const end = !t.week_of && t.to_week ? ttLastDay(t) : null, sel = TT_SEL.has(t.id);
+    return `
+      <${staff ? `div role="button" tabindex="0" data-edit-tt="${t.id}" draggable="true"` : 'div'} class="tt-blk${t.color ? ` tint col-${t.color}` : ''}${sel ? ' sel' : ''}">
+        ${staff ? `<button type="button" class="tt-check" data-tt-sel="${t.id}" aria-label="${sel ? '고르기 풀기' : '이 칸 고르기'}" aria-pressed="${sel}">${sel ? '✓' : ''}</button>` : ''}
+        <span class="tm num">${hm(t.start_time)}–${hm(t.end_time)}${t.kind === 'makeup' ? ' <em class="wk-only mk">보강</em>' : t.week_of ? ' <em class="wk-only">이 주만</em>' : ''}</span>
+        <b>${esc(t.class_name)}</b>${t.subject ? `<span>${esc(t.subject)}</span>` : ''}
+        ${staff && (t.room || t.teacher_name) ? `<span class="sub">${[t.room, t.teacher_name].filter(Boolean).map(esc).join(' · ')}</span>` : ''}
+        ${staff && t.note ? `<span class="note">${esc(t.note)}</span>` : ''}
+        ${end ? `<span class="until ${daysBetween(TODAY, end) <= 7 ? 'soon' : ''}">~${md(end)}까지</span>` : ''}
+        ${staff ? stampLine(t) : ''}
+      </div>`;
+  };
   return `
   <div class="week-bar">
     <button class="btn sm" data-sch-week="-1" aria-label="지난주">‹</button>
@@ -2227,29 +2382,21 @@ function weekView(tt, staff) {
     <button class="btn sm" data-sch-week="1" aria-label="다음 주">›</button>
     ${thisWeek ? '' : '<button class="btn sm" data-sch-week="0">이번 주로</button>'}
     <label class="wk-pick">날짜로 고르기<input type="date" id="schWeekPick" value="${mon}"></label>
-  </div>${tools}
-  <div class="tt ${TT_PICK ? 'picking' : ''}" style="--d:${days.length}">${days.map(d => {
+  </div>${bars}
+  <div class="tt ${TT_SEL.size ? 'picking' : ''}" style="--d:${days.length}">${days.map(d => {
     const date = dateOf(d), isToday = date === TODAY, dayEv = evs.filter(e => evOn(e, date)), off = dayEv.some(e => e.kind === '휴원');
     const blks = list.filter(t => +t.weekday === d).sort(ttSort), offs = off0.filter(t => +t.weekday === d).sort(ttSort);
     return `
     <section class="tt-day ${isToday ? 'today' : ''} ${off ? 'off' : ''}" ${staff ? `data-tt-day="${d}"` : ''}>
       <h3>${WD[d]} <span class="dt">${+date.slice(5, 7)}/${+date.slice(8)}</span>${isToday ? ' <span class="chip info">오늘</span>' : ''}</h3>
       ${dayEv.map(e => `<span class="${evChip(e, 'tt-ev')}">${esc(e.kind)} · ${esc(e.title)}</span>`).join('')}
-      ${blks.length ? blks.map(t => `
-      <${staff ? `button type="button" data-edit-tt="${t.id}" draggable="true"` : 'div'} class="tt-blk${t.color ? ` tint col-${t.color}` : ''}${TT_SEL.has(t.id) ? ' sel' : ''}">
-        ${staff && (TT_PICK || TT_SEL.size) ? `<i class="tt-check" aria-hidden="true">${TT_SEL.has(t.id) ? '✓' : ''}</i>` : ''}
-        <span class="tm num">${hm(t.start_time)}–${hm(t.end_time)}${t.kind === 'makeup' ? ' <em class="wk-only mk">보강</em>' : t.week_of ? ' <em class="wk-only">이 주만</em>' : ''}</span>
-        <b>${esc(t.class_name)}</b>${t.subject ? `<span>${esc(t.subject)}</span>` : ''}
-        ${staff && (t.room || t.teacher_name) ? `<span class="sub">${[t.room, t.teacher_name].filter(Boolean).map(esc).join(' · ')}</span>` : ''}
-        ${staff && t.note ? `<span class="note">${esc(t.note)}</span>` : ''}
-        ${staff ? stampLine(t) : ''}
-      </${staff ? 'button' : 'div'}>`).join('') : offs.length ? '' : '<p class="muted small">수업 없음</p>'}
+      ${blks.length ? blks.map(blk).join('') : offs.length ? '' : '<p class="muted small">수업 없음</p>'}
       ${offs.map(t => `<${staff ? `button type="button" data-tt-uncancel="${t.id}" title="눌러서 휴강 풀기 · 보강 잡기"` : 'div'} class="tt-blk cancel">
         <span class="tm num">${hm(t.start_time)}–${hm(t.end_time)} <em class="wk-only off">휴강</em></span><b>${esc(t.class_name)}</b>${t.subject ? `<span>${esc(t.subject)}</span>` : ''}
         ${t.cancels[mon] ? `<span class="note">${esc(t.cancels[mon])}</span>` : ''}</${staff ? 'button' : 'div'}>`).join('')}
+      ${staff ? TT_CLIP ? `<button type="button" class="tt-add paste" data-tt-paste="${d}">${ic('paste')}여기에 붙여넣기</button>` : `<button type="button" class="tt-add" data-tt-add="${d}">${ic('plus')}수업</button>` : ''}
     </section>`;
-  }).join('')}</div>
-  ${staff ? `<p class="muted small">칸을 누르면 고치거나 지울 수 있어요. 원장님 · 강사님 누구나 고칠 수 있고, 학부모 · 학생에게는 휴강 · 보강이 그대로 보여요.</p>` : ''}`;
+  }).join('')}</div>`;
 }
 
 function monthView(ev, staff) {
@@ -2277,61 +2424,93 @@ function monthView(ev, staff) {
   </section>`;
 }
 
-// 같은 수업: 반 · 시작 · 끝 · 과목 · 주가 같은 칸들 (월 · 수 · 금처럼 요일만 다른 것) — 한 번에 고치고 지워요
-const ttKey = x => [x.class_name, hm(x.start_time), hm(x.end_time), x.subject || '', x.week_of || ''].join('|');
-const ttGroup = t => (REAL ? REAL.timetable : []).filter(x => ttKey(x) === ttKey(t)).sort(ttSort);
-function ttDialog(t) {
+// 같은 수업: 반 · 시작 · 끝 · 과목 · 주 · 기간이 같은 칸들 (월 · 수 · 금처럼 요일만 다른 것) — 한 번에 고치고 지워요
+const ttKey = x => [x.class_name, hm(x.start_time), hm(x.end_time), x.subject || '', x.week_of || '', x.from_week || '', x.to_week || ''].join('|');
+const ttGroup = t => schData().tt.filter(x => ttKey(x) === ttKey(t)).sort(ttSort);
+/* 시간표 저장은 TTX 하나로: 실제 계정은 Supabase, 예시 계정은 이 화면 안에서만 바뀌어요 (새로 고치면 처음대로) */
+const TTX = {
+  ins: async rows => { rows = [].concat(rows); if (REAL) return SB.from('timetable').insert(rows.map(r => ({ ...r, academy_id: REAL.academy.id }))); DATA.timetable.push(...rows.map(r => ({ ...r, id: `tt-${Math.random().toString(36).slice(2, 9)}`, created_by_name: ME.name }))); return { error: null }; },
+  upd: async (id, ch) => { if (REAL) return SB.from('timetable').update(ch).eq('id', id); const t = DATA.timetable.find(x => x.id === id); if (t) Object.assign(t, ch, { updated_by_name: ME.name, updated_at: new Date().toISOString() }); return { error: null }; },
+  del: async ids => { ids = [].concat(ids); if (REAL) return SB.from('timetable').delete().in('id', ids); DATA.timetable = DATA.timetable.filter(x => !ids.includes(x.id)); return { error: null }; }
+};
+const ttReload = () => REAL ? loadSchedule() : Promise.resolve();
+const ttFind = id => schData().tt.find(t => t.id === id);
+const demoNote = () => REAL ? '' : ' · 예시 계정이라 새로 고치면 처음대로예요';
+// 기간 고르기: 보고 있는 주(mon)부터
+const PERIODS = mon => [['m1', `한 달 (4주 · ~${md(addDays(mon, 27))})`], ['m3', `3개월 (12주 · ~${md(addDays(mon, 83))})`], ['until', '끝나는 날 직접 고르기'], ['ever', '끝 없이 매주'], ['week', `이 주만 (${wkLabel(mon)})`]];
+const PERIOD_WEEKS = { m1: 4, m3: 12 };
+// 고른 기간 → 칸에 넣을 값 (until은 그날이 든 주까지)
+function periodRow(p, mon, until) {
+  if (p === 'week') return { week_of: mon, from_week: null, to_week: null };
+  if (p === 'ever') return { week_of: null, from_week: mon, to_week: null };
+  if (p === 'until') return { week_of: null, from_week: mon, to_week: until ? mondayOf(until) : addDays(mon, 21) };
+  return { week_of: null, from_week: mon, to_week: addDays(mon, 7 * (PERIOD_WEEKS[p] - 1)) };
+}
+const periodText = t => t.week_of ? `${wkLabel(t.week_of)}만` : t.to_week ? `${t.from_week ? `${md(t.from_week)}부터 ` : ''}~${md(ttLastDay(t))}까지 매주` : `${t.from_week ? `${md(t.from_week)}부터 ` : ''}끝 없이 매주`;
+// "끝나는 날 직접 고르기"를 고르면 날짜 칸이 보여요
+function bindPeriod(dlg, name = 'period') {
+  const sel = dlg.querySelector(`[name="${name}"]`), box = dlg.querySelector('[name="until"]');
+  if (!sel || !box) return;
+  const wrap = box.closest('.f'), sync = () => { wrap.hidden = sel.value !== 'until'; };
+  sel.addEventListener('change', sync); sync();
+}
+function ttDialog(t, day) {
   const classes = allClasses(), mon = SCH_WEEK || mondayOf(TODAY), weekly = !t || !t.week_of;
   const group = t ? ttGroup(t) : [], many = group.length > 1, gDays = group.map(x => +x.weekday);
-  const strip = d => { const { scope, together, ...rest } = d; return rest; };
+  const strip = d => { const { scope, together, period, until, ...rest } = d; return rest; };
   const days = d => [].concat(d.weekday).map(Number);
   const skipAdd = x => [...new Set([...(x.skip_weeks || []), mon])];
+  const ok = r => { if (r && r.error) throw r.error; return r; };
   formDialog({
-    title: t ? '시간표 고치기' : '시간표 추가', table: 'timetable', row: t, after: loadSchedule,
+    title: t ? '수업 고치기' : '수업 넣기', table: 'timetable', row: t, after: ttReload, academy: false,
     label: r => `${r.class_name} 수업을`,
-    check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
-    doneText: '시간표에 넣었어요',
+    check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : d.period === 'until' && !d.until ? '끝나는 날을 골라 주세요.' : d.period === 'until' && d.until < mon ? '끝나는 날은 이 주보다 뒤여야 해요.' : null,
+    doneText: `시간표에 넣었어요${demoNote()}`,
     fields: [
       ...(many ? [['together', '같이 고칠 칸', { type: 'select', required: true, own: true, value: 'group', options: [['group', `같은 수업 모두 (${gDays.map(d => WD[d]).join(' · ')} ${group.length}칸)`], ['one', `이 칸만 (${WD[t.weekday]}요일)`]] }]] : []),
-      ...(weekly ? [['scope', t ? '어느 주까지 바꿀까요?' : '어느 주에 넣을까요?', { type: 'select', required: true, own: true, value: 'all', options: t
-        ? [['all', '매주 바꾸기 (앞으로 모든 주)'], ['week', `이 주만 바꾸기 (${wkLabel(mon)} · 다른 주는 그대로)`]]
-        : [['all', '매주 (계속 반복)'], ['week', `이 주만 (${wkLabel(mon)})`]] }]] : []),
       ['class_name', '반', { required: true, max: 50, chips: classes, placeholder: '예: 초등 B반' }],
-      ['weekday', many ? '요일 (같은 수업 모두: 빼면 그 요일 칸은 지워지고, 더하면 새로 들어가요)' : t ? '요일 (더 고르면 그 요일에도 같은 수업이 들어가요)' : '요일 (여러 개 고르면 요일마다 같은 수업이 들어가요)', { type: 'multi', required: true, own: many, options: WEEK.map(d => [d, WD[d]]), value: many ? gDays : [1] }],
       ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', chips: subjList() }],
+      ['weekday', many ? '요일 (빼면 그 요일 칸은 지워지고, 더하면 새로 들어가요)' : '요일 (여러 개 고르면 요일마다 같은 수업이 들어가요)', { type: 'multi', required: true, own: many || !t, options: WEEK.map(d => [d, WD[d]]), value: many ? gDays : t ? [+t.weekday] : [day ?? 1] }],
       ['start_time', '시작', { type: 'time', required: true, value: '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: '17:30', half: true }],
-      ['color', '색', { type: 'color' }],
-      ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true, chips: ['1강의실', '2강의실', '3강의실', '자습실'] }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지', chips: staffNames() }],
-      ['note', '메모 (원장·강사만)', { max: 300, placeholder: '예: 격주 단어 시험' }]
+      ...(t && weekly ? [['scope', '어느 주를 바꿀까요?', { type: 'select', required: true, own: true, value: 'all', options: [['all', '모든 주 (이 수업 기간 전체)'], ['week', `이 주만 (${wkLabel(mon)} · 다른 주는 그대로)`]] }]] : []),
+      ...(!t ? [['period', '언제까지?', { type: 'select', required: true, own: true, value: 'm1', options: PERIODS(mon) }]]
+        : weekly ? [['period', `언제까지? · 지금: ${periodText(t)}`, { type: 'select', required: true, own: true, value: 'keep', options: [['keep', '그대로 두기'], ...PERIODS(mon).filter(p => p[0] !== 'week').map(([k, l]) => [k, k === 'until' ? l : `${wkLabel(mon)}부터 ${l}`])] }]] : []),
+      ['until', '끝나는 날', { type: 'date', own: true, value: t && t.to_week ? ttLastDay(t) : addDays(mon, 27) }],
+      ['color', '색', { type: 'color', more: true }],
+      ['room', '강의실', { max: 30, placeholder: '예: 2강의실', half: true, more: true, chips: ['1강의실', '2강의실', '3강의실', '자습실'] }], ['teacher_name', '담당 강사', { max: 50, half: true, more: true, placeholder: '예: 김민지', chips: staffNames() }],
+      ['note', '메모', { max: 300, placeholder: '예: 격주 단어 시험', more: true }]
     ],
-    // 저장: 같은 수업 모두 / 이 칸만 · 매주 / 이 주만 · 요일 여러 개
-    save: async (d, base) => {
-      const one = strip(d), ws = days(d), onlyWeek = d.scope === 'week' || (t && t.week_of), all = many && d.together !== 'one';
+    moreLabel: '색 · 강의실 · 담당 강사 · 메모 (원장 · 강사만 보여요)',
+    save: async d => {
+      const one = strip(d), ws = days(d), all = many && d.together !== 'one';
       const targets = !t ? [] : all ? group : [t];
-      const rows = ws.map(w => ({ ...one, weekday: w, ...(onlyWeek ? { week_of: t && t.week_of ? t.week_of : mon } : {}) }));
-      const ok = r => { if (r && r.error) throw r.error; return r; };
       try {
-        if (!t) ok(await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base }))));
-        else if (d.scope === 'week') {
-          // 매주 수업을 이 주만 바꿔요: 이 주엔 원래 칸들을 빼고(skip_weeks) 바꾼 칸을 이 주에만 넣어요
-          ok(await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base }))));
-          for (const x of targets) ok(await SB.from('timetable').update({ skip_weeks: skipAdd(x) }).eq('id', x.id));
+        if (!t) {
+          const per = periodRow(d.period, mon, d.until);
+          ok(await TTX.ins(ws.map(w => ({ ...one, weekday: w, ...per }))));
+        } else if (d.scope === 'week') {
+          // 기간 안의 매주 수업을 이 주만 바꿔요: 이 주엔 원래 칸들을 빼고(skip_weeks) 바꾼 칸을 이 주에만 넣어요
+          ok(await TTX.ins(ws.map(w => ({ ...one, weekday: w, week_of: mon, from_week: null, to_week: null }))));
+          for (const x of targets) ok(await TTX.upd(x.id, { skip_weeks: skipAdd(x) }));
         } else {
+          const per = weekly && d.period && d.period !== 'keep' ? (({ from_week, ...r }) => r)(periodRow(d.period, mon, d.until)) : {};
+          const rows = ws.map(w => ({ ...one, weekday: w, ...per }));
           // 고른 요일에 원래 칸이 있으면 고치고, 없으면 새로 넣고, 같은 수업 모두일 때 뺀 요일 칸은 지워요
           const left = [...targets], has = w => targets.some(x => +x.weekday === w);
           for (const r of [...rows].sort((a, b) => has(b.weekday) - has(a.weekday))) {
             const i = left.findIndex(x => +x.weekday === r.weekday), hit = i >= 0 ? left.splice(i, 1)[0] : (!all && left.length ? left.shift() : null);
-            if (hit) ok(await SB.from('timetable').update(r).eq('id', hit.id));
-            else ok(await SB.from('timetable').insert({ ...r, ...base }));
+            if (hit) ok(await TTX.upd(hit.id, r));
+            else ok(await TTX.ins({ ...r, week_of: t.week_of || null, from_week: t.from_week || null, to_week: per.to_week !== undefined ? per.to_week : t.to_week || null }));
           }
-          if (all && left.length) ok(await SB.from('timetable').delete().in('id', left.map(x => x.id)));
+          if (all && left.length) ok(await TTX.del(left.map(x => x.id)));
         }
       } catch (e) { return dbErr(e); }
       return null;
     },
-    // 지우기: 같은 수업 모두 / 이 칸만 · 이 주만 빼기
+    // 지우기: 같은 수업 모두 / 이 칸만 · 이 주만 휴강 · 이 주부터 끝내기
     del: async () => {
-      const opts = [...(many ? [['group', `같은 수업 ${group.length}칸 모두 지우기 (${gDays.map(d => WD[d]).join(' · ')})`, 1]] : []), ['one', many ? `이 칸만 지우기 (${WD[t.weekday]}요일)` : weekly ? '매주에서 지우기' : '지우기', 1], ...(weekly ? [['week', `${wkLabel(mon)}만 휴강${many ? ' (같은 수업 모두)' : ''} · 다른 주는 그대로`]] : [])];
+      const opts = [...(many ? [['group', `같은 수업 ${group.length}칸 모두 지우기 (${gDays.map(d => WD[d]).join(' · ')})`, 1]] : []), ['one', many ? `이 칸만 지우기 (${WD[t.weekday]}요일)` : '지우기 (모든 주에서)', 1],
+        ...(weekly ? [['stop', `지난주까지만 하고 끝내기 (${md(addDays(mon, -1))}까지 · 지난 기록은 그대로)`], ['week', `${wkLabel(mon)}만 휴강${many ? ' (같은 수업 모두)' : ''} · 다른 주는 그대로`]] : [])];
       // 고르는 버튼은 아래 버튼 줄 자리에 띄워요 (창이 길어도 바로 보이게)
       const how = await new Promise(res => {
         const bar = $('#dlg .acts');
@@ -2342,29 +2521,87 @@ function ttDialog(t) {
       if (!how) return false;
       const list = how === 'one' ? [t] : group.length ? group : [t];
       if (how === 'week') {
-        for (const x of (many ? group : [t])) { const { error } = await SB.from('timetable').update({ skip_weeks: skipAdd(x), cancels: { ...(x.cancels || {}), [mon]: '' } }).eq('id', x.id); if (error) { toast(dbErr(error, '휴강으로 바꾸지')); return false; } }
+        for (const x of (many ? group : [t])) { const { error } = await TTX.upd(x.id, { skip_weeks: skipAdd(x), cancels: { ...(x.cancels || {}), [mon]: '' } }); if (error) { toast(dbErr(error, '휴강으로 바꾸지')); return false; } }
         return `${wkLabel(mon)}만 휴강으로 바꿨어요 · 다른 주는 그대로예요`;
       }
-      const { error } = await SB.from('timetable').delete().in('id', list.map(x => x.id));
-      return error ? (toast(dbErr(error, '삭제하지')), false) : `${list.length}칸 삭제했어요`;
+      if (how === 'stop') {
+        for (const x of (many ? group : [t])) {
+          const r = x.from_week && x.from_week >= mon ? await TTX.del(x.id) : await TTX.upd(x.id, { to_week: addDays(mon, -7) });
+          if (r.error) { toast(dbErr(r.error, '끝내지')); return false; }
+        }
+        return `${md(addDays(mon, -1))}까지만 하고 끝냈어요 · 이 주부터는 안 보여요`;
+      }
+      const { error } = await TTX.del(list.map(x => x.id));
+      return error ? (toast(dbErr(error, '삭제하지')), false) : `${list.length}칸 삭제했어요${demoNote()}`;
     }
   });
   const dlg = $('#dlg');
   timePickers(dlg, 'start_time', 'end_time');
   bindSubjectEditor(dlg);
+  bindPeriod(dlg);
+  // "이 주만"으로 바꾸면 기간은 안 골라도 돼요
+  const sc = dlg.querySelector('[name=scope]'), pr = dlg.querySelector('[name=period]');
+  if (sc && pr) { const sync = () => { pr.closest('.f').hidden = sc.value === 'week'; if (sc.value === 'week') { pr.value = 'keep'; pr.dispatchEvent(new Event('change')); } }; sc.onchange = sync; sync(); }
   // "이 칸만"으로 바꾸면 요일도 이 칸 요일만 골라 둬요
   const tg = dlg.querySelector('[name=together]');
   if (tg) tg.onchange = () => { const pick = tg.value === 'one' ? [+t.weekday] : gDays; dlg.querySelectorAll('[name=weekday]').forEach(c => { c.checked = pick.includes(+c.value); }); };
-  if (t && t.week_of) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0"><span class="chip info">${wkLabel(t.week_of)}만</span> 이 주에만 있는 수업이에요.</p>`);
-  else if (t && (t.skip_weeks || []).length) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0">매주 수업 · 빠지는 주: ${t.skip_weeks.map(wkLabel).join(', ')}</p>`);
+  if (t && t.week_of) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0"><span class="chip info">${t.kind === 'makeup' ? '보강' : `${wkLabel(t.week_of)}만`}</span> 이 주에만 있는 수업이에요.</p>`);
+  else if (t && (t.skip_weeks || []).length) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0">빠지는 주: ${t.skip_weeks.map(wkLabel).join(', ')}</p>`);
 }
-/* ---------- 시간표 끌어서 옮기기 · 여러 칸 고르기 · 휴강 · 보강 · 다른 주 가져오기 ----------
-   칸을 끌어 다른 요일에 놓거나, 여러 칸을 골라(Shift+누르기 · "여러 칸 골라") 한 번에 옮겨요. 매주 / 이 주만 고를 수 있어요. */
-let TT_SEL = new Set(), TT_PICK = false, TT_DRAG = null;
+/* ---------- 여러 칸 고르기 · 복사 · 붙여넣기 · 끌어서 옮기기 · 휴강 · 보강 · 이어가기 ----------
+   ○를 누르거나 Shift · Ctrl+누르면 고르기, 고르는 중엔 칸을 눌러도 골라져요. 복사한 칸은 다른 요일 · 다른 주에 붙여요. */
+let TT_SEL = new Set(), TT_DRAG = null, TT_CLIP = null;
 const ttRow = x => ({ class_name: x.class_name, weekday: +x.weekday, start_time: hm(x.start_time), end_time: hm(x.end_time), subject: x.subject || null, color: x.color || null, room: x.room || null, teacher_name: x.teacher_name || null, note: x.note || null });
+const ttToggle = id => { if (TT_SEL.has(id)) TT_SEL.delete(id); else { TT_SEL.add(id); TT_CLIP = null; } render(); };
+function ttCopy(ids) {
+  const rows = ids.map(ttFind).filter(Boolean).sort(ttSort);
+  if (!rows.length) return;
+  TT_CLIP = rows.map(t => ({ ...ttRow(t), weekly: !t.week_of }));
+  TT_SEL.clear(); render();
+  toast(`${rows.length}칸을 복사했어요 · 붙일 요일의 "여기에 붙여넣기"를 누르세요`);
+}
+// 붙여넣기: 복사한 칸들의 요일 · 시간 간격은 그대로, 첫 칸을 고른 요일 · 시간으로
+function ttPasteDialog(toDay) {
+  const clip = TT_CLIP; if (!clip) return;
+  const mon = SCH_WEEK || mondayOf(TODAY), base = clip[0], d = dialogEl(), weekly = clip.some(c => c.weekly);
+  d.innerHTML = `<form method="dialog" class="dlg" id="psForm" novalidate>
+    <h2>${clip.length}칸 붙여넣기 · ${wkLabel(mon)}</h2>
+    <p class="muted small" style="margin:-6px 0 0">${clip.slice(0, 4).map(c => `${WD[c.weekday]} ${c.start_time} ${esc(c.class_name)}`).join(' · ')}${clip.length > 4 ? ` 외 ${clip.length - 4}칸` : ''}</p>
+    <div class="f">${clip.length > 1 ? '첫 칸을 어느 요일에? (나머지는 간격 그대로)' : '어느 요일에?'} *<div class="pick-chips multi">${WEEK.map(w => `<label><input type="radio" name="wd" value="${w}" ${w === (toDay ?? base.weekday) ? 'checked' : ''}><span>${WD[w]}</span></label>`).join('')}</div></div>
+    <div class="f">시작 시간 <span class="muted small">(그대로 두면 같은 시간 · 수업 길이는 그대로)</span>${clockPicker('st', base.start_time, true)}</div>
+    <label class="f">언제까지?<select name="period">${PERIODS(mon).map(([k, l]) => `<option value="${k}" ${k === (weekly ? 'm1' : 'week') ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="f" hidden>끝나는 날<input type="date" name="until" value="${addDays(mon, 27)}"></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">그만두기</button><button class="btn primary">붙여넣기</button></div></form>`;
+  d.showModal(); bindClockPickers(d); bindPeriod(d);
+  $('#dlgCancel').onclick = () => d.close();
+  $('#psForm').onsubmit = async e => {
+    e.preventDefault();
+    const f = e.target, to = +f.querySelector('[name=wd]:checked').value, st = f.querySelector('[name=st]').value, m = $('#dlgMsg');
+    const per = periodRow(f.elements.period.value, mon, f.elements.until.value);
+    const dayOff = WEEK.indexOf(to) - WEEK.indexOf(base.weekday), minOff = toMin(st) - toMin(base.start_time);
+    const rows = clip.map(({ weekly: _, ...c }) => ({ ...c, weekday: WEEK[(WEEK.indexOf(c.weekday) + dayOff + 7) % 7], start_time: fromMin(toMin(c.start_time) + minOff), end_time: fromMin(toMin(c.end_time) + minOff), _s: toMin(c.start_time) + minOff, _e: toMin(c.end_time) + minOff, ...per }));
+    if (rows.some(r => r._s < 0 || r._e >= 24 * 60)) { m.textContent = '붙이면 하루를 넘는 칸이 있어요. 시간을 다시 골라 주세요.'; m.hidden = false; return; }
+    const { error } = await TTX.ins(rows.map(({ _s, _e, ...r }) => r));
+    if (error) { m.textContent = dbErr(error, '붙여넣지'); m.hidden = false; return; }
+    d.close(); await ttReload(); render();
+    toast(`${rows.length}칸을 붙여 넣었어요 · ${f.elements.period.selectedOptions[0].textContent}${demoNote()}`);
+  };
+}
+// 기간 이어가기: 곧 끝나거나 막 끝난 수업을 몇 주 더 (0이면 끝 없이)
+async function ttExtend(weeks) {
+  const mon = SCH_WEEK || mondayOf(TODAY);
+  const rows = schData().tt.filter(t => !t.week_of && t.to_week && t.to_week >= addDays(mon, -28) && t.to_week <= addDays(mon, 7) && classOk(t.class_name));
+  for (const t of rows) {
+    const from = t.to_week < mon ? addDays(mon, -7) : t.to_week, end = weeks ? addDays(from, 7 * weeks) : null;
+    const { error } = await TTX.upd(t.id, { to_week: end });
+    if (error) return toast(dbErr(error, '이어가지'));
+  }
+  await ttReload(); render();
+  toast(weeks ? `${rows.length}칸을 ${weeks === 4 ? '한 달' : `${weeks}주`} 더 이어가요${demoNote()}` : `${rows.length}칸을 끝 없이 매주 이어가요${demoNote()}`);
+}
 function ttMoveDialog(ids, baseId, toDay) {
-  if (!REAL) return toast('예시 계정에서는 옮길 수 없어요');
-  const mon = SCH_WEEK || mondayOf(TODAY), rows = ids.map(id => REAL.timetable.find(t => t.id === id)).filter(Boolean);
+  const mon = SCH_WEEK || mondayOf(TODAY), rows = ids.map(ttFind).filter(Boolean);
   if (!rows.length) return;
   const base = rows.find(r => r.id === baseId) || rows[0], anyWeekly = rows.some(r => !r.week_of), d = dialogEl();
   d.innerHTML = `<form method="dialog" class="dlg" id="mvForm" novalidate>
@@ -2372,7 +2609,7 @@ function ttMoveDialog(ids, baseId, toDay) {
     <p class="muted small" style="margin:-6px 0 0">${rows.length > 1 ? `기준 칸(${WD[base.weekday]} ${hm(base.start_time)} ${esc(base.class_name)})을 옮기는 만큼 다른 칸도 함께 옮겨져요.` : `지금 ${WD[base.weekday]}요일 ${hm(base.start_time)}–${hm(base.end_time)}`}</p>
     <div class="f">어느 요일로? *<div class="pick-chips multi">${WEEK.map(w => `<label><input type="radio" name="wd" value="${w}" ${w === (toDay ?? +base.weekday) ? 'checked' : ''}><span>${WD[w]}</span></label>`).join('')}</div></div>
     <div class="f">시작 시간 <span class="muted small">(그대로 두면 시간은 안 바뀌어요 · 수업 길이는 그대로)</span>${clockPicker('st', hm(base.start_time), true)}</div>
-    ${anyWeekly ? `<div class="f">어느 주를 바꿀까요? *<div class="pick-chips multi"><label><input type="radio" name="scope" value="all" checked><span>매주 (앞으로 계속)</span></label><label><input type="radio" name="scope" value="week"><span>${wkLabel(mon)}만 · 다른 주는 그대로</span></label></div></div>` : ''}
+    ${anyWeekly ? `<div class="f">어느 주를 바꿀까요? *<div class="pick-chips multi"><label><input type="radio" name="scope" value="all" checked><span>모든 주 (수업 기간 전체)</span></label><label><input type="radio" name="scope" value="week"><span>${wkLabel(mon)}만 · 다른 주는 그대로</span></label></div></div>` : ''}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">그만두기</button><button class="btn primary">옮기기</button></div></form>`;
   d.showModal(); bindClockPickers(d);
@@ -2386,38 +2623,36 @@ function ttMoveDialog(ids, baseId, toDay) {
     try {
       for (const p of plan) {
         const ch = { weekday: p.wd, start_time: fromMin(p.s), end_time: fromMin(p.e) };
-        if (scope === 'all' || p.t.week_of) { const { error } = await SB.from('timetable').update(ch).eq('id', p.t.id); if (error) throw error; }
+        if (scope === 'all' || p.t.week_of) { const { error } = await TTX.upd(p.t.id, ch); if (error) throw error; }
         else {
           // 매주 수업을 이 주만 옮겨요: 원래 칸은 이 주만 빼고, 옮긴 칸을 이 주에만 넣어요
-          const a = await SB.from('timetable').insert({ ...ttRow(p.t), ...ch, week_of: mon, academy_id: REAL.academy.id }); if (a.error) throw a.error;
-          const b = await SB.from('timetable').update({ skip_weeks: [...new Set([...(p.t.skip_weeks || []), mon])] }).eq('id', p.t.id); if (b.error) throw b.error;
+          const a = await TTX.ins({ ...ttRow(p.t), ...ch, week_of: mon }); if (a.error) throw a.error;
+          const b = await TTX.upd(p.t.id, { skip_weeks: [...new Set([...(p.t.skip_weeks || []), mon])] }); if (b.error) throw b.error;
         }
       }
     } catch (er) { m.textContent = dbErr(er, '옮기지'); m.hidden = false; return; }
-    d.close(); TT_SEL.clear(); await loadSchedule(); render();
-    toast(`${rows.length}칸을 ${WD[to]}요일${minOff ? ` ${st}` : ''}로 옮겼어요${scope === 'week' ? ` · ${wkLabel(mon)}만` : ''}`);
+    d.close(); TT_SEL.clear(); await ttReload(); render();
+    toast(`${rows.length}칸을 ${WD[to]}요일${minOff ? ` ${st}` : ''}로 옮겼어요${scope === 'week' ? ` · ${wkLabel(mon)}만` : ''}${demoNote()}`);
   };
 }
 // 이 주 휴강: 지우지 않고 "휴강"으로 보여 줘요 (이유 · 보강은 칸을 눌러서)
 function ttCancelDialog(ids) {
-  if (!REAL) return toast('예시 계정에서는 바꿀 수 없어요');
-  const mon = SCH_WEEK || mondayOf(TODAY), rows = ids.map(id => REAL.timetable.find(t => t.id === id)).filter(Boolean);
+  const mon = SCH_WEEK || mondayOf(TODAY), rows = ids.map(ttFind).filter(Boolean);
   formDialog({
-    title: `${wkLabel(mon)} 휴강 · ${rows.length}칸`, table: 'timetable', okText: '휴강으로 바꾸기', doneText: '휴강으로 바꿨어요 · 학부모 · 학생 시간표에도 "휴강"으로 보여요',
+    title: `${wkLabel(mon)} 휴강 · ${rows.length}칸`, table: 'timetable', academy: false, okText: '휴강으로 바꾸기', doneText: `휴강으로 바꿨어요 · 학부모 · 학생 시간표에도 "휴강"으로 보여요${demoNote()}`,
     fields: [['reason', '이유 (학부모 · 학생에게 보여요)', { max: 60, placeholder: '예: 추석 연휴', chips: ['공휴일', '학원 행사', '강사 사정', '시험 기간', '방학'] }]],
     save: async d => {
       for (const t of rows) {
         const ch = { cancels: { ...(t.cancels || {}), [mon]: d.reason || '' } };
         if (!t.week_of) ch.skip_weeks = [...new Set([...(t.skip_weeks || []), mon])];
-        const { error } = await SB.from('timetable').update(ch).eq('id', t.id); if (error) return dbErr(error, '휴강으로 바꾸지');
+        const { error } = await TTX.upd(t.id, ch); if (error) return dbErr(error, '휴강으로 바꾸지');
       }
       TT_SEL.clear(); return null;
-    }, after: loadSchedule
+    }, after: ttReload
   });
 }
 // 휴강 칸을 누르면: 휴강 풀기 · 보강 잡기
 function ttUncancelDialog(t) {
-  if (!REAL) return toast('예시 계정에서는 바꿀 수 없어요');
   const mon = SCH_WEEK || mondayOf(TODAY), d = dialogEl();
   d.innerHTML = `<div class="dlg"><h2>${esc(t.class_name)} · ${wkLabel(mon)} 휴강</h2>
     <p class="muted small" style="margin:-6px 0 0">${WD[t.weekday]}요일 ${hm(t.start_time)}–${hm(t.end_time)}${t.cancels[mon] ? ` · ${esc(t.cancels[mon])}` : ''}</p>
@@ -2427,71 +2662,58 @@ function ttUncancelDialog(t) {
   $('#ucMk').onclick = () => { d.close(); ttMakeupDialog(t); };
   $('#ucUndo').onclick = async () => {
     const cancels = { ...(t.cancels || {}) }; delete cancels[mon];
-    const { error } = await SB.from('timetable').update({ cancels, ...(t.week_of ? {} : { skip_weeks: (t.skip_weeks || []).filter(w => w !== mon) }) }).eq('id', t.id);
+    const { error } = await TTX.upd(t.id, { cancels, ...(t.week_of ? {} : { skip_weeks: (t.skip_weeks || []).filter(w => w !== mon) }) });
     if (error) return toast(dbErr(error, '되돌리지'));
-    d.close(); await loadSchedule(); render(); toast('휴강을 풀었어요 · 원래대로 수업이에요');
+    d.close(); await ttReload(); render(); toast('휴강을 풀었어요 · 원래대로 수업이에요');
   };
 }
 // 보강: 그날 하루만 있는 수업 (week_of + kind makeup)
 function ttMakeupDialog(from) {
-  if (!REAL) return toast('예시 계정에서는 추가할 수 없어요');
   const mon = SCH_WEEK || mondayOf(TODAY), def = from ? addDays(mon, ((+from.weekday + 6) % 7)) : TODAY;
   formDialog({
-    title: from ? `${from.class_name} 보강 잡기` : '보강 넣기', table: 'timetable', okText: '보강 넣기', doneText: '보강을 넣었어요 · 그날 시간표에 "보강"으로 보여요',
+    title: from ? `${from.class_name} 보강 잡기` : '보강 넣기', table: 'timetable', academy: false, okText: '보강 넣기', doneText: `보강을 넣었어요 · 그날 시간표에 "보강"으로 보여요${demoNote()}`,
     check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
     fields: [
       ['day', '보강 날짜', { type: 'date', required: true, value: from ? addDays(def, 1) : def, half: true }],
       ['class_name', '반', { required: true, max: 50, chips: allClasses(), value: from ? from.class_name : '', half: true }],
       ['start_time', '시작', { type: 'time', required: true, value: from ? hm(from.start_time) : '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: from ? hm(from.end_time) : '17:30', half: true }],
       ['subject', '과목', { max: 50, value: from ? from.subject || '' : '', chips: subjList() }],
-      ['room', '강의실 (원장·강사만)', { max: 30, value: from ? from.room || '' : '', half: true }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, value: from ? from.teacher_name || '' : '', chips: staffNames(), half: true }],
-      ['note', '메모 (원장·강사만)', { max: 300, value: from ? `${md(def)} 휴강 보강` : '' }]
+      ['room', '강의실', { max: 30, value: from ? from.room || '' : '', half: true, more: true }], ['teacher_name', '담당 강사', { max: 50, value: from ? from.teacher_name || '' : '', chips: staffNames(), half: true, more: true }],
+      ['note', '메모', { max: 300, value: from ? `${md(def)} 휴강 보강` : '', more: true }]
     ],
-    save: async (d, base) => {
+    moreLabel: '강의실 · 담당 강사 · 메모 (원장 · 강사만 보여요)',
+    save: async d => {
       const { day, ...rest } = d;
-      const { error } = await SB.from('timetable').insert({ ...rest, color: from ? from.color || null : null, weekday: day0(day).getDay(), week_of: mondayOf(day), kind: 'makeup', ...base });
+      const { error } = await TTX.ins({ ...rest, color: from ? from.color || null : null, weekday: day0(day).getDay(), week_of: mondayOf(day), kind: 'makeup' });
       return error ? dbErr(error) : null;
-    }, after: loadSchedule
+    }, after: ttReload
   });
   timePickers($('#dlg'), 'start_time', 'end_time');
 }
-// 다른 주 시간표 가져오기: 그 주에만 있던 칸(이 주만 · 보강)을 이번에 보는 주로 그대로
+// 다른 주 시간표 가져오기: 그 주에 있던 칸(이 주만 · 보강 · 기간 수업)을 이번에 보는 주로 — 기간도 고를 수 있어요
 function ttCopyWeekDialog() {
-  if (!REAL) return toast('예시 계정에서는 가져올 수 없어요');
-  const mon = SCH_WEEK || mondayOf(TODAY), weeks = [...new Set(REAL.timetable.filter(t => t.week_of && t.week_of !== mon).map(t => t.week_of))].sort().reverse();
+  const mon = SCH_WEEK || mondayOf(TODAY), tt = schData().tt;
+  const inWeek = w => tt.filter(t => ttOn(t, w) && !ttOn(t, mon));
+  const weeks = [...new Set([addDays(mon, -7), addDays(mon, -14), addDays(mon, -21), ...tt.filter(t => t.week_of && t.week_of !== mon).map(t => t.week_of)])].sort().reverse().slice(0, 12);
   formDialog({
-    title: `${wkLabel(mon)}로 시간표 가져오기`, table: 'timetable', okText: '가져오기',
-    fields: [['src', '어느 주에서 가져올까요?', { type: 'select', required: true, value: weeks[0] || addDays(mon, -7), options: [...new Set([addDays(mon, -7), ...weeks])].map(w => [w, `${wkLabel(w)} · 그 주에만 있던 칸 ${REAL.timetable.filter(t => t.week_of === w).length}개`]) }],
-      ['as', '가져온 칸을', { type: 'select', required: true, value: 'week', options: [['week', `${wkLabel(mon)}에만 넣기`], ['all', '매주 반복으로 넣기 (앞으로 계속)']] }]],
-    save: async (d, base) => {
-      const src = REAL.timetable.filter(t => t.week_of === d.src);
-      if (!src.length) return `${wkLabel(d.src)}에는 그 주에만 있는 칸이 없어요. 매주 수업은 따로 가져오지 않아도 매주 그대로 나와요.`;
-      const { error } = await SB.from('timetable').insert(src.map(t => ({ ...ttRow(t), kind: d.as === 'all' ? 'regular' : t.kind || 'regular', ...(d.as === 'all' ? {} : { week_of: mon }), ...base })));
+    title: `${wkLabel(mon)}로 시간표 가져오기`, table: 'timetable', academy: false, okText: '가져오기',
+    fields: [['src', '어느 주에서 가져올까요? (이 주에 이미 있는 수업은 빼고)', { type: 'select', required: true, value: weeks[0], options: weeks.map(w => [w, `${wkLabel(w)} · ${inWeek(w).length}칸`]) }],
+      ['period', '가져온 칸을 언제까지?', { type: 'select', required: true, value: 'week', options: PERIODS(mon) }], ['until', '끝나는 날', { type: 'date', value: addDays(mon, 27) }]],
+    save: async d => {
+      const src = inWeek(d.src);
+      if (!src.length) return `${wkLabel(d.src)}에는 이 주에 없는 수업이 없어요. 이미 이 주에도 그대로 나와요.`;
+      const { error } = await TTX.ins(src.map(t => ({ ...ttRow(t), kind: 'regular', ...periodRow(d.period, mon, d.until) })));
       return error ? dbErr(error, '가져오지') : null;
-    }, doneText: '시간표를 가져왔어요', after: loadSchedule
+    }, doneText: `시간표를 가져왔어요${demoNote()}`, after: ttReload
   });
+  bindPeriod($('#dlg'));
 }
-async function ttOnlyAct(kind) {
-  if (!REAL) return toast('예시 계정에서는 바꿀 수 없어요');
-  const mon = SCH_WEEK || mondayOf(TODAY), only = REAL.timetable.filter(t => t.week_of === mon && t.kind !== 'makeup');
-  if (kind === 'fix') {
-    if (!confirm(`${wkLabel(mon)}에만 있던 ${only.length}칸을 매주 반복으로 바꿀까요? 앞으로 매주 그대로 나와요.`)) return;
-    const { error } = await SB.from('timetable').update({ week_of: null }).in('id', only.map(t => t.id));
-    if (error) return toast(dbErr(error, '바꾸지'));
-    toast(`${only.length}칸을 매주 반복으로 바꿨어요`);
-  } else {
-    const next = addDays(mon, 7);
-    const { error } = await SB.from('timetable').insert(only.map(t => ({ ...ttRow(t), week_of: next, academy_id: REAL.academy.id })));
-    if (error) return toast(dbErr(error, '넣지'));
-    SCH_WEEK = next; toast(`${only.length}칸을 ${wkLabel(next)}에도 넣었어요`);
-  }
-  await loadSchedule(); render();
-}
-// 끌어서 놓기 (컴퓨터) · Shift+누르기로 여러 칸
+// 끌어서 놓기 (컴퓨터): 고른 칸이 여럿이면 함께
 function bindTimetableDrag() {
   document.querySelectorAll('.tt-blk[draggable]').forEach(b => {
     b.ondragstart = e => { const id = b.dataset.editTt; TT_DRAG = TT_SEL.has(id) ? [...TT_SEL] : [id]; TT_DRAG.base = id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); document.querySelectorAll(TT_DRAG.map(x => `[data-edit-tt="${x}"]`).join(',')).forEach(x => x.classList.add('dragging')); };
     b.ondragend = () => document.querySelectorAll('.dragging, .drop-on').forEach(x => x.classList.remove('dragging', 'drop-on'));
+    b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); b.click(); } };
   });
   document.querySelectorAll('[data-tt-day]').forEach(sec => {
     sec.ondragover = e => { if (TT_DRAG) { e.preventDefault(); sec.classList.add('drop-on'); } };
@@ -2499,16 +2721,30 @@ function bindTimetableDrag() {
     sec.ondrop = e => { e.preventDefault(); sec.classList.remove('drop-on'); if (!TT_DRAG) return; const ids = TT_DRAG, base = TT_DRAG.base; TT_DRAG = null; ttMoveDialog(ids, base, +sec.dataset.ttDay); };
   });
 }
+// 키보드: Ctrl+C 복사 · Ctrl+V 붙여넣기 · Delete 지우기 · Esc 풀기 (시간표 화면에서, 입력 중이 아닐 때)
+document.addEventListener('keydown', e => {
+  if (!location.hash.startsWith('#schedule') || !isStaff() || SCH_VIEW !== 'week' || document.querySelector('dialog[open]') || /INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName)) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 'c' && TT_SEL.size) { e.preventDefault(); ttCopy([...TT_SEL]); }
+  else if (mod && e.key.toLowerCase() === 'v' && TT_CLIP) { e.preventDefault(); ttPasteDialog(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && TT_SEL.size) { e.preventDefault(); ttDelSel(); }
+  else if (e.key === 'Escape' && (TT_SEL.size || TT_CLIP)) { TT_SEL.clear(); TT_CLIP = null; render(); }
+});
+async function ttDelSel() {
+  if (!confirm(`고른 ${TT_SEL.size}칸을 지울까요? (매주 수업이면 모든 주에서 지워져요 · 이번 주만 쉬려면 "이 주 휴강")`)) return;
+  const { error } = await TTX.del([...TT_SEL]);
+  if (error) return toast(dbErr(error, '지우지'));
+  const n = TT_SEL.size; TT_SEL.clear(); await ttReload(); render(); toast(`${n}칸 지웠어요${demoNote()}`);
+}
 // 시간표 정리: 여러 칸을 골라 한 번에 지우거나 전체 삭제
 function ttCleanDialog() {
-  if (!REAL) { toast('예시 계정에서는 지울 수 없어요'); return; }
-  const list = [...REAL.timetable].sort(ttSort), d = dialogEl();
+  const list = [...schData().tt].sort(ttSort), d = dialogEl();
   const byClass = [...new Set(list.map(x => x.class_name))];
   d.innerHTML = `<form method="dialog" class="dlg" id="ttcForm" novalidate>
     <h2>시간표 정리</h2>
     <p class="muted small" style="margin:-6px 0 0">지울 칸을 고르세요. 반 이름을 누르면 그 반 칸이 모두 골라져요. 지운 칸은 되돌릴 수 없어요.</p>
     <div class="pick-chips">${byClass.map(c => `<button type="button" data-ttc-class="${esc(c)}">${esc(c)}</button>`).join('')}<button type="button" data-ttc-all>모두 고르기</button><button type="button" data-ttc-none>모두 풀기</button></div>
-    <div class="ttc-list">${list.map(x => `<label class="chk-line"><input type="checkbox" name="tt" value="${x.id}" data-cls="${esc(x.class_name)}"><span><b>${esc(x.class_name)}</b> · ${WD[x.weekday]} ${hm(x.start_time)}–${hm(x.end_time)}${x.subject ? ` · ${esc(x.subject)}` : ''}${x.week_of ? ` · ${wkLabel(x.week_of)}만` : ''}</span></label>`).join('') || '<p class="muted small">시간표가 없어요.</p>'}</div>
+    <div class="ttc-list">${list.map(x => `<label class="chk-line"><input type="checkbox" name="tt" value="${x.id}" data-cls="${esc(x.class_name)}"><span><b>${esc(x.class_name)}</b> · ${WD[x.weekday]} ${hm(x.start_time)}–${hm(x.end_time)}${x.subject ? ` · ${esc(x.subject)}` : ''}${x.kind === 'makeup' ? ` · ${wkLabel(x.week_of)} 보강` : ` · ${periodText(x)}`}</span></label>`).join('') || '<p class="muted small">시간표가 없어요.</p>'}</div>
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><button type="button" class="btn danger" id="ttcAll">전체 삭제 (${list.length}칸)</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary danger-fill" id="ttcDel">고른 칸 지우기</button></div></form>`;
   d.showModal();
@@ -2520,9 +2756,9 @@ function ttCleanDialog() {
   d.querySelector('[data-ttc-none]').onclick = () => { boxes().forEach(x => { x.checked = false; }); count(); };
   $('#dlgCancel').onclick = () => d.close();
   const go = async ids => {
-    const { error } = await SB.from('timetable').delete().in('id', ids);
+    const { error } = await TTX.del(ids);
     if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error, '지우지'); m.hidden = false; return; }
-    d.close(); await loadSchedule(); render(); toast(`시간표 ${ids.length}칸을 지웠어요`);
+    d.close(); await ttReload(); render(); toast(`시간표 ${ids.length}칸을 지웠어요${demoNote()}`);
   };
   $('#ttcForm').onsubmit = e => { e.preventDefault(); const ids = boxes().filter(b => b.checked).map(b => b.value); if (!ids.length) { const m = $('#dlgMsg'); m.textContent = '지울 칸을 골라 주세요.'; m.hidden = false; return; } if (confirm(`고른 ${ids.length}칸을 지울까요?`)) go(ids); };
   $('#ttcAll').onclick = () => { if (list.length && confirm(`시간표 ${list.length}칸을 모두 지울까요? 되돌릴 수 없어요.`) && confirm('정말 모두 지울까요?')) go(list.map(x => x.id)); };
@@ -2886,7 +3122,7 @@ const LIB_VIS = {
   class: ['반 학부모 · 수강생', 'warn', '원장 · 강사 + 고른 반 아이의 학부모 · 학생'],
   everyone: ['학원 모두', 'good', '원장 · 강사 · 학부모 · 학생 모두']
 };
-const LIB_MAX = 50 * 1024 * 1024, LIB_MANY = 30; // 한 번에 30개까지 (사진 여러 장 등)
+const LIB_MAX = FILE_MAX, LIB_MANY = 30; // 한 번에 30개까지 (사진 여러 장 등)
 let libCat = '전체', libVis = 'all', libFolder = 'all'; // libFolder: all · none(폴더 밖) · 폴더 id
 const fileSize = n => n == null ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`;
 const fileIcon = it => it.link_url && !it.file_path ? 'ext' : /pdf/.test(it.mime || '') ? 'doc' : /image/.test(it.mime || '') ? 'page' : /video/.test(it.mime || '') ? 'video' : 'doc';
@@ -2910,7 +3146,7 @@ function libraryPage() {
   const add = staff ? `<button class="btn primary" data-act="addLib">${ic('plus')}자료 올리기</button>` : '';
   const desc = ROLE === 'owner' ? '학원 자료를 한곳에 모아요. 올릴 때 누구에게 보일지 고를 수 있어요. 원장님은 강사님의 비공개 자료까지 모두 볼 수 있어요.'
     : ROLE === 'teacher' ? '수업 자료 · 서식을 올리고 함께 써요. "나만 보기"로 올린 자료는 나와 원장님만 볼 수 있어요.'
-    : '학원에서 학부모 · 학생에게 공유한 자료예요. 눌러서 열거나 내려받을 수 있어요.';
+    : '학원에서 학부모 · 학생에게 공유한 자료예요. 눌러서 미리 보고 다운로드할 수 있어요.';
   const fs = libFolders().filter(f => staff || all.some(it => it.folder_id === f.id)), loose = all.filter(it => !folderOf(it.folder_id)).length, cur = folderOf(libFolder);
   const folderBar = fs.length || staff ? `
   <div class="lib-folders">
@@ -2929,10 +3165,10 @@ function libraryPage() {
       <div><div class="t">${canEditLib(it) ? `<span class="nm-link" data-edit-lib="${it.id}" role="button" tabindex="0">${esc(it.title)}</span>` : esc(it.title)} ${staff ? visChip(it) : ''}</div>
         <div class="d">${esc(it.category)} · ${esc(it.uploader_name || '학원')}${it.uploader_role === 'teacher' ? ' 선생님' : it.uploader_role === 'owner' ? ' 원장님' : ''} · ${md(it.created_at.slice(0, 10))}${it.file_name ? ` · ${esc(it.file_name)} ${fileSize(it.file_size)}` : ''}</div>
         ${it.description ? `<div class="d pre">${esc(it.description)}</div>` : ''}</div>
-      <div class="r"><span class="btns">${staff ? `<button class="btn sm" data-lib-move="${it.id}" title="다른 폴더로">${ic('folder')}${folderOf(it.folder_id) ? esc(folderOf(it.folder_id).name) : '폴더 옮기기'}</button>` : folderOf(it.folder_id) && libFolder === 'all' ? `<span class="chip mute">${esc(folderOf(it.folder_id).name)}</span>` : ''}${it.file_path ? `<button class="btn sm" data-lib-open="${it.id}">열기</button><button class="btn sm primary" data-lib-down="${it.id}">내려받기</button>` : ''}${it.link_url ? `<a class="btn sm ${it.file_path ? '' : 'primary'}" href="${esc(it.link_url)}" target="_blank" rel="noopener">링크 열기 ${ic('ext')}</a>` : ''}${canEditLib(it) ? `<button class="btn sm" data-edit-lib="${it.id}">${ic('pen')}수정</button><button class="btn sm danger" data-lib-del="${it.id}">삭제</button>` : ''}</span></div>
+      <div class="r"><span class="btns">${staff ? `<button class="btn sm" data-lib-move="${it.id}" title="다른 폴더로">${ic('folder')}${folderOf(it.folder_id) ? esc(folderOf(it.folder_id).name) : '폴더 옮기기'}</button>` : folderOf(it.folder_id) && libFolder === 'all' ? `<span class="chip mute">${esc(folderOf(it.folder_id).name)}</span>` : ''}${it.file_path ? `<button class="btn sm" data-lib-open="${it.id}">${ic('eye')}미리보기</button><button class="btn sm primary" data-lib-down="${it.id}">${ic('download')}다운로드</button>` : ''}${it.link_url ? `<button class="btn sm ${it.file_path ? '' : 'primary'}" data-lib-link="${it.id}">${ic(embedUrl(it.link_url) ? 'play' : 'ext')}${embedUrl(it.link_url) ? '링크 영상 보기' : '링크 미리보기'}</button>` : ''}${canEditLib(it) ? `<button class="btn sm" data-edit-lib="${it.id}">${ic('pen')}수정</button><button class="btn sm danger" data-lib-del="${it.id}">삭제</button>` : ''}</span></div>
     </div>`).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>${all.length ? '고른 조건에 맞는 자료가 없어요' : '아직 자료가 없어요'}</h2>
-    <p class="muted">${staff ? '수업 자료 · 학부모 안내문 · 행정 서식을 올려 두면 필요한 사람만 볼 수 있어요. 파일은 50MB까지, 큰 영상은 링크로 넣어 주세요.' : '학원에서 자료를 공유하면 여기에 보여요.'}</p>${all.length ? '' : add}</section>`}`;
+    <p class="muted">${staff ? '수업 자료 · 학부모 안내문 · 행정 서식을 올려 두면 필요한 사람만 볼 수 있어요. 파일은 하나에 2GB까지 올릴 수 있고, 누르면 웹 안에서 미리 보고 다운로드해요.' : '학원에서 자료를 공유하면 여기에 보여요.'}</p>${all.length ? '' : add}</section>`}`;
 }
 
 function libDialog(it) {
@@ -2944,7 +3180,7 @@ function libDialog(it) {
     <label class="f">제목 *<input name="title" maxlength="100" value="${esc(it ? it.title : '')}" placeholder="예: 11월 초등 B반 단어장 (비우면 파일 이름)"></label>
     ${it ? `${it.file_name ? `<p class="muted small" style="margin:0">지금 파일: ${esc(it.file_name)} ${fileSize(it.file_size)}</p>` : ''}
     <label class="f">${it.file_name ? '파일 바꾸기 (고르면 새 파일로 바뀌어요)' : '파일 넣기'}<input type="file" name="file"></label>` : `
-    <label class="f">파일 (하나에 50MB까지 · 사진 등 한 번에 ${LIB_MANY}개까지)<input type="file" name="file" multiple></label>
+    <label class="f">파일 (하나에 2GB까지 · 사진 등 한 번에 ${LIB_MANY}개까지)<input type="file" name="file" multiple></label>
     <p class="muted small" id="libPicked" style="margin:-4px 0 0" hidden></p>`}
     <label class="f">${it ? '링크' : '또는 링크'}<input name="link" type="url" maxlength="500" value="${esc(it && it.link_url || '')}" placeholder="https:// (유튜브 · 구글 드라이브 등)"></label>
     ${libFolders().length ? `<label class="f">폴더<select name="folder"><option value="">폴더 밖</option>${libFolders().map(f => `<option value="${f.id}" ${(it ? it.folder_id : libFolder) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>` : ''}
@@ -2972,21 +3208,21 @@ function libDialog(it) {
     if (it && !it.file_path && !file && !link) return fail('링크를 넣어 주세요.');
     if (link && !/^https:\/\/\S+$/.test(link)) return fail('링크는 https:// 로 시작해야 해요.');
     const big = files.find(x => x.size > LIB_MAX);
-    if (big) return fail(`${big.name} 파일이 50MB보다 커요. 큰 파일은 구글 드라이브 같은 곳에 올리고 링크로 넣어 주세요.`);
+    if (big) return fail(`${big.name} 파일이 2GB보다 커요. 나눠서 올리거나 링크로 넣어 주세요.`);
     if (vis === 'class' && !el.cls.value) return fail('반을 골라 주세요. 반이 없으면 원생 명단에서 반을 먼저 정해 주세요.');
     const row = { title, category: el.cat.value, visibility: vis, target_class: vis === 'class' ? el.cls.value : null, description: el.desc.value.trim() || null, link_url: link || null, ...(el.folder ? { folder_id: el.folder.value || null } : {}) };
     const btn = f.querySelector('button.primary'); btn.disabled = true; btn.textContent = file ? '올리는 중…' : '저장 중…';
     const upload = async fl => {
       const ext = (fl.name.match(/\.([a-z0-9]{1,8})$/i) || [])[1], path = `${REAL.academy.id}/${crypto.randomUUID()}/file${ext ? `.${ext.toLowerCase()}` : ''}`;
-      const up = await SB.storage.from('library').upload(path, fl, { contentType: fl.type || 'application/octet-stream' });
-      if (up.error) throw up.error;
+      const up = await putFile('library', path, fl, p => { btn.textContent = `올리는 중… ${files.length > 1 ? `${files.indexOf(fl) + 1}/${files.length} · ` : ''}${Math.round(p * 100)}%`; });
+      if (up.error) throw Object.assign(new Error(upErr(up.error, fl.name)), { shown: true });
       return { file_path: path, file_name: fl.name.slice(0, 200), file_size: fl.size, mime: (fl.type || '').slice(0, 100) || null };
     };
     const done = (n, label) => { btn.disabled = false; btn.textContent = label; return n; };
     if (it) {
       // 고치기: 새 파일을 고르면 올리고 예전 파일은 지워요
       let fileRow = {};
-      try { if (file) fileRow = await upload(file); } catch (er) { done(0, '저장'); return fail(dbErr(er, '파일을 올리지')); }
+      try { if (file) fileRow = await upload(file); } catch (er) { done(0, '저장'); return fail(er.shown ? er.message : dbErr(er, '파일을 올리지')); }
       const { error } = await SB.from('library_items').update({ ...row, ...fileRow }).eq('id', it.id);
       if (error) { if (fileRow.file_path) await SB.storage.from('library').remove([fileRow.file_path]); done(0, '저장'); return fail(dbErr(error)); }
       if (fileRow.file_path && it.file_path) await SB.storage.from('library').remove([it.file_path]);
@@ -2997,12 +3233,12 @@ function libDialog(it) {
       for (const [i, fl] of files.entries()) {
         btn.textContent = `올리는 중… ${i + 1}/${files.length}`;
         try { const fr = await upload(fl); const { error } = await SB.from('library_items').insert({ ...row, title: (title ? `${title} (${i + 1})` : fl.name.replace(/\.[^.]+$/, '')).slice(0, 100), academy_id: REAL.academy.id, ...fr }); if (error) { await SB.storage.from('library').remove([fr.file_path]); throw error; } ok++; }
-        catch (er) { done(0, '올리기'); await loadLibrary(); render(); return fail(`${ok}개는 올렸고 ${fl.name}에서 멈췄어요 — ${dbErr(er, '올리지').replace(/^올리지 못했어요 — /, '')}`); }
+        catch (er) { done(0, '올리기'); await loadLibrary(); render(); return fail(`${ok}개는 올렸고 ${fl.name}에서 멈췄어요 — ${(er.shown ? er.message : dbErr(er, '올리지')).replace(/^올리지 못했어요 — /, '')}`); }
       }
       d.close(); await loadLibrary(); render(); toast(`자료 ${ok}개를 올렸어요 · ${LIB_VIS[vis][2]}`); return;
     } else {
       let fr = { file_path: null, file_name: null, file_size: null, mime: null };
-      try { if (file) fr = await upload(file); } catch (er) { done(0, '올리기'); return fail(dbErr(er, '파일을 올리지')); }
+      try { if (file) fr = await upload(file); } catch (er) { done(0, '올리기'); return fail(er.shown ? er.message : dbErr(er, '파일을 올리지')); }
       const { error } = await SB.from('library_items').insert({ ...row, academy_id: REAL.academy.id, ...fr });
       if (error) { if (fr.file_path) await SB.storage.from('library').remove([fr.file_path]); done(0, '올리기'); return fail(dbErr(error)); }
     }
@@ -3053,13 +3289,15 @@ function moveLibDialog(id) {
     d.close(); await loadLibrary(); render(); toast(to ? `${folderOf(to).name} 폴더로 옮겼어요` : '폴더 밖으로 꺼냈어요');
   };
 }
-// 비공개 버킷이라 잠깐 쓰는 주소(10분)를 받아서 열어요
-async function openLib(id, download) {
-  const it = REAL.library.find(x => x.id === id);
-  const w = download ? null : window.open('about:blank', '_blank');
-  const { data, error } = await SB.storage.from('library').createSignedUrl(it.file_path, 600, download ? { download: it.file_name || true } : undefined);
-  if (error || !data) { if (w) w.close(); toast('파일을 열지 못했어요'); return; }
-  if (w) w.location = data.signedUrl; else location.href = data.signedUrl;
+// 자료 미리보기 · 다운로드: 비공개 버킷이라 잠깐 쓰는 주소를 받아요 (보기 1시간 · 다운로드 10분)
+const libItem = it => ({ bucket: 'library', path: it.file_path, name: it.file_name || it.title, mime: it.mime, size: it.file_size });
+function libPreview(id, link) {
+  const list = libData().filter(x => x.file_path || x.link_url), it = list.find(x => x.id === id);
+  if (!it) return;
+  if (link) return fileViewer([{ link: it.link_url, name: it.title }]);
+  // 같은 목록의 다른 파일도 ‹ › 로 넘겨 봐요
+  const files = list.filter(x => x.file_path);
+  fileViewer(files.map(libItem), files.indexOf(it));
 }
 
 /* ================= 채팅: 카톡처럼 친구 · 채팅 (Supabase friends · conversations · messages) =================
@@ -3068,7 +3306,7 @@ async function openLib(id, download) {
    원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 사이만).
    새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
 const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false, readAt: {}, reads: {}, urls: {} };
-const CHAT_MAX_FILES = 10, CHAT_MAX_SIZE = 20 * 1024 * 1024;
+const CHAT_MAX_FILES = 10, CHAT_MAX_SIZE = FILE_MAX; // 하나에 2GB까지 (큰 파일은 이어 올리기)
 const isImg = f => /^image\//.test(f.mime || '');
 let MSG_TAB = null; // 'friends' | 'chats'
 const WHO = { admin: '센터 관리자', owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
@@ -3195,7 +3433,7 @@ function chatLog(msgs, c) {
     day = d; prev = m.sender_id;
     const files = m.files || [], onlyFiles = files.length && /^\[(사진|파일)/.test(m.body);
     const imgs = files.filter(isImg), docs = files.filter(f => !isImg(f));
-    const att = files.length ? `<div class="bub-files">${imgs.length ? `<div class="bub-imgs n${Math.min(imgs.length, 4)}">${imgs.map(f => `<button type="button" class="bub-img" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}"><img data-chat-img="${esc(f.path)}" alt="${esc(f.name)}"></button>`).join('')}</div>` : ''}${docs.map(f => `<button type="button" class="bub-doc" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}" data-down="1">${ic('doc')}<span><b>${esc(f.name)}</b><small>${fileSize(f.size)} · 내려받기</small></span></button>`).join('')}</div>` : '';
+    const att = files.length ? `<div class="bub-files">${imgs.length ? `<div class="bub-imgs n${Math.min(imgs.length, 4)}">${imgs.map(f => `<button type="button" class="bub-img" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}"><img data-chat-img="${esc(f.path)}" alt="${esc(f.name)}"></button>`).join('')}</div>` : ''}${docs.map(f => `<button type="button" class="bub-doc" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}" data-mime="${esc(f.mime || '')}" data-size="${f.size || ''}" data-doc="1">${ic(fileKind(f) === 'video' ? 'video' : 'doc')}<span><b>${esc(f.name)}</b><small>${sizeText(f.size)} · 눌러서 미리보기 · 다운로드</small></span></button>`).join('')}</div>` : '';
     // 읽음: 1:1은 내 말풍선에 "읽음 / 안읽음", 그룹은 안 읽은 사람 수 (카톡처럼)
     const n = unreadOf(c, m), rc = !c ? '' : c.kind === 'group' ? (n ? `<em class="rc">${n}</em>` : '') : mine ? `<em class="rc ${n ? '' : 'read'}">${n ? '안읽음' : '읽음'}</em>` : '';
     return `${sep}${who}<div class="bubble ${mine ? 'mine' : ''} ${people && !mine ? 'in-grp' : ''}"><div class="bub-in">${onlyFiles ? '' : `<p>${esc(m.body)}</p>`}${att}</div><span class="bub-meta">${rc}<time>${msgTime(m.created_at)}</time></span></div>`;
@@ -3647,8 +3885,8 @@ document.addEventListener('click', e => {
 // 채팅 사진 · 파일 열기 (대화창은 새 메시지마다 다시 그려서 위임으로 받아요)
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-chat-open]'); if (!b || !SB || !USER) return;
-  // 사진은 웹 안에서 크게 (같은 말풍선 사진끼리 넘겨 보기), 파일은 내려받기
-  if (b.dataset.down) { openChatFile(b.dataset.chatOpen, b.dataset.name, true); return; }
+  // 사진은 웹 안에서 크게 (같은 말풍선 사진끼리 넘겨 보기), 파일도 미리보기 창에서 보고 다운로드
+  if (b.dataset.doc) { fileViewer([{ bucket: 'chat', path: b.dataset.chatOpen, name: b.dataset.name, mime: b.dataset.mime, size: +b.dataset.size || null }]); return; }
   const list = [...b.closest('.bub-imgs').querySelectorAll('[data-chat-open]')];
   imgViewer(list.map(x => ({ bucket: 'chat', path: x.dataset.chatOpen, name: x.dataset.name })), list.indexOf(b));
 });
@@ -3695,52 +3933,16 @@ async function hydrateChatFiles(root) {
   if (need.length && SB) { const { data } = await SB.storage.from('chat').createSignedUrls(need, 3600); (data || []).forEach(x => { if (x.signedUrl) MSG.urls[x.path] = x.signedUrl; }); }
   imgs.forEach(i => { const u = MSG.urls[i.dataset.chatImg]; if (u && i.src !== u) { i.src = u; i.onload = () => { const log = $('#chatLog'); if (log && log.dataset.first === '1' && log.scrollHeight - log.scrollTop - log.clientHeight < 400) log.scrollTop = log.scrollHeight; }; } });
 }
-// 사진 크게 보기: 새 창으로 가지 않고 웹 안에서 넘겨 보고 내려받아요 (채팅 · 공지 사진)
-// items: [{ bucket, path, name }] — 비공개 버킷이라 볼 때 1시간 주소, 내려받을 때 10분짜리 내려받기 주소를 받아요
-function imgViewer(items, at = 0) {
-  let v = $('#imgView');
-  if (!v) { document.body.insertAdjacentHTML('beforeend', '<dialog id="imgView" class="img-view" aria-label="사진 보기"></dialog>'); v = $('#imgView'); }
-  let i = at;
-  const url = async it => {
-    const k = `${it.bucket}:${it.path}`;
-    if (!IMG_URLS[k] && it.bucket === 'chat' && MSG.urls[it.path]) IMG_URLS[k] = MSG.urls[it.path];
-    if (!IMG_URLS[k]) { const { data } = await SB.storage.from(it.bucket).createSignedUrl(it.path, 3600); if (data) IMG_URLS[k] = data.signedUrl; }
-    return IMG_URLS[k];
-  };
-  const draw = async () => {
-    const it = items[i], many = items.length > 1;
-    v.innerHTML = `<div class="iv-top"><b>${esc(it.name || '사진')}</b>${many ? `<span class="iv-n">${i + 1} / ${items.length}</span>` : ''}<span style="flex:1"></span>
-      <button type="button" class="btn sm" data-iv-down>${ic('download')}내려받기</button><button type="button" class="iv-x" data-iv-close aria-label="닫기">×</button></div>
-      <div class="iv-stage">${many ? '<button type="button" class="iv-nav prev" data-iv-go="-1" aria-label="이전 사진">‹</button>' : ''}<img alt="${esc(it.name || '사진')}"><span class="iv-load">불러오는 중…</span>${many ? '<button type="button" class="iv-nav next" data-iv-go="1" aria-label="다음 사진">›</button>' : ''}</div>`;
-    v.querySelector('[data-iv-close]').onclick = () => v.close();
-    v.querySelectorAll('[data-iv-go]').forEach(b => b.onclick = () => { i = (i + +b.dataset.ivGo + items.length) % items.length; draw(); });
-    v.querySelector('[data-iv-down]').onclick = async () => {
-      const { data, error } = await SB.storage.from(it.bucket).createSignedUrl(it.path, 600, { download: it.name || true });
-      if (error || !data) { toast('내려받지 못했어요'); return; }
-      const a = document.createElement('a'); a.href = data.signedUrl; a.download = it.name || ''; document.body.appendChild(a); a.click(); a.remove();
-    };
-    const u = await url(it), img = v.querySelector('img');
-    if (!img) return;
-    if (u) { img.onload = () => { const l = v.querySelector('.iv-load'); if (l) l.remove(); }; img.src = u; } else v.querySelector('.iv-load').textContent = '사진을 열지 못했어요';
-  };
-  v.onclick = e => { if (e.target === v || e.target.classList.contains('iv-stage')) v.close(); };
-  v.onkeydown = e => { if (items.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { i = (i + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length; draw(); } };
-  draw(); if (!v.open) v.showModal();
-}
-async function openChatFile(path, name, down) {
-  const { data, error } = await SB.storage.from('chat').createSignedUrl(path, 600, down ? { download: name || true } : undefined);
-  if (error || !data) { toast('파일을 열지 못했어요'); return; }
-  if (down) location.href = data.signedUrl; else window.open(data.signedUrl, '_blank', 'noopener');
-}
 async function sendMessage(id, body, picked = []) {
   // 파일 · 사진 묶음: chat/대화방/무작위/파일이름 으로 올리고 메시지에 목록을 붙여요 (한 번에 10개까지)
   const files = [];
   for (const [i, f] of picked.entries()) {
-    const safe = f.name.replace(/[^\w.\-가-힣]+/g, '_').slice(-80) || `file${i}`, path = `${id}/${crypto.randomUUID()}/${safe}`;
-    const up = await SB.storage.from('chat').upload(path, f, { contentType: f.type || 'application/octet-stream' });
-    if (up.error) { toast(dbErr(up.error, `${f.name} 파일을 올리지`)); if (files.length) await SB.storage.from('chat').remove(files.map(x => x.path)); return false; }
+    const path = `${id}/${crypto.randomUUID()}/${safeName(f.name, i)}`;
+    const up = await putFile('chat', path, f, p => upProgress(`${f.name} 보내는 중 ${picked.length > 1 ? `(${i + 1}/${picked.length}) ` : ''}${Math.round(p * 100)}%`, p));
+    if (up.error) { upProgress(); toast(upErr(up.error, f.name)); if (files.length) await SB.storage.from('chat').remove(files.map(x => x.path)); return false; }
     files.push({ path, name: f.name.slice(0, 200), size: f.size, mime: (f.type || '').slice(0, 100) });
   }
+  upProgress();
   if (!body) { const im = files.filter(isImg).length; body = im === files.length ? `[사진 ${im}장]` : `[파일 ${files.length}개] ${files[0].name}`.slice(0, 200); }
   const { data, error } = await SB.from('messages').insert({ conversation_id: id, body, files }).select('id, sender_id, body, created_at, files').single();
   if (error) { toast(dbErr(error, '보내지')); if (files.length) await SB.storage.from('chat').remove(files.map(x => x.path)); return false; }
@@ -4628,7 +4830,7 @@ function dbErr(e, what = '저장하지') {
     : m ? m.slice(0, 120) : '잠시 후 다시 해 주세요';
   return `${what} 못했어요 — ${why}.${c ? ` (오류 코드 ${c})` : ''}`;
 }
-function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check, expand, save, del }) {
+function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check, expand, save, del, moreLabel }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
   const cur = (k, o) => row && !o.own ? row[k] : o.value; // own: 표에 없는 칸(고칠 때도 처음 값)
@@ -4639,6 +4841,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     if (o.type === 'time') return `<div class="f">${lab}${o.required ? ' *' : ''}${clockPicker(k, v, o.required)}</div>`;
     // images: 사진 여러 장 (비공개 버킷 o.bucket, 최대 o.max장 · 올릴 때 긴 쪽 1600px JPEG로 줄여요)
     if (o.type === 'images') return `<div class="f">${lab} <span class="muted small">최대 ${o.max}장</span><div class="img-pick" data-imgs="${k}"></div><label class="btn sm img-add">${ic('image')}사진 고르기<input type="file" accept="image/*" multiple data-img-in="${k}" hidden></label></div>`;
+    // files: 파일 여러 개 (비공개 버킷 o.bucket, 최대 o.max개 · 하나에 2GB까지, 큰 파일은 이어 올리기)
+    if (o.type === 'files') return `<div class="f">${lab} <span class="muted small">최대 ${o.max}개 · 하나에 ${sizeText(FILE_MAX)}까지</span><div class="file-pick" data-files="${k}"></div><label class="btn sm img-add">${ic('upload')}파일 고르기<input type="file" multiple data-file-in="${k}" hidden></label></div>`;
     // color: 10가지 색 동그라미 중 하나 (안 고르면 기본 색)
     if (o.type === 'color') return `<div class="f">${lab}<div class="swatches">${[['', '기본'], ...COLORS].map(([c, n]) => `<label class="sw ${c ? `col-${c}` : 'sw-none'}" title="${n}"><input type="radio" name="${k}" value="${c}" ${(v || '') === c ? 'checked' : ''}><span aria-hidden="true"></span><small>${n}</small></label>`).join('')}</div></div>`;
     if (o.type === 'multi') return `<div class="f">${lab}${o.required ? ' *' : ''}<div class="pick-chips multi">${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<label><input type="checkbox" name="${k}" value="${esc(ov)}" ${[].concat(v ?? []).map(String).includes(String(ov)) ? 'checked' : ''}><span>${esc(ol)}</span></label>`).join('')}</div></div>`;
@@ -4653,13 +4857,17 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     // chips: 예시를 눌러 바로 채우기 (직접 적어도 돼요)
     return o.chips ? `<div class="f-chips">${lbl}<div class="pick-chips">${o.chips.map(c => `<button type="button" class="${v === c ? 'on' : ''}" data-pick="${k}" data-v="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>` : lbl;
   };
-  // half 표시된 칸은 둘씩 묶어 한 줄로
-  let html = '', pair = [];
-  fields.forEach(f => {
-    if (f[2] && f[2].half) { pair.push(input(f)); if (pair.length === 2) { html += `<div class="two">${pair.join('')}</div>`; pair = []; } }
-    else { if (pair.length) { html += `<div class="two">${pair.join('')}</div>`; pair = []; } html += input(f); }
-  });
-  if (pair.length) html += `<div class="two">${pair.join('')}</div>`;
+  // half 표시된 칸은 둘씩 묶어 한 줄로 · more 표시된 칸은 아래 "더 넣기"로 접어 둬요
+  const build = list => {
+    let h = '', pair = [];
+    list.forEach(f => {
+      if (f[2] && f[2].half) { pair.push(input(f)); if (pair.length === 2) { h += `<div class="two">${pair.join('')}</div>`; pair = []; } }
+      else { if (pair.length) { h += `<div class="two">${pair.join('')}</div>`; pair = []; } h += input(f); }
+    });
+    return pair.length ? h + `<div class="two">${pair.join('')}</div>` : h;
+  };
+  const moreF = fields.filter(f => f[2] && f[2].more), filled = moreF.some(([k, , o]) => { const v = cur(k, o); return v != null && v !== '' && !(Array.isArray(v) && !v.length); });
+  const html = build(fields.filter(f => !(f[2] && f[2].more))) + (moreF.length ? `<details class="f-more" ${filled ? 'open' : ''}><summary>${ic('plus')}더 넣기 · ${moreLabel || moreF.map(f => f[1]).join(' · ')}</summary>${build(moreF)}</details>` : '');
   d.innerHTML = `
   <form method="dialog" class="dlg" id="dlgForm" novalidate>
     <h2>${title}</h2>${html}
@@ -4681,6 +4889,23 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       hydrateImgs(box);
     };
     inp.onchange = () => { const room = o.max - st.keep.length - st.add.length, list = [...inp.files].filter(f => /^image\//.test(f.type)); if (list.length > room) toast(`사진은 ${o.max}장까지예요 · ${Math.max(0, room)}장만 더 넣었어요`); st.add.push(...list.slice(0, Math.max(0, room))); inp.value = ''; draw(); };
+    draw();
+  });
+  // 파일 칸: 있던 파일(keep) + 새로 고른 파일(add)
+  fields.filter(f => f[2] && f[2].type === 'files').forEach(([k, , o]) => {
+    const st = imgs[k] = { keep: [...((row && row[k]) || [])], add: [], o, files: true }, box = d.querySelector(`[data-files="${k}"]`), inp = d.querySelector(`[data-file-in="${k}"]`);
+    const draw = () => {
+      box.innerHTML = [...st.keep.map((f, i) => `<span class="fp">${ic('doc')}<b>${esc(f.name)}</b><small>${sizeText(f.size)}</small><button type="button" data-fp-keep="${i}" aria-label="빼기">×</button></span>`),
+        ...st.add.map((f, i) => `<span class="fp new">${ic('upload')}<b>${esc(f.name)}</b><small>${sizeText(f.size)} · 새로</small><button type="button" data-fp-add="${i}" aria-label="빼기">×</button></span>`)].join('') || '<span class="muted small">아직 파일이 없어요</span>';
+      box.querySelectorAll('[data-fp-keep]').forEach(b => b.onclick = () => { st.keep.splice(+b.dataset.fpKeep, 1); draw(); });
+      box.querySelectorAll('[data-fp-add]').forEach(b => b.onclick = () => { st.add.splice(+b.dataset.fpAdd, 1); draw(); });
+    };
+    inp.onchange = () => {
+      const all = [...inp.files], big = all.filter(f => f.size > FILE_MAX), list = all.filter(f => f.size <= FILE_MAX), room = o.max - st.keep.length - st.add.length;
+      if (big.length) toast(`${sizeText(FILE_MAX)}보다 큰 파일은 뺐어요 (${big.map(f => f.name).join(', ')})`);
+      if (list.length > room) toast(`파일은 ${o.max}개까지예요 · ${Math.max(0, room)}개만 더 넣었어요`);
+      st.add.push(...list.slice(0, Math.max(0, room))); inp.value = ''; draw();
+    };
     draw();
   });
   $('#dlgCancel').onclick = () => d.close();
@@ -4709,6 +4934,20 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
         data[k] = [...st.keep, ...up]; st.uploaded = up; st.removed = ((row && row[k]) || []).filter(p => !st.keep.includes(p));
         continue;
       }
+      if (o.type === 'files') {
+        const st = imgs[k], up = [], msg = $('#dlgMsg'), btn = d.querySelector('.acts .btn.primary');
+        btn.disabled = true;
+        for (const [i, f] of st.add.entries()) {
+          const path = `${o.prefix()}/${crypto.randomUUID()}/${safeName(f.name, i)}`;
+          msg.hidden = false; msg.textContent = `파일 올리는 중… ${i + 1}/${st.add.length} · ${f.name}`;
+          const r = await putFile(o.bucket, path, f, p => { msg.textContent = `파일 올리는 중… ${i + 1}/${st.add.length} · ${f.name} ${Math.round(p * 100)}%`; });
+          if (r.error) { btn.disabled = false; if (up.length) await SB.storage.from(o.bucket).remove(up.map(x => x.path)); return fail(upErr(r.error, f.name)); }
+          up.push({ path, name: f.name.slice(0, 200), size: f.size, mime: (f.type || '').slice(0, 100) || null });
+        }
+        btn.disabled = false; msg.hidden = true;
+        data[k] = [...st.keep, ...up]; st.uploaded = up.map(x => x.path); st.removed = ((row && row[k]) || []).filter(x => !st.keep.includes(x)).map(x => x.path);
+        continue;
+      }
       if (o.type === 'multi') {
         data[k] = [...d.querySelectorAll(`[name="${k}"]:checked`)].map(x => x.value);
         if (o.required && !data[k].length) return fail(`${lab}을(를) 하나 이상 골라 주세요.`);
@@ -4725,7 +4964,9 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     if (bad) return fail(bad);
     const base = { ...extra, ...(academy ? { academy_id: REAL.academy.id } : {}) };
     // save: 저장을 직접 하는 화면(시간표 "이 주만" 같은)은 오류 문구를 돌려줘요
-    if (save) { const msg = await save(data, base); if (msg) return fail(msg); d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`); return; }
+    const dropUp = async () => { for (const st of Object.values(imgs)) if (st.uploaded && st.uploaded.length) await SB.storage.from(st.o.bucket).remove(st.uploaded); };
+    const dropOld = () => { for (const st of Object.values(imgs)) if (st.removed && st.removed.length) SB.storage.from(st.o.bucket).remove(st.removed).then(() => {}, () => {}); };
+    if (save) { const msg = await save(data, base); if (msg) { await dropUp(); return fail(msg); } dropOld(); d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`); return; }
     // 고칠 때도 여러 개 고르면(expand) 첫 번째는 이 줄을 고치고 나머지는 새 줄로 넣어요
     let error;
     if (row && expand) {
@@ -4733,8 +4974,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       ({ error } = await SB.from(table).update(list[0]).eq('id', row.id));
       if (!error && list.length > 1) ({ error } = await SB.from(table).insert(list.slice(1).map(x => ({ ...x, ...base }))));
     } else ({ error } = await (row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert(expand ? expand(data).map(x => ({ ...x, ...base })) : { ...data, ...base })));
-    if (error) { for (const st of Object.values(imgs)) if (st.uploaded && st.uploaded.length) await SB.storage.from(st.o.bucket).remove(st.uploaded); return fail(dbErr(error)); }
-    for (const st of Object.values(imgs)) if (st.removed && st.removed.length) SB.storage.from(st.o.bucket).remove(st.removed).then(() => {}, () => {});
+    if (error) { await dropUp(); return fail(dbErr(error)); }
+    dropOld();
     d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`);
   };
   if (row && !noDelete) $('#dlgDel').onclick = async () => {
@@ -4927,7 +5168,7 @@ function noticeDetail(id) {
   const person = r => `<div class="li"><span class="av" style="background:${r.read_at ? 'var(--good)' : 'var(--blue-100)'}">${esc(r.name[0])}</span><div class="t">${esc(r.name)} <span class="muted small">${ROLE_NAMES[r.role]}</span></div><div class="r">${r.read_at ? `<span class="time">${md(r.read_at.slice(0, 10))} ${r.read_at.slice(11, 16)}</span>` : '<span class="chip mute">안 읽음</span>'}</div></div>`;
   return head(esc(n.title), `${noticeTo(n)} · ${md(n.created_at.slice(0, 10))} 보냄`, `<button class="btn" data-edit-notice="${n.id}">고치기</button>`) + `
   <div class="grid2">
-    <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}</section>
+    <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}${fileChips(n.files, 'notices')}</section>
     <section class="card">
       <div class="card-head"><h2>읽음 확인</h2><span class="sub">${rs ? `${read.length}/${rs.length}명` : '불러오는 중'}</span></div>
       ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? `<p class="muted" style="margin:0">${n.target_class ? `${esc(n.target_class)} 아이와 앱으로 연결된 학부모 · 수강생이 아직 없어요. 원생 명단에서 "앱 연결"을 해 주세요.` : '아직 앱에 가입한 학부모 · 수강생이 없어요.'}</p>` : `
@@ -4952,7 +5193,8 @@ function noticeDialog(n) {
       ['title', '제목', { required: true, max: 100, placeholder: '예: 11월 학부모 설명회 안내' }],
       ['target_class', '받는 사람', { type: 'select', blank: '전체 학부모·학생', options: classes.map(c => [c, `${c} 학부모 · 수강생만`]) }],
       ['body', '내용', { type: 'area', max: 3000, rows: 7, placeholder: '날짜 · 시간 · 준비물처럼 꼭 알아야 할 내용을 적어 주세요.' }],
-      ['images', '사진', { type: 'images', max: 10, bucket: 'notices', prefix: () => REAL.academy.id }]
+      ['images', '사진', { type: 'images', max: 10, bucket: 'notices', prefix: () => REAL.academy.id }],
+      ['files', '파일 첨부 (안내문 · 신청서 · 영상 등)', { type: 'files', max: 10, bucket: 'notices', prefix: () => REAL.academy.id }]
     ]
   });
 }
@@ -5524,7 +5766,7 @@ function newsDetail(id) {
     SB.rpc('mark_notice_read', { p_notice: id }).then(({ error }) => { if (error) REAL.reads.delete(id); });
   }
   return head(esc(n.title), `${esc(REAL.academy.name)} · ${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}`) + `
-  <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}</section>
+  <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}${fileChips(n.files, 'notices')}</section>
   <a class="hint" href="#news">${ic('notice')}<span>다른 공지도 확인해 보세요</span><b>공지 →</b></a>`;
 }
 
@@ -6020,7 +6262,7 @@ const CENTER_GROUPS = [
   ['처리할 일', '새 신청 · 문의 · 맡긴 일 · 센터 일정', ['requests', 'inquiries', 'tasks', 'schedule']],
   ['학원 · 회원', '학원과 이용 분야 · 가입한 회원', ['academies', 'members']],
   ['연결 · 파트너', '제휴 · 유학 · 홍보를 파트너와 이어 주기', ['partners', 'abroad', 'promo']],
-  ['센터 운영', '강사 교육 영상 · 관리자 · 파트너 담당자', ['videos', 'admins']]
+  ['센터 운영', '원장님 공지 · 강사 교육 영상 · 관리자 · 파트너 담당자', ['notices', 'videos', 'admins']]
 ];
 function centerHome() {
   const C = CENTER, wk = addDays(TODAY, -6);
@@ -6055,6 +6297,114 @@ function centerHome() {
   <div class="ch-menu">${CENTER_GROUPS.map(([g, dsc, ids]) => `
     <section class="card"><div class="card-head"><h2>${g}</h2></div><p class="muted small" style="margin:-6px 0 8px">${dsc}</p>
       <div class="ch-links">${ids.filter(k => CENTER_AREA.subs[k]).map(k => { const x = CENTER_AREA.subs[k]; return `<a href="#center/${k}">${ic(x.icon)}<span><b>${x.name}${ndot(`center/${k}`)}</b><small>${x.stat ? x.stat() : x.desc}</small></span><i>›</i></a>`; }).join('')}</div></section>`).join('')}</div>`;
+}
+
+/* ================= 센터 공지 (center_notices): 센터 관리자 → 학원 원장님(원하면 강사님도) =================
+   모든 학원 또는 고른 학원에만 보내고, 고치고, 파일을 붙여요. 원장님은 "센터 공지"에서 읽고, 읽으면 센터가 확인해요. */
+const cnTarget = n => n.all_academies ? '모든 학원' : (() => { const names = (n.academy_ids || []).map(id => (CENTER && CENTER.academies.find(a => a.id === id) || {}).name).filter(Boolean); return `${names.length}곳 · ${names.slice(0, 3).map(esc).join(', ')}${names.length > 3 ? ` 외 ${names.length - 3}곳` : ''}`; })();
+const cnWho = n => `원장님${n.with_teachers ? ' · 강사님' : ''}`;
+function centerNoticesPage() {
+  const list = CENTER.notices || [], st = CENTER.noticeStats || {};
+  const add = `<button class="btn primary" data-act="addCn">${ic('plus')}새 공지 쓰기</button>`;
+  return head('원장님 공지', '센터가 학원 원장님께 보내는 공지예요. 모든 학원이나 고른 학원에만 보내고, 파일도 붙여요. 원장님 화면 "센터 공지"와 홈에 떠요.', add) + (list.length ? `
+  <section class="card"><div class="list stack">${list.map(n => { const s = st[n.id] || { total: 0, read: 0 }; return `
+    <a class="li link" href="#center/notices/${n.id}">
+      <span class="av" style="background:var(--r-admin)">${ic('notice')}</span>
+      <div><div class="t">${n.pinned ? '<span class="chip warn">위에 고정</span> ' : ''}${esc(n.title)}${(n.files || []).length ? ` <span class="chip mute">${ic('doc')}${n.files.length}</span>` : ''}</div>
+        <div class="d">${cnTarget(n)} · ${cnWho(n)} · ${md(n.created_at.slice(0, 10))}${n.updated_at ? ` · ${md(n.updated_at.slice(0, 10))} 고침` : ''}</div>${s.total ? bar(s.read / s.total * 100) : ''}</div>
+      <div class="r"><span class="time">읽음</span><b class="num">${s.read}/${s.total}</b></div></a>`; }).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('notice')}</span><h2>아직 보낸 공지가 없어요</h2>
+    <p class="muted">새 기능 안내 · 설명회 일정 · 교육청 소식처럼 원장님들께 알릴 일을 보내 보세요. 받는 학원을 고를 수 있고, 누가 읽었는지도 보여요.</p>${add}</section>`);
+}
+const CN_READERS = {};
+function centerNoticeDetail(id) {
+  const n = (CENTER.notices || []).find(x => x.id === id);
+  if (!n) return notFound();
+  if (!(id in CN_READERS)) { CN_READERS[id] = null; SB.rpc('center_notice_readers', { p_notice: id }).then(({ data }) => { CN_READERS[id] = data || []; if (location.hash === `#center/notices/${id}`) render(); }); }
+  const rs = CN_READERS[id], read = rs ? rs.filter(r => r.read_at) : [], unread = rs ? rs.filter(r => !r.read_at) : [];
+  const person = r => `<div class="li"><span class="av" style="background:${r.read_at ? 'var(--good)' : 'var(--blue-100)'}">${esc((r.name || '?')[0])}</span><div><div class="t">${esc(r.name)} <span class="muted small">${ROLE_NAMES[r.role] || ''}</span></div><div class="d">${esc(r.academy_name || '')}</div></div><div class="r">${r.read_at ? `<span class="time">${md(r.read_at.slice(0, 10))} ${r.read_at.slice(11, 16)}</span>` : '<span class="chip mute">안 읽음</span>'}</div></div>`;
+  return head(esc(n.title), `${cnTarget(n)} · ${cnWho(n)} · ${md(n.created_at.slice(0, 10))} 보냄${n.updated_at ? ` · ${md(n.updated_at.slice(0, 10))} 고침` : ''}`, `<button class="btn" data-edit-cn="${n.id}">${ic('pen')}고치기</button>`) + `
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h2>내용</h2>${n.pinned ? '<span class="chip warn">위에 고정</span>' : ''}</div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${fileChips(n.files, 'center')}</section>
+    <section class="card"><div class="card-head"><h2>읽음 확인</h2><span class="sub">${rs ? `${read.length}/${rs.length}명` : '불러오는 중'}</span></div>
+      ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? '<p class="muted" style="margin:0">받는 원장님이 아직 없어요. 고른 학원에 원장님 계정이 있는지 확인해 주세요.</p>' : `<div class="list">${unread.map(person).join('')}${read.map(person).join('')}</div>`}</section>
+  </div>`;
+}
+function centerNoticeDialog(n) {
+  const acads = [...(CENTER.academies || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')), nid = n ? n.id : crypto.randomUUID();
+  formDialog({
+    title: n ? '원장님 공지 고치기' : '원장님께 공지 쓰기', table: 'center_notices', row: n, academy: false, okText: n ? '저장' : '보내기',
+    doneText: '공지를 보냈어요 · 원장님 화면 "센터 공지"와 홈에 떠요', label: r => `"${r.title}" 공지를`,
+    after: async () => { delete CN_READERS[nid]; await loadCenter(); if (!n) location.hash = '#center/notices'; },
+    fields: [
+      ['title', '제목', { required: true, max: 100, placeholder: '예: 11월 원장님 설명회 안내' }],
+      ['target', '받는 학원', { type: 'select', required: true, own: true, value: n && !n.all_academies ? 'some' : 'all', options: [['all', `모든 학원 (${acads.length}곳)`], ['some', '고른 학원만']] }],
+      ['academy_ids', '어느 학원에? (여러 곳 고르기)', { type: 'multi', options: acads.map(a => [a.id, a.name || '(이름 없음)']), value: n ? n.academy_ids : [] }],
+      ['with_teachers', '강사님에게도 보이기', { type: 'check' }],
+      ['body', '내용', { type: 'area', max: 5000, rows: 8, placeholder: '날짜 · 장소 · 준비할 것처럼 꼭 알아야 할 내용을 적어 주세요.' }],
+      ['files', '파일 첨부', { type: 'files', max: 10, bucket: 'center', prefix: () => nid }],
+      ['pinned', '목록 맨 위에 고정', { type: 'check' }]
+    ],
+    check: d => d.target === 'some' && !d.academy_ids.length ? '받을 학원을 하나 이상 골라 주세요.' : null,
+    save: async d => {
+      const { target, ...rest } = d, row = { ...rest, all_academies: target === 'all', academy_ids: target === 'all' ? [] : d.academy_ids };
+      const { error } = n ? await SB.from('center_notices').update(row).eq('id', n.id) : await SB.from('center_notices').insert({ ...row, id: nid });
+      return error ? dbErr(error) : null;
+    },
+    del: async () => {
+      if (!confirm(`"${n.title}" 공지를 지울까요? 원장님 화면에서도 사라져요.`)) return false;
+      const { error } = await SB.from('center_notices').delete().eq('id', n.id);
+      if (error) { toast(dbErr(error, '지우지')); return false; }
+      if ((n.files || []).length) SB.storage.from('center').remove(n.files.map(f => f.path)).then(() => {}, () => {});
+      location.hash = '#center/notices'; return '공지를 지웠어요';
+    }
+  });
+  // "모든 학원"이면 학원 고르기를 숨겨요 · 학원이 많으면 이름으로 찾기
+  const dlg = $('#dlg'), sel = dlg.querySelector('[name=target]'), box = dlg.querySelector('[name=academy_ids]') && dlg.querySelector('[name=academy_ids]').closest('.f');
+  if (box) {
+    if (acads.length > 8) box.insertAdjacentHTML('afterbegin', '<input type="search" class="cn-find" placeholder="학원 이름으로 찾기" style="margin:6px 0">');
+    const q = box.querySelector('.cn-find'); if (q) q.oninput = () => box.querySelectorAll('.pick-chips label').forEach(l => { l.hidden = !!q.value.trim() && !l.textContent.includes(q.value.trim()); });
+    const sync = () => { box.hidden = sel.value !== 'some'; }; sel.onchange = sync; sync();
+  }
+}
+
+// 원장님 · 강사님 화면: 센터 공지 (예시 계정은 예시 공지)
+const DEMO_CNEWS = [
+  { id: 'cn1', title: '11월 원장님 설명회 · 자동 청구 쓰는 법', body: '11월 20일(수) 오전 10시 · 학원지원센터 세미나실\n\n1. 매달 자동 청구 · 미납 안내 켜는 법\n2. 시간표 기간 정하기 · 복사 · 붙여넣기\n3. 질의응답\n\n참석하실 원장님은 채팅으로 알려 주세요.', pinned: true, all_academies: true, files: [{ path: 'demo/설명회 안내.pdf', name: '11월 설명회 안내.pdf', size: 482000, mime: 'application/pdf' }], created_at: `${addDays(TODAY, -2)}T10:00:00` },
+  { id: 'cn2', title: '연말 교습비 변경 신고 기간 안내', body: '교습비를 바꾸실 학원은 교육청 신고를 먼저 해 주세요. 서류 · 행정 → 서류 자동 처리에서 신고서를 바로 만들 수 있어요.', all_academies: true, files: [], created_at: `${addDays(TODAY, -9)}T15:20:00` }
+];
+const cnewsData = () => REAL ? REAL.cnews || [] : ROLE === 'owner' ? DEMO_CNEWS : [];
+const cnRead = id => REAL ? (REAL.cnewsRead || new Set()).has(id) : (() => { try { return (sessionStorage.getItem('asc-cn-read') || '').includes(id); } catch (e) { return false; } })();
+const cnUnread = () => cnewsData().filter(n => !cnRead(n.id));
+function cnewsPage() {
+  const list = cnewsData();
+  return head('센터 공지', '학원지원센터가 원장님께 보내는 소식 · 안내예요. 파일은 눌러서 미리 보고 다운로드할 수 있어요.') + (list.length ? `
+  <section class="card"><div class="list stack">${list.map(n => `
+    <a class="li link" href="#cnews/${n.id}">
+      <span class="av" style="background:var(--r-admin)">${ic('notice')}</span>
+      <div><div class="t">${n.pinned ? '<span class="chip warn">중요</span> ' : ''}${esc(n.title)}${(n.files || []).length ? ` <span class="chip mute">${ic('doc')}파일 ${n.files.length}</span>` : ''}</div>
+        <div class="d">학원지원센터 · ${md(n.created_at.slice(0, 10))}${n.updated_at ? ` · ${md(n.updated_at.slice(0, 10))} 고침` : ''}</div></div>
+      <div class="r">${cnRead(n.id) ? '<span class="chip mute">읽음</span>' : '<span class="chip crit">새 공지</span>'}</div></a>`).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('notice')}</span><h2>아직 센터 공지가 없어요</h2><p class="muted">센터에서 공지를 보내면 여기와 홈에 떠요.</p></section>`);
+}
+function cnewsDetail(id) {
+  const n = cnewsData().find(x => x.id === id);
+  if (!n) return notFound();
+  if (!cnRead(id)) {
+    if (REAL) { (REAL.cnewsRead ||= new Set()).add(id); SB.rpc('mark_center_notice_read', { p_notice: id }).then(() => {}); }
+    else try { sessionStorage.setItem('asc-cn-read', `${sessionStorage.getItem('asc-cn-read') || ''} ${id}`); } catch (e) { /* 이번 화면에선 읽음 */ }
+  }
+  return head(esc(n.title), `학원지원센터 · ${md(n.created_at.slice(0, 10))}${n.updated_at ? ` · ${md(n.updated_at.slice(0, 10))} 고침` : ''}`) + `
+  <section class="card" style="max-width:760px"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${fileChips(n.files, 'center')}
+    <p class="muted small" style="margin:14px 0 0">궁금한 점은 <a href="#help" style="color:var(--blue-600);font-weight:600">센터에 문의하기</a>나 채팅으로 물어봐 주세요.</p></section>`;
+}
+const CNEWS_AREA = { name: '센터 공지', icon: 'notice', desc: '학원지원센터가 원장님께 보내는 소식', stat: () => { const n = cnUnread().length; return n ? `새 공지 ${n}개` : `공지 ${cnewsData().length}개`; }, render: cnewsPage, detail: cnewsDetail, title: id => (cnewsData().find(n => n.id === id) || {}).title };
+async function loadCnews() {
+  const [n, r] = await Promise.all([
+    SB.from('center_notices').select('*').order('pinned', { ascending: false }).order('created_at', { ascending: false }),
+    SB.from('center_notice_reads').select('notice_id')
+  ]);
+  REAL.cnews = n.data || []; REAL.cnewsRead = new Set((r.data || []).map(x => x.notice_id));
 }
 
 /* ---------- 회원 한 명 보기 (#center/members/회원) : 학원 · 역할 · 쓰는 분야 · 최근 연 메뉴 · 쓴 기록 ---------- */
@@ -6459,6 +6809,7 @@ const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 
     abroad: { name: '유학 상담', icon: 'globe', desc: '원장님이 넘긴 학부모 유학 상담 연결', stat: () => `연결 요청 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`, render: centerAbroadPage },
     promo: { name: '홍보 의뢰', icon: 'megaphone', desc: '원장님 홍보 작업을 인투마케팅에 연결', stat: () => `새 의뢰 ${CENTER.promoReqs.filter(r => r.status === 'new').length}건`, render: centerPromoPage },
     members: { name: '회원', icon: 'users', desc: '가입한 사람의 이름 · 아이디 · 연락처 · 학원 · 마지막 로그인', stat: () => `회원 ${CENTER.members.length}명 · 최근 7일 가입 ${CENTER.members.filter(m => m.created_at && dday(m.created_at.slice(0, 10)) >= -7).length}명`, render: centerMembersPage, detail: memberDetail, title: id => { const m = CENTER.members.find(x => x.id === id); return m ? m.name || '회원' : ''; } },
+    notices: { name: '원장님 공지', icon: 'notice', desc: '모든 학원 · 고른 학원 원장님께 공지 · 파일', stat: () => `공지 ${(CENTER.notices || []).length}개`, render: centerNoticesPage, detail: centerNoticeDetail, title: id => ((CENTER.notices || []).find(n => n.id === id) || {}).title },
     admins: { name: '관리자', icon: 'shield', desc: '관리자 신청 수락 · 추가 · 빼기', stat: () => { const n = CENTER.adminApps.filter(a => a.status === 'pending').length; return `${CENTER.admins.length}명${n ? ` · 신청 ${n}건` : ''}`; }, render: centerAdminsPage }
   } };
 
@@ -6475,6 +6826,8 @@ function attendStat() {
 /* ================= 역할별 메뉴 구조 =================
    영역(area) → 세부(subs) 두 단계. subs가 없으면 영역 화면이 바로 열려요. */
 // 예시 일정 날짜를 이번 달로 맞춰요
+// 예시 시간표: 고등 심화반은 다음 주까지인 기간 수업 (곧 끝나는 수업 · "이어가기"를 눌러 볼 수 있게), 나머지는 매주
+DATA.timetable.filter(t => t.class_name === '고등 심화반').forEach(t => { t.from_week = addDays(mondayOf(TODAY), -21); t.to_week = addDays(mondayOf(TODAY), 7); });
 DATA.events.forEach(e => { const m = TODAY.slice(0, 7), dd = n => `${m}-${String(Math.min(n, 28)).padStart(2, '0')}`; e.day = dd(e.d); e.end_day = e.end ? dd(e.end) : null; });
 // 예시 계정의 "오늘"도 실제 오늘에 맞춰요: 오늘 요일에 수업이 있는 반만 출결에, 아이 일정도 오늘 요일 것만 (일요일엔 수업 없음)
 DATA.today = todayText();
@@ -6532,6 +6885,7 @@ const AREAS = {
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     library: LIBRARY_AREA,
+    cnews: CNEWS_AREA,
     mou: { name: '제휴(MOU)', icon: 'handshake', desc: '유학·캠프 등 센터가 맺어 둔 제휴를 바로 신청 · 학부모 유학 상담', stat: () => REAL
         ? `진행 중 제휴 ${REAL.partnerApps.filter(a => a.status !== 'closed').length}건 · 유학 상담 새 신청 ${REAL.abroad.requests.filter(r => r.status === 'new').length}건`
         : `이용 중 ${DATA.partners.filter(p => p.status === 'using').length}곳 · 신청 가능 ${DATA.partners.filter(p => p.status === 'none').length}곳`,
@@ -6658,9 +7012,11 @@ const NEWS = {
     'teachers/center': () => REAL.tasks.filter(t => t.area === 'teachers' && t.status !== 'new').map(t => t.updated_at),
     'members/center': () => REAL.tasks.filter(t => t.area === 'members' && t.status !== 'new').map(t => t.updated_at),
     schedule: () => notMine(REAL.events, 'created_by'),
-    library: () => notMine(REAL.library, 'uploaded_by')
+    library: () => notMine(REAL.library, 'uploaded_by'),
+    cnews: () => cnUnread().map(n => n.updated_at || n.created_at)
   },
   teacher: {
+    cnews: () => cnUnread().map(n => n.updated_at || n.created_at),
     approvals: () => apvData().map(a => a.decided_at),
     learn: () => DATA.training.map(t => t.created_at),
     jobs: () => (JOBS ? JOBS.posts : []).map(p => p.created_at),
@@ -6695,7 +7051,7 @@ const NEWS = {
   }
 };
 // 예시 계정: 처음 들어오면 몇 곳에 점이 보이고, 열어 보면 사라져요
-const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'promo/requests'], teacher: ['approvals', 'learn'],
+const DEMO_NEWS = { owner: ['admin/approvals', 'members/leads', 'mou/abroad', 'promo/requests', 'cnews'], teacher: ['approvals', 'learn'],
   parent: ['news', 'kid/bills', 'abroad'], student: ['todos', 'reports'] };
 function newsKeys() {
   if (!REAL && !CENTER) return DEMO && !USER ? Object.fromEntries((DEMO_NEWS[ROLE] || []).map(k => [k, () => [`${TODAY}T00:00:00`]])) : {};
@@ -6758,8 +7114,8 @@ function markSeen(path) {
 
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
-  owner: [['학원 운영', '학생 · 출결 · 수납 · 시간표', ['members', 'admin', 'schedule']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
-  teacher: [['학원 운영', '학생 · 출결 · 시간표 · 결재', ['members', 'admin', 'schedule', 'approvals', 'teachers']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
+  owner: [['학원 운영', '학생 · 출결 · 수납 · 시간표', ['members', 'admin', 'schedule']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '센터 공지 · 제휴 · 홍보를 센터가 연결', ['cnews', 'mou', 'promo', 'center']]],
+  teacher: [['학원 운영', '학생 · 출결 · 시간표 · 결재', ['members', 'admin', 'schedule', 'approvals', 'teachers']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 센터 공지 · 제휴 · 홍보', ['learn', 'cnews', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library']], ['유학 · 캠프', '학원이 안내하는 캠프 · 어학연수 · 유학', ['abroad', 'center']]],
   admin: [['센터', '센터 관리 · 채팅', ['center', 'messages']]]
@@ -7669,7 +8025,7 @@ function bind() {
       pick.querySelectorAll('[data-cp-del]').forEach(b => b.onclick = () => { picked.splice(+b.dataset.cpDel, 1); drawPick(); }); };
     if (fin) fin.onchange = () => {
       const add = [...fin.files], big = add.filter(f => f.size > CHAT_MAX_SIZE);
-      if (big.length) toast(`20MB보다 큰 파일은 빼고 넣었어요 (${big.map(f => f.name).join(', ')})`);
+      if (big.length) toast(`${sizeText(CHAT_MAX_SIZE)}보다 큰 파일은 빼고 넣었어요 (${big.map(f => f.name).join(', ')})`);
       picked = [...picked, ...add.filter(f => f.size <= CHAT_MAX_SIZE)];
       if (picked.length > CHAT_MAX_FILES) { toast(`한 번에 ${CHAT_MAX_FILES}개까지 보낼 수 있어요`); picked = picked.slice(0, CHAT_MAX_FILES); }
       fin.value = ''; drawPick();
@@ -7699,8 +8055,9 @@ function bind() {
   on('[data-edit-lib]', b => libDialog(REAL.library.find(x => x.id === b.dataset.editLib)));
   on('[data-lib-cat]', b => { libCat = b.dataset.libCat; render(); });
   on('[data-lib-vis]', b => { libVis = b.dataset.libVis; render(); });
-  on('[data-lib-open]', b => REAL ? openLib(b.dataset.libOpen, false) : toast('예시 자료예요'));
-  on('[data-lib-down]', b => REAL ? openLib(b.dataset.libDown, true) : toast('예시 자료예요'));
+  on('[data-lib-open]', b => libPreview(b.dataset.libOpen));
+  on('[data-lib-link]', b => libPreview(b.dataset.libLink, true));
+  on('[data-lib-down]', b => { const it = libData().find(x => x.id === b.dataset.libDown); if (it) downloadFile(libItem(it)); });
   // 성장 리포트
   on('[data-act="newReport"]', newReportDialog);
   on('[data-act="printReport"]', () => window.print());
@@ -7777,33 +8134,35 @@ function bind() {
   on('[data-title-preset]', b => titleDialog(null, b.dataset.titlePreset));
   on('[data-edit-title]', b => titleDialog(rolesData().titles.find(t => String(t.id) === b.dataset.editTitle)));
   on('[data-act="cleanTT"]', ttCleanDialog);
+  on('[data-act="addCn"]', () => centerNoticeDialog(null));
+  on('[data-edit-cn]', b => centerNoticeDialog((CENTER.notices || []).find(n => n.id === b.dataset.editCn)));
   on('[data-act="addCev"]', () => centerEventDialog(null));
   on('[data-cev]', (b, e) => { e.preventDefault(); centerEventDialog((CENTER.events || []).find(x => x.id === b.dataset.cev)); });
   on('[data-cev-from]', (b, e) => { e.preventDefault(); e.stopPropagation(); centerEventDialog(null, JSON.parse(b.dataset.cevFrom)); });
-  on('[data-act="addTT"]', () => REAL ? ttDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
+  on('[data-act="addTT"]', () => isStaff() && ttDialog(null));
   on('[data-act="addEv"]', () => REAL ? evDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
+  on('[data-tt-add]', b => ttDialog(null, +b.dataset.ttAdd));
+  on('[data-tt-sel]', (b, e) => { e.stopPropagation(); ttToggle(b.dataset.ttSel); });
   on('[data-edit-tt]', (b, e) => {
+    if (e.target.closest('[data-tt-sel]')) return;
     const id = b.dataset.editTt;
     // 고르는 중이거나 Shift · Ctrl을 누른 채 누르면 여러 칸 고르기
-    if (TT_PICK || e.shiftKey || e.ctrlKey || e.metaKey) { if (TT_SEL.has(id)) TT_SEL.delete(id); else TT_SEL.add(id); render(); return; }
-    if (REAL) ttDialog(REAL.timetable.find(t => t.id === id)); else toast('예시 계정에서는 고칠 수 없어요 · 끌어서 옮기기 · 여러 칸 고르기는 눌러 볼 수 있어요');
+    if (TT_SEL.size || e.shiftKey || e.ctrlKey || e.metaKey) { ttToggle(id); return; }
+    ttDialog(ttFind(id));
   });
-  on('[data-act="ttPick"]', () => { TT_PICK = !TT_PICK; if (!TT_PICK) TT_SEL.clear(); render(); });
   on('[data-act="ttSelNone"]', () => { TT_SEL.clear(); render(); });
+  on('[data-act="ttSelAll"]', () => { document.querySelectorAll('[data-edit-tt]').forEach(x => TT_SEL.add(x.dataset.editTt)); render(); });
+  on('[data-act="ttCopySel"]', () => ttCopy([...TT_SEL]));
+  on('[data-act="ttPaste"]', () => ttPasteDialog());
+  on('[data-tt-paste]', b => ttPasteDialog(+b.dataset.ttPaste));
+  on('[data-act="ttClipNone"]', () => { TT_CLIP = null; render(); });
+  on('[data-tt-extend]', b => ttExtend(+b.dataset.ttExtend));
   on('[data-act="ttMoveSel"]', () => ttMoveDialog([...TT_SEL]));
   on('[data-act="ttCancelSel"]', () => ttCancelDialog([...TT_SEL]));
-  on('[data-act="ttDelSel"]', async () => {
-    if (!REAL) return toast('예시 계정에서는 지울 수 없어요');
-    if (!confirm(`고른 ${TT_SEL.size}칸을 지울까요? (매주 수업이면 모든 주에서 지워져요 · 이번 주만 쉬려면 "이 주 휴강")`)) return;
-    const { error } = await SB.from('timetable').delete().in('id', [...TT_SEL]);
-    if (error) return toast(dbErr(error, '지우지'));
-    const n = TT_SEL.size; TT_SEL.clear(); await loadSchedule(); render(); toast(`${n}칸 지웠어요`);
-  });
+  on('[data-act="ttDelSel"]', ttDelSel);
   on('[data-act="ttMakeup"]', () => ttMakeupDialog(null));
   on('[data-act="ttCopyWeek"]', ttCopyWeekDialog);
-  on('[data-act="ttOnlyNext"]', () => ttOnlyAct('next'));
-  on('[data-act="ttOnlyFix"]', () => ttOnlyAct('fix'));
-  on('[data-tt-uncancel]', b => ttUncancelDialog(REAL.timetable.find(t => t.id === b.dataset.ttUncancel)));
+  on('[data-tt-uncancel]', b => ttUncancelDialog(ttFind(b.dataset.ttUncancel)));
   bindTimetableDrag();
   on('[data-edit-ev]', (b, e) => { e.preventDefault(); if (REAL) evDialog(REAL.events.find(x => x.id === b.dataset.editEv)); });
   // 결재
@@ -8125,12 +8484,14 @@ async function loadCenter() {
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
     newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries'), SB.rpc('admin_academies'), newest('center_tasks'), SB.rpc('admin_members')
   ]);
-  const [{ data: pm }, { data: ce }] = await Promise.all([SB.rpc('list_partner_members'), SB.from('center_events').select('*').order('day')]);
+  const [{ data: pm }, { data: ce }, { data: cn }, { data: cns }] = await Promise.all([SB.rpc('list_partner_members'), SB.from('center_events').select('*').order('day'),
+    SB.from('center_notices').select('*').order('pinned', { ascending: false }).order('created_at', { ascending: false }), SB.rpc('center_notice_stats')]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = Number(x.done) || 0; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
     partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [],
-    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [], partnerMembers: pm || [], events: ce || [] };
+    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [], partnerMembers: pm || [], events: ce || [],
+    notices: cn || [], noticeStats: Object.fromEntries((cns || []).map(x => [x.notice_id, x])) };
 }
 // 파트너 담당자: 우리 회사로 바로 온 신청만 (RLS가 걸러 줘요) — 센터 화면을 그대로 써서 CENTER 모양으로 채워요
 const PARTNER_INFO = { intomarketing: { name: '인투마케팅', subs: ['promo'] }, intoabroad: { name: '인투유학', subs: ['abroad', 'partners'] } };
@@ -8343,19 +8704,19 @@ async function boot() {
     REAL = { academy: mem[0].academies, role: mem[0].role, students: [], codes: [], members: [],
       attend: { day: TODAY, map: {} }, plans: [], invoices: [], expenses: [], incomes: [], paperwork: [],
       jobs: [], applicants: [], partnerApps: [], abroad: { promos: [], requests: [] }, services: {}, serviceSince: {}, tasks: [],
-      approvals: [], reports: [], library: [], libFolders: [], library_folders: [], payroll: [], autoLogs: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set() };
+      approvals: [], reports: [], library: [], libFolders: [], library_folders: [], payroll: [], autoLogs: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set(), cnews: [], cnewsRead: new Set() };
     useAcademy();
     await loadServices();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies()]);
     if (ROLE === 'owner') await Promise.all([loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadFixed(), loadPaperwork(), loadJobs(), loadPartnerApps(),
-      loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks(), loadPayroll(), loadAutoLogs(), loadStaffPerms()]);
+      loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks(), loadPayroll(), loadAutoLogs(), loadStaffPerms(), loadCnews()]);
     // 강사: 기본 + 원장님이 켜 준 권한의 자료만 (권한이 없으면 DB도 돌려주지 않아요)
-    if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses(),
+    if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses(), loadCnews(),
       can('billing') || can('finance') ? loadInvoices() : null, can('finance') ? loadExpenses() : null, can('finance') ? loadIncomes() : null, can('finance') ? loadFixed() : null,
       can('paper') ? loadPaperwork() : null, can('payroll') ? loadPayroll() : null, can('hire') ? loadJobs() : null,
       can('staff') ? loadTeacherClasses() : null, can('invite') || can('staff') ? loadInvite() : null,
       can('students') ? loadFamilyMembers() : null, can('notices') ? loadNotices() : null]);
-    if (ROLE === 'teacher') MY = teacherMenus();
+    if (ROLE === 'teacher') { MY = teacherMenus(); if (REAL.cnews.length) MY.cnews = CNEWS_AREA; }
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen(), loadPeopleCounts()]);
     tailorMenus();

@@ -1,6 +1,6 @@
 // 엑셀(.xlsx) · CSV 읽기와 양식(.xlsx) 만들기 — 바깥 라이브러리 없이 브라우저 기능만 써요.
 // readSheet(file) → 첫 번째 시트의 행 목록 [[칸, 칸, …], …] (칸은 모두 글자, 날짜는 YYYY-MM-DD)
-// downloadXlsx(파일 이름, 행 목록, 칸 너비, 옵션) → 보기 좋게 꾸민 .xlsx 내려받기
+// downloadXlsx(파일 이름, 행 목록, 칸 너비, 옵션) → 보기 좋게 꾸민 .xlsx 다운로드
 
 /* ---------- 읽기 ---------- */
 async function readSheet(file) {
