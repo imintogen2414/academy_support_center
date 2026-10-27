@@ -70,7 +70,11 @@ const PHONE_PAGES = {
     <div class="m-card"><small class="m-cap">미납 6건</small>${mk.row('이하은 · 300,000원', 'D+3', '')}${mk.row('한지우 · 300,000원', 'D+1', '')}<div class="m-btn sm">미납 안내 한 번에 보내기</div></div>`],
     ['학부모 공지', 1, ['공지 · 읽음 확인', '전체나 반별로 공지를 보내면 학부모 휴대폰에 바로 떠요. 읽은 가족 · 안 읽은 가족이 보여서 다시 알릴 사람만 골라요.'], `
     <div class="m-card"><small class="m-cap">어제 보낸 공지</small><b class="m-big-t">겨울방학 특강 안내</b><div class="m-meter"><i style="--w:82%"></i></div><small class="m-note">28가족 중 23가족 읽음</small></div>
-    <div class="m-card"><small class="m-cap">안 읽은 가족 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`]
+    <div class="m-card"><small class="m-cap">안 읽은 가족 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`],
+    ['직책 · 권한', 3, ['직책 · 권한', '매니저 · 재정 담당처럼 학원 안 직책을 정하고, 원장님만 쓰던 기능을 강사마다 하나씩 켜 줘요. 켜 준 화면만 강사 메뉴에 생겨요.'], `
+    <div class="m-card m-hi"><span class="m-av2">김</span><div><b>김민지 · 매니저</b><small>초등 B반 · 중등 A반 담당</small></div></div>
+    <div class="m-card"><small class="m-cap">켜 준 기능</small>${[['모든 원생', 1], ['수납', 1], ['결재 처리', 1], ['공지', 1], ['재정', 0], ['원천세', 0]].map(([t, on]) => mk.row(t, '', mk.chip(on ? '켬' : '끔', on ? 'blue' : ''))).join('')}</div>
+    <div class="m-card"><small class="m-cap">우리 학원 직책</small><div class="m-chips">${mk.chip('매니저', 'blue')}${mk.chip('재정 담당', '')}${mk.chip('상담 실장', '')}</div></div>`]
   ],
   teacher: [
     ['초등 B반 출결', 0, ['담당 반 출결', '수업 중에 휴대폰으로 출석 · 지각 · 결석을 눌러요. QR로 먼저 찍은 학생은 이미 체크돼 있어요.'], `
@@ -89,6 +93,10 @@ const PHONE_PAGES = {
     <div class="m-card m-todo">${[['단어 30개 외우기', 1], ['리딩 3과 읽기', 1], ['문법 워크북 12쪽', 1]].map(([t], i) => `<div class="m-row" style="--i:${i}"><span><i class="m-box on"></i>${t}</span></div>`).join('')}</div>
     <div class="m-card"><small class="m-cap">어제 숙제</small>${mk.row('다 한 학생', '11/13', '')}${mk.row('안 한 학생', '정민재 · 한지우', '')}</div>
     <div class="m-btn">13명에게 보내기</div>`],
+    ['일정 · 시간표', 3, ['시간표 함께 고치기', '원장님과 강사님이 같은 시간표를 넣고 고쳐요. 칸마다 누가 넣고 고쳤는지 남고, 아래 "바뀐 기록"에서 한눈에 봐요.'], `
+    <div class="m-card">${[['월', '16:30 초등 B반 리딩', '박윤지 넣음'], ['수', '16:30 초등 B반 문법', '김민지 고침 10/27'], ['금', '17:30 중등 A반 단어', '박윤지 넣음']].map(([d, t, w]) => `<div class="m-row"><span><em class="m-wd">${d}</em>${t}</span></div><small class="m-note">${w}</small>`).join('')}</div>
+    <div class="m-card"><small class="m-cap">바뀐 기록</small>${mk.row('김민지 · 수 16:30 시간 고침', '10/27', '')}${mk.row('박윤지 · 11/2 월말 평가 넣음', '10/25', '')}</div>
+    <div class="m-btn">수업 더하기</div>`],
     ['성장 리포트 · 10월', 3, ['성장 리포트', '과목 점수 · 학습 태도 · 의견을 적어 발급하면 학부모님이 휴대폰으로 받아 봐요. 출결 · 숙제는 저절로 채워져요.'], `
     <div class="m-card"><small class="m-cap">김서연 · 과목 점수</small>${scoreBar('리딩', 92)}${scoreBar('문법', 84)}${scoreBar('단어', 96)}</div>
     <div class="m-card">${mk.row('출석률', '100%', '')}${mk.row('숙제 수행', '27/28', '')}</div>

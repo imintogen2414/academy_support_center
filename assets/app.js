@@ -21,6 +21,7 @@ const ICON = {
   attend: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12l2 2 4-4"/>',
   card: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
   chat: '<path d="M21 12a8 8 0 0 1-12 7l-6 2 2-6a8 8 0 1 1 16-3z"/>',
+  notice: '<path d="M3 10v4a1 1 0 0 0 1 1h3l6 4V5L7 9H4a1 1 0 0 0-1 1z"/><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5M19 7a7 7 0 0 1 0 10"/>',
   chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   shield: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
@@ -2640,14 +2641,15 @@ function groupInfoDialog(c) {
 
 // 내 프로필: 사진 · 이름 · 상태 메시지 (사진은 공개 버킷 avatars/내 id/…)
 /* ---------- 중복 확인: 이름 · 아이디 · 전화번호는 다른 회원과 겹치지 않아요 (profiles 유일 인덱스 + check_profile_taken) ---------- */
-const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호' };
+const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호', email: '이메일' };
 const hasJong = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 > 0; };
 const takenMsg = list => { const w = list.map(k => TAKEN_TEXT[k]).join(' · '), j = hasJong(w); return `이미 있는 ${w}${j ? '이에요' : '예요'}! 다른 ${w}${j ? '을' : '를'} 써 주세요.`; };
-async function checkTaken(name, phone) {
-  const { data } = await SB.rpc('check_profile_taken', { p_username: null, p_name: name || null, p_phone: phone || null });
+async function checkTaken(name, phone, email) {
+  const { data } = await SB.rpc('check_profile_taken', { p_username: null, p_name: name || null, p_phone: phone || null, p_email: email || null });
   return data || [];
 }
-const uniqueError = e => e && e.code === '23505' ? takenMsg([/phone/.test(e.message || '') ? 'phone' : 'name']) : '';
+const uniqueError = e => e && e.code === '23505' ? takenMsg([/phone/.test(e.message || '') ? 'phone' : /email/.test(e.message || '') ? 'email' : 'name']) : '';
+const emailOk = v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
 
 /* ---------- 설정 (#settings): 내 정보 · 우리 학원 · 이용 중인 지원 · 결제 · 화면 · 계정 ---------- */
 const loginKind = () => !USER ? '예시 계정' : /@id\.academysupportcenter\.app$/.test(USER.email || '') ? '아이디 · 비밀번호' : `구글 (${esc(USER.email || '')})`;
@@ -2708,11 +2710,12 @@ function settingsPage() {
     ${row('이름', ME.name)}
     ${row('아이디', P.username ? `${esc(P.username)} <span class="muted small">(바꿀 수 없어요)</span>` : demo ? 'demo' : '<span class="muted">구글로 로그인해서 아이디가 없어요</span>')}
     ${row('휴대폰 번호', P.phone ? fmtPhone(P.phone) : demo ? '010-1234-5678' : none)}
+    ${row('이메일', P.email ? esc(P.email) : demo ? 'demo@example.com' : none)}
     ${row('로그인 방법', loginKind())}
     ${row('역할', roleName)}
     ${USER && USER.created_at ? row('가입한 날', USER.created_at.slice(0, 10).replace(/-/g, '.')) : ''}
     <div class="row-btns"><button class="btn sm primary" data-act="editProfile">내 정보 고치기</button>${idLogin ? '<button class="btn sm" data-act="changePw">비밀번호 바꾸기</button>' : ''}</div>
-    <p class="muted small">이름 · 아이디 · 휴대폰 번호는 다른 회원과 겹칠 수 없어요. 휴대폰 번호는 센터와 우리 학원 원장님만 연락용으로 써요.</p>`);
+    <p class="muted small">이름 · 아이디 · 휴대폰 번호 · 이메일은 다른 회원과 겹칠 수 없어요. 휴대폰 번호 · 이메일은 아이디 · 비밀번호를 찾을 때와 센터 · 우리 학원 원장님 연락용으로만 써요.</p>`);
   let acad = '';
   if (ROLE !== 'admin' && !SEEKER) {
     const fam = ROLE === 'parent' || ROLE === 'student';
@@ -2784,8 +2787,13 @@ function pwDialog() {
   };
 }
 // 홈: 휴대폰 번호가 없으면 한 줄 안내 (학생은 빼요)
-const phoneHint = () => USER && PROFILE && !PROFILE.phone && ROLE !== 'student' && ROLE !== 'admin'
-  ? `<a class="hint" href="#settings">${ic('users')}<span>휴대폰 번호를 등록해 주세요 · 센터와 학원이 연락할 때 써요</span><b>설정에서 등록 →</b></a>` : '';
+// 아이디 회원이 이메일이 없으면 이메일도 (아이디 · 비밀번호 찾기에 써요)
+const phoneHint = () => {
+  if (!USER || !PROFILE || ROLE === 'admin') return '';
+  const miss = [ROLE !== 'student' && !PROFILE.phone && '휴대폰 번호', PROFILE.username && !PROFILE.email && '이메일'].filter(Boolean);
+  if (ROLE === 'student' && (PROFILE.phone || PROFILE.email)) return '';
+  return miss.length ? `<a class="hint" href="#settings">${ic('users')}<span>${miss.join(' · ')}을 등록해 주세요 · 아이디 · 비밀번호를 잊었을 때 찾고, 센터와 학원이 연락할 때 써요</span><b>설정에서 등록 →</b></a>` : '';
+};
 
 function profileDialog() {
   if (!USER) { toast('예시 계정에서는 바꿀 수 없어요'); return; }
@@ -2796,6 +2804,7 @@ function profileDialog() {
       <div class="pf-btns"><label class="btn sm">사진 고르기<input type="file" id="pfFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>${url ? '<button type="button" class="btn sm" id="pfNoPic">사진 빼기</button>' : ''}<span class="muted small">5MB 이하 이미지</span></div></div>
     <label class="f">이름 <span class="muted small">다른 회원과 겹치지 않게</span><input name="name" maxlength="50" value="${esc(PROFILE.name || '')}"></label>
     <label class="f">휴대폰 번호${ROLE === 'student' ? ' <span class="muted small">없으면 비워 두세요</span>' : ''}<input name="phone" type="tel" inputmode="numeric" maxlength="13" value="${PROFILE.phone ? fmtPhone(PROFILE.phone) : ''}" placeholder="010-0000-0000"></label>
+    <label class="f">이메일 <span class="muted small">아이디 · 비밀번호를 찾을 때 써요</span><input name="email" type="email" inputmode="email" maxlength="200" value="${esc(PROFILE.email || '')}" placeholder="예: name@gmail.com" autocapitalize="none"></label>
     <label class="f">상태 메시지 <span class="muted small">친구에게 보여요</span><input name="status" maxlength="60" value="${esc(PROFILE.status_msg || '')}" placeholder="예: 평일 14–21시 연락 가능해요"></label>
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div></form>`;
@@ -2815,12 +2824,13 @@ function profileDialog() {
   if ($('#pfNoPic')) $('#pfNoPic').onclick = () => { url = null; $('#pfPic').innerHTML = pfp(ME.name, null, ROLE, 'lg'); };
   $('#pfForm').onsubmit = async e => {
     e.preventDefault();
-    const el = e.target.elements, name = el.name.value.trim(), phone = el.phone.value.replace(/\D/g, '');
+    const el = e.target.elements, name = el.name.value.trim(), phone = el.phone.value.replace(/\D/g, ''), email = el.email.value.trim().toLowerCase();
     if (!name) return fail('이름을 적어 주세요.');
     if (phone && !phoneOk(phone)) return fail('휴대폰 번호 형식이 맞지 않아요. 예: 010-1234-5678');
-    const taken = await checkTaken(name, phone);
+    if (email && !emailOk(email)) return fail('이메일 형식이 맞지 않아요. 예: name@gmail.com');
+    const taken = await checkTaken(name, phone, email);
     if (taken.length) return fail(takenMsg(taken));
-    const row = { name, phone: phone || null, status_msg: el.status.value.trim() || null, avatar_url: url };
+    const row = { name, phone: phone || null, email: email || null, status_msg: el.status.value.trim() || null, avatar_url: url };
     const { error } = await SB.from('profiles').update(row).eq('id', USER.id);
     if (error) return fail(uniqueError(error) || '저장하지 못했어요. 다시 시도해 주세요.');
     Object.assign(PROFILE, row); ME.name = esc(name); ME.av = ME.name[0];
@@ -3889,7 +3899,7 @@ function realNoticesPage() {
   const add = `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`;
   if (!list.length) return head('공지', '') + `
   <section class="card empty">
-    <span class="tile-ic">${ic('chat')}</span>
+    <span class="tile-ic">${ic('notice')}</span>
     <h2>아직 보낸 공지가 없어요</h2>
     <p class="muted">공지를 쓰면 학부모·학생 앱의 "공지"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 가족에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
     ${add}
@@ -3900,7 +3910,7 @@ function realNoticesPage() {
       const st = REAL.noticeStats[n.id] || { total: 0, read: 0 };
       return `
       <a class="li link" href="#members/notices/${n.id}">
-        <span class="av" style="background:var(--blue-500)">${ic('chat')}</span>
+        <span class="av" style="background:var(--blue-500)">${ic('notice')}</span>
         <div><div class="t">${esc(n.title)}</div><div class="d">${noticeTo(n)} · ${md(n.created_at.slice(0, 10))}</div>${st.total ? bar(st.read / st.total * 100) : ''}</div>
         <div class="r"><span class="time">읽음</span><b class="num">${st.read}/${st.total}</b></div>
       </a>`;
@@ -3952,7 +3962,7 @@ function noticesPage() {
   <section class="card"><div class="list">
     ${DATA.notices.map(n => `
       <div class="li">
-        <span class="av" style="background:var(--blue-500)">${ic('chat')}</span>
+        <span class="av" style="background:var(--blue-500)">${ic('notice')}</span>
         <div><div class="t">${esc(n.title)}</div><div class="d">${esc(n.to)} · ${n.at}</div></div>
         <div class="r"><span class="time">읽음</span><b class="num">${n.read}/${n.total}</b></div>
       </div>`).join('')}
@@ -4427,7 +4437,7 @@ function newsPage() {
   return head('공지', '학원에서 보낸 공지예요.') + `
   <section class="card"><div class="list">
     ${DATA.notices.filter(n => n.to === '전체 학부모').concat([{ title: '10월 수강료 납부 안내', to: '하늘영어학원', at: '10/20' }]).map(n => `
-      <div class="li"><span class="av" style="background:var(--blue-500)">${ic('chat')}</span><div><div class="t">${esc(n.title)}</div><div class="d">${n.at}</div></div><span></span></div>`).join('')}
+      <div class="li"><span class="av" style="background:var(--blue-500)">${ic('notice')}</span><div><div class="t">${esc(n.title)}</div><div class="d">${n.at}</div></div><span></span></div>`).join('')}
   </div></section>`;
 }
 
@@ -4495,11 +4505,11 @@ function realNewsPage() {
     const fresh = !REAL.reads.has(n.id);
     return `
     <a class="li link" href="#news/${n.id}">
-      <span class="av" style="background:${fresh ? 'var(--blue-500)' : 'var(--blue-100)'}">${ic('chat')}</span>
+      <span class="av" style="background:${fresh ? 'var(--blue-500)' : 'var(--blue-100)'}">${ic('notice')}</span>
       <div><div class="t">${esc(n.title)}</div><div class="d">${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}</div></div>
       <div class="r">${fresh ? '<span class="chip crit">새 공지</span>' : '<span class="chip mute">읽음</span>'}</div>
     </a>`;
-  }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('chat')}</span><h2>아직 받은 공지가 없어요</h2><p class="muted">학원에서 공지를 보내면 여기에 올라와요.</p></section>`);
+  }).join('')}</div></section>` : `<section class="card empty"><span class="tile-ic">${ic('notice')}</span><h2>아직 받은 공지가 없어요</h2><p class="muted">학원에서 공지를 보내면 여기에 올라와요.</p></section>`);
 }
 function newsDetail(id) {
   const n = REAL.notices.find(x => x.id === id);
@@ -4510,7 +4520,7 @@ function newsDetail(id) {
   }
   return head(esc(n.title), `${esc(REAL.academy.name)} · ${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}`) + `
   <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
-  <a class="hint" href="#news">${ic('chat')}<span>다른 공지도 확인해 보세요</span><b>공지 →</b></a>`;
+  <a class="hint" href="#news">${ic('notice')}<span>다른 공지도 확인해 보세요</span><b>공지 →</b></a>`;
 }
 
 // 학부모·학생 홈 "오늘 챙길 일"
@@ -4986,6 +4996,22 @@ function centerHome() {
 /* ---------- 회원 한 명 보기 (#center/members/회원) : 학원 · 역할 · 쓰는 분야 · 최근 연 메뉴 · 쓴 기록 ---------- */
 const MEM_DETAIL = {};
 const menuLabel = key => { const [a, b] = key.split('/'), all = { ...AREAS.owner, ...AREAS.teacher, ...(FAMILY_AREAS ? { ...FAMILY_AREAS.parent, ...FAMILY_AREAS.student } : {}), center: CENTER_AREA }; const x = all[a]; if (!x) return key; return b && x.subs && x.subs[b] ? `${x.name} › ${x.subs[b].name}` : x.name; };
+// 센터 관리자: 아이디 회원에게 임시 비밀번호 (Edge Function account-help · admin_temp)
+async function tempPwDialog(b) {
+  const m = (CENTER.members || []).find(x => x.id === b.dataset.tempPw);
+  if (!m || !confirm(`${m.name || m.username}님의 비밀번호를 임시 비밀번호로 바꿀까요?\n지금 비밀번호로는 더 로그인할 수 없어요.`)) return;
+  b.disabled = true;
+  const { data, error } = await SB.functions.invoke('account-help', { body: { action: 'admin_temp', user_id: m.id } });
+  b.disabled = false;
+  if (error || !data || !data.ok) { toast(data && data.error === 'no_password_login' ? '구글 회원은 비밀번호가 없어요' : '만들지 못했어요. 잠시 후 다시 시도해 주세요'); return; }
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg"><h2>임시 비밀번호</h2>
+    <p class="muted small" style="margin:-6px 0 0">아래 아이디 · 비밀번호를 본인에게만 알려 주세요. 이 창을 닫으면 다시 볼 수 없어요.</p>
+    <div class="pay-acct"><span class="muted small">아이디</span><b>${esc(data.username)}</b><span class="muted small">임시 비밀번호</span><b class="num" style="font-size:20px;letter-spacing:1px">${esc(data.password)}</b><button type="button" class="btn sm" id="tpCopy">복사</button></div>
+    <div class="acts"><span style="flex:1"></span><button class="btn primary">닫기</button></div></form>`;
+  d.showModal();
+  $('#tpCopy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(`아이디 ${data.username} / 임시 비밀번호 ${data.password}`).then(() => toast('복사했어요'), () => {}); };
+}
 function memberDetail(id) {
   const m = (CENTER.members || []).find(x => x.id === id);
   if (!m) return notFound();
@@ -4998,9 +5024,11 @@ function memberDetail(id) {
   <div class="ch-grid">
     <section class="card"><div class="card-head"><h2>기본 정보</h2></div>
       ${row('이름', esc(m.name || '-'))}${row(m.username ? '아이디' : '이메일', esc(m.username || m.email || '-'))}${row('로그인 방법', PROVIDER[m.provider] || esc(m.provider || '-'))}
-      ${row('휴대폰', m.phone ? telLink(fmtPhone(m.phone)) : '<span class="muted">없음</span>')}${row('역할', MEM_ROLES[m.role || 'none'])}
+      ${row('휴대폰', m.phone ? telLink(fmtPhone(m.phone)) : '<span class="muted">없음</span>')}${m.username ? row('이메일', m.email ? esc(m.email) : '<span class="muted">없음</span>') : ''}${row('역할', MEM_ROLES[m.role || 'none'])}
       ${x && x.partner ? row('파트너', `<span class="chip info">${PARTNER_INFO[x.partner].name} 담당자</span>`) : ''}
       ${x && x.kids && x.kids.length ? row(m.role === 'parent' ? '연결된 아이' : '내 원생 정보', x.kids.map(k => `${esc(k.name)}${k.class ? ` (${esc(k.class)})` : ''}`).join(' · ')) : ''}
+      ${m.username && !CENTER.partner ? `<div class="row-btns" style="margin-top:10px"><button class="btn sm" data-temp-pw="${m.id}">임시 비밀번호 만들기</button></div>
+      <p class="muted small" style="margin:6px 0 0">비밀번호를 잊었는데 휴대폰 · 이메일로 찾을 수 없을 때, 본인인지 확인한 뒤 만들어 알려 주세요. 로그인한 뒤 설정에서 바꾸게 안내해요.</p>` : ''}
     </section>
     <section class="card"><div class="card-head"><h2>최근에 연 메뉴</h2><span class="sub">무엇을 쓰는지</span></div>
       ${x === null ? '<p class="muted small">불러오는 중…</p>' : x.seen && x.seen.length ? `<div class="list">${x.seen.slice(0, 8).map(v => `<div class="li"><div class="t">${esc(menuLabel(v.key))}</div><div class="r"><span class="time">${when(v.at)}</span></div></div>`).join('')}</div>` : '<p class="muted small">아직 메뉴를 연 기록이 없어요.</p>'}
@@ -5399,7 +5427,7 @@ const AREAS = {
         invite: { name: '초대 코드', icon: 'plus', desc: '원장·강사·학부모를 우리 학원에 초대', stat: () => REAL ? `함께하는 사람 ${REAL.members.length}명` : '코드 3종류', render: invitePage },
         todos: { name: '오늘 할 일', icon: 'check', desc: '반 · 학생에게 오늘 할 일 주기', stat: todoStat, render: todosPage },
         reports: REPORT_AREA,
-        notices: { name: '공지', icon: 'chat', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
+        notices: { name: '공지', icon: 'notice', desc: '공지 보내고 읽음 확인', stat: () => REAL ? `보낸 공지 ${REAL.notices.length}건` : `이번 달 ${DATA.notices.length}건`, render: noticesPage,
           detail: noticeDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title },
         center: taskSub('members')
       } },
@@ -5449,7 +5477,7 @@ const AREAS = {
         bills: { name: '수납', icon: 'card', desc: '학원별 수강료 결제', stat: () => { const n = DATA.child.bills.filter(b => !b.paid).length; return n ? `낼 금액 ${n}건` : '모두 납부'; }, render: kidBillsPage }
       } },
     schedule: SCHEDULE_AREA,
-    news: { name: '공지', icon: 'chat', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
+    news: { name: '공지', icon: 'notice', desc: '학원 공지와 안내', stat: () => '새 공지 2건', render: newsPage },
     messages: MESSAGES_AREA,
     library: LIBRARY_AREA,
     abroad: { name: '유학 상담', icon: 'globe', desc: '학원이 안내하는 유학 · 캠프 상담 신청', stat: () => `안내 ${abroadData().promos.filter(p => p.active).length}건`, render: parentAbroadPage }
@@ -5481,7 +5509,7 @@ const TEACHER_OLD = { attend: 'admin/attend', students: 'members/students', lead
 const promoOpen = () => REAL ? REAL.promoReqs.filter(r => r.status !== 'done' && r.status !== 'rejected').length : DATA.promoRequests.length;
 // 실제 로그인한 학부모·학생: 원장이 이어 준 아이의 출결 · 수납 · 공지
 const kidStat = () => REAL.kids.length ? REAL.kids.map(k => esc(k.name)).join(' · ') : '아이 연결 전';
-const newsArea = { name: '공지', icon: 'chat', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
+const newsArea = { name: '공지', icon: 'notice', desc: '학원 공지와 안내', stat: () => { const n = unreadNotices().length; return n ? `새 공지 ${n}건` : `공지 ${REAL.notices.length}건`; },
   render: realNewsPage, detail: newsDetail, title: id => (REAL.notices.find(n => n.id === id) || {}).title };
 const FAMILY_AREAS = {
   parent: {
@@ -6123,7 +6151,7 @@ function accountDialog() {
     <div class="acc-list">${DEMO_ACC.map(([r, l]) => { const u = DATA.users[r === 'seeker' ? 'teacher' : r]; const cur = DEMO_SEEKER ? r === 'seeker' : r === ROLE;
       return row(r === 'seeker' ? '박' : u.av, rc(r === 'seeker' ? 'teacher' : r), r === 'seeker' ? '박지수' : u.name, `${l} 예시 계정`, `data-acc-demo="${r}"`, cur); }).join('')}</div>
     <a class="btn wide" href="/#login">${ic('plus')}실제 계정으로 로그인</a>` : `
-    <p class="muted small" style="margin:-6px 0 0">이 기기에서 로그인한 계정이에요. 누르면 비밀번호 없이 바로 바뀌어요.</p>
+    <p class="muted small" style="margin:-6px 0 0">이 기기에서 로그인한 계정이에요(${others.length + 1}/10). 누르면 비밀번호 없이 바로 바뀌어요. 10개가 넘으면 가장 오래 안 쓴 계정부터 빠져요.</p>
     <div class="acc-list">${row(ME.av, ME.color, acctInfo().name, [ME.label, acctInfo().acad].filter(Boolean).join(' · '), 'disabled', true)}
       ${others.map(a => row((a.name || '?')[0], rc(a.role), a.name || '이름 없음', [a.label, a.acad].filter(Boolean).join(' · '), `data-acc="${esc(a.id)}"`, false)).join('')}</div>
     ${keepLogin() ? '' : '<p class="muted small">"로그인 유지하기"가 꺼져 있어서 이 계정은 기억하지 않아요. 설정에서 켜면 다음부터 기억해요.</p>'}
@@ -6462,6 +6490,7 @@ function bind() {
   on('[data-act="newGroup"]', () => pickFriendsDialog({ group: true }));
   on('[data-act="addFriend"]', addFriendDialog);
   on('[data-act="editProfile"]', profileDialog);
+  on('[data-temp-pw]', tempPwDialog);
   // 설정
   on('[data-act="changePw"]', pwDialog);
   on('[data-theme-set]', b => { window.setThemeMode && setThemeMode(b.dataset.themeSet); render(); });
@@ -7057,7 +7086,7 @@ async function boot() {
     // 토큰이 새로 바뀌면 계정 전환 목록의 토큰도 새것으로 (옛 토큰을 다시 쓰지 않게)
     SB.auth.onAuthStateChange(ev => { if (ev === 'TOKEN_REFRESHED' && PROFILE && ME) setTimeout(() => rememberAccount(acctInfo(), USER.id), 0); });
     const [{ data: p }, { data: admin }] = await Promise.all([
-      SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg, phone').eq('id', user.id).maybeSingle(),
+      SB.from('profiles').select('username, name, role, academy_name, avatar_url, status_msg, phone, email').eq('id', user.id).maybeSingle(),
       SB.rpc('am_center_admin')
     ]);
     PROFILE = p || {};
