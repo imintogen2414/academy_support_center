@@ -1360,15 +1360,15 @@ div.tt-blk[data-edit-tt]:focus-visible { outline: 3px solid var(--blue-400); out
 .fp small { color: var(--muted); flex-shrink: 0; }
 .fp button { border: 0; background: rgba(0, 0, 0, .08); width: 22px; height: 22px; border-radius: 50%; cursor: pointer; flex-shrink: 0; color: var(--ink); }
 .att-list { display: grid; gap: 8px; margin-top: 14px; }
-.att { display: flex; align-items: center; gap: 8px; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); padding: 6px 8px 6px 6px; min-width: 0; }
+.att-item { display: flex; align-items: center; gap: 8px; border-radius: 12px; box-shadow: 0 0 0 1px var(--line); padding: 6px 8px 6px 6px; min-width: 0; }
 .att-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 6px; text-align: left; font: inherit; color: inherit; cursor: pointer; border-radius: 8px; }
 .att-main:hover { background: var(--blue-50); }
 .att-main .icon { width: 22px; height: 22px; color: var(--blue-600); flex-shrink: 0; }
 .att-main span { display: grid; min-width: 0; }
 .att-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .att-main small { color: var(--muted); font-size: 12px; }
-.att .btn { flex-shrink: 0; }
-@media (max-width: 520px) { .att .btn { padding-inline: 8px; font-size: 0; gap: 0; } .att .btn .icon { margin: 0; } }
+.att-item .btn { flex-shrink: 0; }
+@media (max-width: 520px) { .att-item .btn { padding-inline: 8px; font-size: 0; gap: 0; } .att-item .btn .icon { margin: 0; } }
 /* 올리는 중 띠 */
 .up-prog { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 1000; background: var(--navy-900, #0b1150); color: #fff; border-radius: 14px; padding: 10px 14px; width: min(420px, calc(100vw - 32px)); box-shadow: 0 12px 30px rgba(7, 10, 61, .3); font-size: 13px; display: grid; gap: 8px; }
 .up-prog span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

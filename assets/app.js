@@ -293,7 +293,7 @@ function realAttendPage() {
     <div class="list">${ss.map(s => `
       <div class="li">
         <span class="av" style="background:${map[s.id] ? 'var(--navy-700)' : 'var(--blue-100)'}">${esc(s.name[0])}</span>
-        <div class="t">${esc(s.name)} <span class="muted small">${esc(s.grade || '')}</span>${REAL.attend.how && REAL.attend.how[s.id] && REAL.attend.how[s.id].method !== 'staff' ? ` <span class="chip info">${ATT_METHOD[REAL.attend.how[s.id].method]} ${REAL.attend.how[s.id].at ? msgTime(REAL.attend.how[s.id].at) : ''}</span>` : ''}</div>
+        <div class="t">${esc(s.name)} <span class="muted small">${esc(s.grade || '')}</span>${REAL.attend.how && REAL.attend.how[s.id] && ATT_METHOD[REAL.attend.how[s.id].method] && REAL.attend.how[s.id].method !== 'staff' ? ` <span class="chip info">${ATT_METHOD[REAL.attend.how[s.id].method]} ${REAL.attend.how[s.id].at ? msgTime(REAL.attend.how[s.id].at) : ''}</span>` : ''}</div>
         <div class="seg">${Object.entries(ATT).map(([k, [l, c]]) => `<button class="${map[s.id] === k ? `on ${c}` : ''}" data-att="${s.id}:${k}">${l}</button>`).join('')}</div>
       </div>`).join('')}
     </div>
@@ -1719,7 +1719,7 @@ function fileViewer(items, at = 0) {
 // 사진 크게 보기 (채팅 · 공지 사진) — 같은 미리보기 창
 const imgViewer = (items, at = 0) => fileViewer(items.map(x => ({ mime: 'image/jpeg', ...x })), at);
 // 첨부 파일 목록: 누르면 미리보기, 옆 버튼은 바로 다운로드 (공지 · 센터 공지)
-const fileChips = (files, bucket) => (files || []).length ? `<div class="att-list">${files.map(f => `<div class="att">
+const fileChips = (files, bucket) => (files || []).length ? `<div class="att-list">${files.map(f => `<div class="att-item">
   <button type="button" class="att-main" data-fv="${esc(f.path)}" data-fv-b="${bucket}" data-fv-n="${esc(f.name)}" data-fv-m="${esc(f.mime || '')}" data-fv-s="${f.size || ''}">${ic(fileKind(f) === 'image' ? 'image' : fileKind(f) === 'video' ? 'video' : 'doc')}<span><b>${esc(f.name)}</b><small>${sizeText(f.size)} · 눌러서 미리보기</small></span></button>
   <button type="button" class="btn sm" data-fv-down="${esc(f.path)}" data-fv-b="${bucket}" data-fv-n="${esc(f.name)}">${ic('download')}다운로드</button></div>`).join('')}</div>` : '';
 document.addEventListener('click', e => {
