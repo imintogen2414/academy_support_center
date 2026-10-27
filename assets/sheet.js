@@ -148,7 +148,9 @@ function zipStore(entries) {
    · 합계 줄 굵게 · "*" 안내 줄은 회색 · 머리줄 아래 틀 고정 + 거르기 · 칸 너비 저절로 · 인쇄는 한 쪽 너비에 맞춤.
    머리줄 = 칸이 두 개 이상 찬 첫 줄. 그 위 한 칸짜리 줄은 제목(첫 줄) · 부제목.
    opts.required: 꼭 채울 칸(머리줄 진한 파랑), opts.example: "예시)"로 시작하는 줄은 기울여 회색,
-   opts.guide: [[칸, 설명], …] → 두 번째 시트 "작성 안내" (올리기는 첫 시트만 읽어요), opts.sheet: 시트 이름. */
+   opts.guide: [[칸, 설명], …] → 두 번째 시트 "작성 안내" (올리기는 첫 시트만 읽어요), opts.sheet: 시트 이름,
+   opts.more: [[시트 이름, 행, 너비], …] → 시트를 더 붙여요(행정 지원 전체 받기처럼 한 파일에 여러 시트).
+   글씨체는 모든 칸이 맑은 고딕(한글 글꼴 정보 charset 129 함께). */
 function downloadXlsx(filename, rows, widths = [], opts = {}) {
   const x = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const colName = i => { let s = ''; i++; while (i) { s = String.fromCharCode(65 + (i - 1) % 26) + s; i = Math.floor((i - 1) / 26); } return s; };
@@ -206,10 +208,11 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
   };
   // opts.blank: 양식 아래 바로 적을 수 있게 테두리만 있는 빈 줄
   const body = opts.blank ? [...rows, ...[...Array(opts.blank)].map(() => (rows[0] || []).map(() => ''))] : rows;
-  const sheets = [[opts.sheet || '양식', sheetXml(body, widths, opts)]];
+  const sheets = [[opts.sheet || '양식', sheetXml(body, widths, opts)], ...(opts.more || []).map(([n, r, w, o]) => [n, sheetXml(r, w || [], o || {})])];
   if (opts.guide) sheets.push(['작성 안내', sheetXml([['작성 안내'], ['첫 번째 시트에 채워서 그대로 올려 주세요. 칸 이름(첫 줄)은 바꾸지 마세요.'], [], ['칸', '꼭 채우기', '이렇게 적어요'], ...opts.guide], [16, 10, 60])]);
-  const font = (o = '') => `<font>${o}<sz val="${/sz/.test(o) ? '' : '11'}"/><name val="맑은 고딕"/></font>`.replace('<sz val=""/>', '');
-  const fonts = [font(), font('<b/><sz val="16"/><color rgb="FF1B2470"/>'), font('<sz val="10"/><color rgb="FF6B7280"/>'), font('<b/><color rgb="FFFFFFFF"/>'), font('<b/>'), font('<i/><sz val="10"/><color rgb="FF6B7280"/>'), font('<i/><color rgb="FF8A93A6"/>')];
+  // 글꼴: 순서는 b · i · sz · color · name · family · charset (엑셀 규칙)
+  const font = ({ b, i, sz = 11, color } = {}) => `<font>${b ? '<b/>' : ''}${i ? '<i/>' : ''}<sz val="${sz}"/>${color ? `<color rgb="${color}"/>` : ''}<name val="맑은 고딕"/><family val="3"/><charset val="129"/></font>`;
+  const fonts = [font(), font({ b: 1, sz: 16, color: 'FF1B2470' }), font({ sz: 10, color: 'FF6B7280' }), font({ b: 1, color: 'FFFFFFFF' }), font({ b: 1 }), font({ i: 1, sz: 10, color: 'FF6B7280' }), font({ i: 1, color: 'FF8A93A6' })];
   const fill = rgb => `<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`;
   const fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>', fill('FF2A3496'), fill('FFF3F5FC'), fill('FFE3E8FB'), fill('FF101876')];
   const borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>', `<border>${['left', 'right', 'top', 'bottom'].map(k => `<${k} style="thin"><color rgb="FFD5DAE8"/></${k}>`).join('')}<diagonal/></border>`, `<border>${['left', 'right'].map(k => `<${k} style="thin"><color rgb="FFD5DAE8"/></${k}>`).join('')}<top style="medium"><color rgb="FF2A3496"/></top><bottom style="thin"><color rgb="FFD5DAE8"/></bottom><diagonal/></border>`];

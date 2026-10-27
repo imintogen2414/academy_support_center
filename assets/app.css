@@ -1157,3 +1157,41 @@ button.who-btn:hover b { text-decoration: underline; }
 .perm-list .switch { display: inline-block; }
 .perm-list small { color: var(--muted); font-size: 12px; }
 .stamp { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+
+/* 일정 · 시간표 색 10가지 (.col-이름 → --cc) */
+.col-blue { --cc: #2f6bff; } .col-sky { --cc: #1aa3e8; } .col-teal { --cc: #0fa39a; } .col-green { --cc: #22a35a; } .col-lime { --cc: #7cb518; }
+.col-yellow { --cc: #e0a800; } .col-orange { --cc: #f07818; } .col-red { --cc: #e5484d; } .col-pink { --cc: #e2549b; } .col-purple { --cc: #8257e6; }
+.chip.tint { background: color-mix(in srgb, var(--cc) 15%, var(--surface)); color: color-mix(in srgb, var(--cc) 72%, var(--ink)); border-color: transparent; }
+.tt-blk.tint { background: color-mix(in srgb, var(--cc) 11%, var(--surface)); border-left-color: var(--cc); }
+button.tt-blk.tint:hover { background: color-mix(in srgb, var(--cc) 19%, var(--surface)); }
+.tt-blk.tint .tm { color: color-mix(in srgb, var(--cc) 78%, var(--ink)); }
+.cal-c .ev.tint { background: color-mix(in srgb, var(--cc) 18%, var(--surface)); color: color-mix(in srgb, var(--cc) 75%, var(--ink)); }
+@media (max-width: 640px) { .cal-c .ev.tint { background: var(--cc); } }
+.wk-only { font-style: normal; font-size: 10.5px; font-weight: 700; background: var(--ink); color: var(--surface); border-radius: 99px; padding: 1px 6px; margin-left: 4px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.sw { position: relative; display: grid; justify-items: center; gap: 2px; cursor: pointer; }
+.sw input { position: absolute; opacity: 0; pointer-events: none; }
+.sw span { width: 30px; height: 30px; border-radius: 50%; background: var(--cc); box-shadow: inset 0 0 0 2px rgba(0,0,0,.06); display: block; }
+.sw.sw-none span { background: repeating-linear-gradient(45deg, var(--line) 0 4px, var(--surface) 4px 8px); box-shadow: inset 0 0 0 1px var(--line); }
+.sw small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.sw input:checked + span { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--cc, var(--ink)); }
+.sw.sw-none input:checked + span { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.sw input:checked ~ small { color: var(--ink); }
+.sw input:focus-visible + span { outline: 2px solid var(--blue-400); outline-offset: 3px; }
+.link-btn.subj-edit { background: none; border: 0; padding: 4px 0 0; color: var(--blue-600); font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: underline; }
+.subj-box { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; }
+.subj-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 99px; padding: 3px 4px 3px 11px; font-size: 12.5px; font-weight: 600; background: var(--surface); }
+.subj-chip button { border: 0; background: var(--sunk, var(--line)); color: var(--muted); width: 20px; height: 20px; border-radius: 50%; cursor: pointer; line-height: 1; }
+.subj-add { display: flex; gap: 6px; }
+.subj-add input { flex: 1; min-width: 0; }
+.del-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.del-pick b { margin-right: 4px; }
+/* 우리 학원 사람들 */
+.ppl { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px; }
+.ppl > div { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border-radius: 12px; background: var(--sunk, var(--blue-50)); }
+.ppl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--blue-500)); }
+.ppl b { font-size: 20px; line-height: 1.1; }
+.ppl small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.ppl .ppl-en { background: transparent; border: 1px dashed var(--line); }
+.set-row.ppl-row { display: grid; gap: 8px; }
+.set-row.ppl-row .ppl { width: 100%; }

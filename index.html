@@ -150,6 +150,30 @@ document.getElementById('demoList').innerHTML = demoButtons();
 // 처음: 메인 메시지 → 운영 프로그램 3 → 휴대폰에서(역할별 화면) → 추가 서비스 3 → 이용 사례 → 질문 4개 → 시작하기 (원장님 기준)
 // .rv는 화면에 들어올 때 살짝 떠오르고(--d는 순서), 기기 그림은 assets/mock.js
 const ROLE_NAME = { owner: '원장님', teacher: '강사님', parent: '학부모님', student: '학생' };
+// 휴대폰 · 노트북에서: 역할 버튼을 눌러 화면을 바꾸고, 휴대폰 ↔ 노트북으로 바꿔 봐요 (첫 화면 · 운영 프로그램 상세)
+// 장은 6초마다 그 역할 안에서만 넘어가요(역할은 저절로 안 바뀌어요). 누르거나 넘기면 저절로 넘기기는 멈춰요.
+function deviceSec() {
+  return `
+  <section class="sec navy" id="mobile-sec">
+    <div class="wrap mob">
+      <div class="mob-text rv">
+        <p class="eyebrow">휴대폰 · 노트북에서</p>
+        <h2>설치 없이 휴대폰 · 노트북에서,<br>각자 자기 화면으로</h2>
+        <p>원장님이 초대 코드를 보내면 역할에 맞는 화면이 생겨요. 앱을 깔 필요 없이 휴대폰 · 노트북 인터넷 창에서 그대로 쓰고, 홈 화면에 추가해 두면 앱처럼 열려요.</p>
+        <p class="tap-hint"><span class="tap-dot" aria-hidden="true"></span><span><b>역할을 눌러 보세요</b> · 원장님 · 강사님 · 학부모님 · 학생 화면이 바로 바뀌어요</span></p>
+        <div class="role-tabs" role="tablist" aria-label="역할별 화면">${DEMO_ROLES.map(([r, , , d], i) => `
+          <button type="button" role="tab" class="rt r-${r}${i ? '' : ' on'}" data-role="${r}" aria-selected="${!i}" style="--dur:${PHONE_PAGES[r].length * 6}s"><span class="rt-av">${{ owner: '원', teacher: '강', parent: '부', student: '학' }[r]}</span><span class="rt-tx"><b>${ROLE_NAME[r]} 화면</b><small>${d}</small></span><span class="rt-go" aria-hidden="true">눌러 보기 ›</span><i class="rt-bar"></i></button>`).join('')}
+        </div>
+        <a class="link" id="mobDemo" href="/demo/owner">원장님 화면 직접 눌러 보기 <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="mob-art rv" style="--d:1">
+        <div class="dev-switch" role="tablist" aria-label="기기"><button type="button" class="on" data-dev="phone" aria-selected="true">휴대폰으로 보기</button><button type="button" data-dev="laptop" aria-selected="false">노트북으로 보기</button></div>
+        <div class="mob-phones">${DEMO_ROLES.map(([r], i) => `<div class="mp${i ? '' : ' on'}" data-role="${r}">${fitBox(PHONE_W, PHONE_H, phoneDeck(r), 'fit-phone')}</div>`).join('')}</div>
+        <div class="mob-laps">${DEMO_ROLES.map(([r], i) => `<div class="ml${i ? '' : ' on'}" data-role="${r}">${laptopMock(r)}</div>`).join('')}</div>
+        <div class="mob-cap" id="mobCap" aria-live="polite"><div class="mc-dots"></div><b></b><p></p><div class="mc-nav"><button type="button" data-mc="-1" aria-label="이전 화면">‹</button><span></span><button type="button" data-mc="1" aria-label="다음 화면">›</button></div></div></div>
+    </div>
+  </section>`;
+}
 function homeView() {
   return `
   <section class="hero">
@@ -182,21 +206,7 @@ function homeView() {
     </div>
   </section>
 
-  <section class="sec navy" id="mobile-sec">
-    <div class="wrap mob">
-      <div class="mob-text rv">
-        <p class="eyebrow">휴대폰에서도</p>
-        <h2>설치 없이 휴대폰에서,<br>각자 자기 화면으로</h2>
-        <p>원장님이 초대 코드를 보내면 역할에 맞는 화면이 생겨요. 앱을 깔 필요 없이 휴대폰 인터넷 창에서 그대로 쓰고, 홈 화면에 추가해 두면 앱처럼 열려요. 옆 휴대폰을 옆으로 넘기면 역할마다 자주 쓰는 화면을 차례로 볼 수 있어요.</p>
-        <div class="role-tabs" role="tablist" aria-label="역할별 화면">${DEMO_ROLES.map(([r, , , d], i) => `
-          <button type="button" role="tab" class="rt r-${r}${i ? '' : ' on'}" data-role="${r}" aria-selected="${!i}" style="--dur:${PHONE_PAGES[r].length * 4}s"><b>${ROLE_NAME[r]}</b><small>${d}</small><i class="rt-bar"></i></button>`).join('')}
-        </div>
-        <a class="link" id="mobDemo" href="/demo/owner">원장님 화면 직접 눌러 보기 <span aria-hidden="true">→</span></a>
-      </div>
-      <div class="mob-art rv" style="--d:1"><div class="mob-phones">${DEMO_ROLES.map(([r], i) => `<div class="mp${i ? '' : ' on'}" data-role="${r}">${fitBox(PHONE_W, PHONE_H, phoneDeck(r), 'fit-phone')}</div>`).join('')}</div>
-        <div class="mob-cap" id="mobCap" aria-live="polite"><div class="mc-dots"></div><b></b><p></p><div class="mc-nav"><button type="button" data-mc="-1" aria-label="이전 화면">‹</button><span></span><button type="button" data-mc="1" aria-label="다음 화면">›</button></div></div></div>
-    </div>
-  </section>
+  ${deviceSec()}
 
   <section class="sec" id="service-sec">
     <div class="wrap">
@@ -342,6 +352,7 @@ function areaView(a) {
         </div>
       </section>
 
+      ${prog ? `<div class="d-dev">${deviceSec()}</div>` : ''}
       ${a.partner ? partnerView(a.partner) : ''}
       <section class="d-sec rv">
         <h3>${prog ? '이렇게 시작해요' : '진행 순서'}</h3>
@@ -675,15 +686,21 @@ function bindMotion(root) {
     setTimeout(show, CALM ? 0 : 1400);
     if (!CALM) toastTimer = setInterval(show, 4200);
   }
-  // 휴대폰에서: 역할마다 여러 장. 4초마다 다음 장 → 마지막 장 뒤엔 다음 역할(마우스를 올리면 멈춤).
+  // 휴대폰 · 노트북에서: 역할마다 여러 장. 6초마다 그 역할 안에서 다음 장(마우스를 올리면 멈춤) — 역할은 누를 때만 바뀌어요.
   // 휴대폰을 옆으로 넘기거나(손가락 · 마우스 끌기) 아래 ‹ › · 점 · 역할 버튼을 누르면 저절로 넘기기는 멈춰요.
+  // "노트북으로 보기"를 누르면 같은 역할의 노트북 화면이 넓게 보여요.
   clearInterval(deckTimer);
   const tabs = [...root.querySelectorAll('.rt')], mob = root.querySelector('.mob'), cap = root.querySelector('#mobCap');
   if (tabs.length && cap) {
-    let role = tabs[0].dataset.role, page = 0, hover = false;
+    let role = tabs[0].dataset.role, page = 0, hover = false, dev = 'phone';
     const sc = r => root.querySelector(`.mp[data-role="${r}"] .m-pages`);
     const count = () => PHONE_PAGES[role].length;
     const drawCap = () => {
+      if (dev === 'laptop') {
+        const r = DEMO_ROLES.find(x => x[0] === role);
+        cap.querySelector('b').textContent = `${ROLE_NAME[role]} 노트북 화면`; cap.querySelector('p').textContent = `${r[3]} — 노트북 · PC 인터넷 창에서도 휴대폰과 같은 계정으로 그대로 써요.`;
+        return;
+      }
       const [, , [t, d]] = PHONE_PAGES[role][page];
       cap.querySelector('b').textContent = t; cap.querySelector('p').textContent = d;
       cap.querySelector('.mc-nav span').textContent = `${page + 1} / ${count()}`;
@@ -697,12 +714,19 @@ function bindMotion(root) {
     const pick = r => {
       role = r;
       tabs.forEach(b => { const on = b.dataset.role === r; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
-      root.querySelectorAll('.mp').forEach(m => m.classList.toggle('on', m.dataset.role === r));
+      root.querySelectorAll('.mp, .ml').forEach(m => m.classList.toggle('on', m.dataset.role === r));
       const a = root.querySelector('#mobDemo'); a.href = `/demo/${r}`; a.firstChild.textContent = `${ROLE_NAME[r]} 화면 직접 눌러 보기 `;
       showPage(0, false);
     };
     const stop = () => { clearInterval(deckTimer); mob.classList.add('manual'); };
-    tabs.forEach(b => b.onclick = () => { stop(); pick(b.dataset.role); });
+    tabs.forEach(b => b.onclick = () => { stop(); mob.classList.add('touched'); pick(b.dataset.role); });
+    root.querySelectorAll('[data-dev]').forEach(b => b.onclick = () => {
+      dev = b.dataset.dev; stop(); mob.classList.add('touched');
+      root.querySelectorAll('[data-dev]').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); });
+      mob.classList.toggle('lap', dev === 'laptop');
+      fitMocks(root); drawCap();
+      if (dev === 'phone') showPage(page, false);
+    });
     cap.onclick = e => {
       const nav = e.target.closest('[data-mc]'), dot = e.target.closest('[data-dot]');
       if (nav) { stop(); showPage(page + Number(nav.dataset.mc)); } else if (dot) { stop(); showPage(Number(dot.dataset.dot)); }
@@ -723,11 +747,7 @@ function bindMotion(root) {
     });
     mob.onmouseenter = () => { hover = true; }; mob.onmouseleave = () => { hover = false; };
     pick(role);
-    if (!CALM) deckTimer = setInterval(() => {
-      if (hover || !document.contains(cap)) return;
-      if (page < count() - 1) showPage(page + 1);
-      else pick(tabs[(tabs.findIndex(b => b.dataset.role === role) + 1) % tabs.length].dataset.role);
-    }, 4000);
+    if (!CALM) deckTimer = setInterval(() => { if (!hover && dev === 'phone' && document.contains(cap)) showPage(page + 1); }, 6000);
   }
 }
 // 머리글: 내리면 아래 선 · 그림자

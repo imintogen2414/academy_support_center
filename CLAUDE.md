@@ -35,6 +35,12 @@
 - 아이디 · 비밀번호 찾기(첫 화면 `#find/id` · `#find/pw`, 로그인 버튼 아래 링크): Edge Function `account-help`(verify_jwt 끔). `find_id`(이름 + 휴대폰/이메일 → 가린 아이디 · 구글 계정 표시), `send_code`(아이디 + 가입한 휴대폰/이메일 → 6자리 인증번호, 1시간 5번), `reset`(인증번호 10분 · 5번까지 → 새 비밀번호), `admin_temp`(센터 관리자 → 회원 상세 "임시 비밀번호 만들기"). 인증번호는 해시만 `recovery_codes`(RLS 켜고 정책 없음, 서비스 키만). 보내기는 비밀 값으로: 이메일 Resend `RESEND_API_KEY` · `MAIL_FROM`, 문자 솔라피 `SOLAPI_API_KEY` · `SOLAPI_API_SECRET` · `SOLAPI_SENDER` — 없으면 "준비 안 됨 · 센터 문의" 안내.
 - 가입할 때 휴대폰 + 이메일(`profiles.email`, 소문자, 겹치면 안 됨 `profiles_email_uniq`). 학생은 둘 중 하나만 있어도 돼요. 구글 회원은 구글 이메일이 저절로. 설정 "내 정보 고치기"에서 이메일도 고치고, 없으면 홈에 한 줄 안내(`phoneHint`).
 - 센터 시험용 휴대폰 `010-2369-9657`(`private.is_test_phone`)은 휴대폰 · 이메일 겹침 검사에서 빠져서 몇 번이고 다시 가입할 수 있어요(유일 인덱스 조건 · `check_profile_taken` · `handle_new_user`). 이름 · 아이디는 그대로 겹치면 안 돼요.
+- 일정 · 시간표 색(`timetable.color` · `academy_events.color`, 10가지 `COLORS` → CSS `.tint.col-이름`, 입력은 `formDialog`의 `type: 'color'` 동그라미). `.col`은 칸반 열 클래스라 색에는 `tint`를 써요.
+- 주마다 다른 시간표: `timetable.week_of`(그 주 월요일, 있으면 그 주에만) · `skip_weeks`(매주 수업이 빠지는 주). 화면은 `ttOn(t, 월요일)`, DB는 `private.tt_on`(QR 지각 판단). 칸을 누르면 "매주 바꾸기 / 이 주만 바꾸기", 지우기는 "이 주만 빼기 / 매주에서 지우기". 고칠 때도 요일을 더 고르면 그 요일에 새 칸(예전엔 고칠 때 요일 하나만 돼서 "요일 여러 개"가 막혔어요). 순서는 `ttSort`(요일 → 시작 시간 → 반).
+- 우리 학원 과목 목록: `academies.subjects`(`set_academy_subjects`, 원장 · 강사), 시간표 창 과목 칸 아래 "과목 목록 고치기"(`bindSubjectEditor`). 없으면 `SUBJECTS`.
+- 우리 학원 사람들(`academy_people_counts(학원)`, 학원에 속한 누구나): 원장 · 강사 · 학부모 · 학생 계정 수 + 다니는 원생 — 홈 카드(`peopleCard`) · 설정 "우리 학원".
+- 행정 지원 엑셀로 모두 받기(`#admin` 위쪽 버튼 · `adminExportDialog` → `adminExport`): 기간을 고르면 요약 + 원생 명단 · 출결 기록 · 학생별 · 반별 출결 · 청구 · 미납 · 월별 수납 · 지출 · 수입 · 월별 재정 · 항목별 지출 · 거래 내역 · 원천세 · 서류 · 결재 · 수강료 · 할인 · 자동 처리 시트(강사는 켜 준 권한만). `downloadXlsx`의 `opts.more`로 여러 시트, 글꼴은 맑은 고딕(charset 129).
+- 첫 화면 · 운영 프로그램 상세 "휴대폰 · 노트북에서"(`deviceSec`): 역할 버튼(눌러 보기 · 처음엔 반짝임) + "휴대폰으로 보기 / 노트북으로 보기"(`LAP_SCREENS` 역할마다 노트북 화면, `laptopMock(역할)`). 장은 6초마다 그 역할 안에서만 넘어가고 역할은 누를 때만 바뀌어요.
 - 공지 아이콘은 `ICON.notice`(스피커), 채팅은 `chat`(말풍선) — 섞어 쓰지 않기.
 - 결재함(`#admin/approvals`) 아래에 강사가 올린 홍보 의뢰 · 제휴 신청(원장 결재 대기)도 모아 보여요(`otherApvCard`).
 - 센터 관리 → 회원(`#center/members`, `admin_members()`): 가입한 사람 이름 · 아이디/이메일 · 로그인 방법 · 역할 · 휴대폰 · 학원 · 가입일 · 마지막 로그인. 보기만 해요. 사람을 누르면 `#center/members/회원`(`memberDetail`, `admin_member_detail(회원)`): 학원 · 역할 · 이용 분야 · 자동 처리 · 연결된 아이 · 최근 연 메뉴(`user_seen`) · 쓴 기록 수 · 첫 화면 지원 신청.
@@ -150,6 +156,7 @@
 25. ~~첫 화면 QR 출석 소개 · 휴대폰 여러 장 넘기기 · 예시 계정 QR · 관리자 학원 · 회원 한눈에 · 관리자 예시 계정 · 엑셀 꾸미기~~ (완료)
 26. ~~로그아웃 버튼 · 계정 전환 · 강사도 원장처럼 원생 관리 · 강사 출결 QR · 일정 같이 고치기 + 누가 고쳤는지 · 강사 권한 켜고 끄기 · 학원 안 직책(매니저 · 재정 담당)~~ (완료)
 27. ~~아이디 · 비밀번호 찾기(휴대폰 · 이메일) · 공지 아이콘 · 시험용 휴대폰 열기 · 계정 전환 10개 · 첫 화면 · 분야 상세에 직책 · 권한 · 강사 QR · 시간표 기록 반영~~ (완료 · 인증번호를 실제로 보내려면 Resend · 솔라피 비밀 값을 넣기)
+28. ~~휴대폰 · 노트북 화면 보기 · 행정 지원 엑셀 모두 받기 · 학원 사람 수 · 일정 · 시간표 색 · 주마다 다른 시간표 · 과목 목록 고치기 · 시간 순서 · 고칠 때 요일 여러 개~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.

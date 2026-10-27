@@ -153,31 +153,43 @@ const phoneDeck = role => `
     <div class="m-screen">${STATUS}<div class="m-pages">${PHONE_PAGES[role].map(([t, tab, , body], i) => `<div class="m-pg" data-pg="${i}">${appPage(role, t, body, tab)}</div>`).join('')}</div></div>
   </div>`;
 
-// 노트북: 원장 화면 (왼쪽 메뉴 + 오늘 챙길 일 + 숫자 + 매출 그래프)
+// 노트북: 역할마다 (왼쪽 메뉴 + 인사 + 숫자 3개 + 왼쪽 목록 · 오른쪽 그래프나 목록). 첫 화면 큰 그림은 원장 화면
 const LAP_W = 820, LAP_H = 470;
-const laptopMock = () => fitBox(LAP_W, LAP_H, `
-  <div class="m-laptop">
+const lapList = (items, cls = '') => items.map(([t, b], i) => `<div class="m-li ${cls}" style="--i:${i}"><span>${t}</span>${b ? `<em>${b}</em>` : ''}</div>`).join('');
+const lapChart = (bars, labels) => `<div class="m-chart">${bars.map((h, i) => `<i style="--h:${h}%;--i:${i}"><span>${labels[i]}</span></i>`).join('')}</div>`;
+const LAP_SCREENS = {
+  owner: { menu: ['홈', '행정·재정', '학생·학부모', '강사', '일정·시간표', '채팅'], hello: '안녕하세요, 정수민 원장님',
+    stats: [['다니는 원생', '128', '명', '이번 달 +6', 1], ['10월 수납', '92', '%', '미납 6건'], ['이번 달 순이익', '1,240', '만원', '지난달보다 +8%', 1]],
+    left: ['오늘 챙길 일', lapList([['미납 6건 · 학부모 안내', '안내 보내기'], ['입금 확인 2건', '확인하기'], ['원천세 신고 마감 D-5', '서류 보기'], ['체험수업 16:00 · 2명', '상담 카드']])],
+    right: ['월별 매출', lapChart([52, 61, 58, 70, 66, 78], ['5월', '6월', '7월', '8월', '9월', '10월'])] },
+  teacher: { menu: ['홈', '행정 지원 · 출결', '학생·학부모', '일정·시간표', '강사 교육', '채팅'], hello: '안녕하세요, 김민지 선생님 · 매니저',
+    stats: [['오늘 수업', '3', '반', '16:30 초등 B반부터'], ['오늘 출결', '12', '/13', 'QR로 9명 먼저', 1], ['어제 숙제', '85', '%', '안 한 학생 2명']],
+    left: ['오늘 할 일', lapList([['초등 B반 출결 넣기', '출결'], ['입구 QR 출석 화면 켜기', 'QR'], ['10월 성장 리포트 3명', '쓰기'], ['원장님 결재 · 교재 구입', '대기']])],
+    right: ['이번 주 시간표', `<div class="m-tt">${[['월', [['16:30 초등 B', 'blue'], ['18:00 중등 A', 'green']]], ['화', [['16:30 초등 C', 'orange']]], ['수', [['16:30 초등 B', 'blue'], ['18:00 중등 A', 'green']]], ['목', [['17:00 중등 심화', 'purple']]], ['금', [['16:30 단어 시험', 'red']]]].map(([d, l]) => `<div><small>${d}</small>${l.map(([t, c]) => `<i class="tc-${c}">${t}</i>`).join('')}</div>`).join('')}</div>`] },
+  parent: { menu: ['홈', '우리 아이', '수납', '공지', '일정', '채팅'], hello: '김서연 학부모님, 안녕하세요',
+    stats: [['오늘 출석', '15:02', '', '입구 QR로 출석', 1], ['10월 수강료', '270,000', '원', '형제 할인 적용'], ['새 공지', '2', '개', '겨울방학 특강 안내']],
+    left: ['우리 아이 소식', lapList([['겨울방학 특강 안내 · 공지', '새 공지'], ['오늘 할 일 2/3 했어요', '할 일'], ['9월 성장 리포트가 왔어요', '보기'], ['11월 2일 월말 평가', '일정']])],
+    right: ['최근 수업 출결', lapChart([100, 100, 70, 100, 100, 100], ['10/19', '10/20', '10/21', '10/22', '10/23', '10/26'])] },
+  student: { menu: ['홈', '오늘 할 일', '시간표', '출석', '성장 리포트', '채팅'], hello: '서연아, 오늘도 힘내!',
+    stats: [['오늘 할 일', '2', '/3', '하나 남았어요'], ['다음 수업', '16:30', '', '영어 리딩 · 302호'], ['이번 달 출석', '100', '%', '지각 없음', 1]],
+    left: ['오늘 할 일', lapList([['단어 30개 외우기', '완료'], ['리딩 3과 읽기', '완료'], ['문법 워크북 12쪽', '하기']])],
+    right: ['과목 점수', lapChart([92, 84, 96, 88], ['리딩', '문법', '단어', '듣기'])] }
+};
+const laptopMock = (role = 'owner') => { const L = LAP_SCREENS[role]; return fitBox(LAP_W, LAP_H, `
+  <div class="m-laptop r-${role}">
     <div class="m-lid"><div class="m-win">
-      <aside class="m-side"><b class="m-logo"><i></i>학원지원센터</b>${['홈', '행정·재정', '학생·학부모', '강사', '일정·시간표', '채팅'].map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('')}</aside>
+      <aside class="m-side"><b class="m-logo"><i></i>학원지원센터</b>${L.menu.map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('')}</aside>
       <main class="m-main">
-        <div class="m-head"><div><small>10월 26일 월요일</small><b>안녕하세요, 정수민 원장님</b></div><span class="m-search">학생 · 반 · 메뉴 찾기</span></div>
-        <div class="m-stats">
-          <div><small>다니는 원생</small><b>128<em>명</em></b><i class="up">이번 달 +6</i></div>
-          <div><small>10월 수납</small><b>92<em>%</em></b><i>미납 6건</i></div>
-          <div><small>이번 달 순이익</small><b>1,240<em>만원</em></b><i class="up">지난달보다 +8%</i></div>
-        </div>
+        <div class="m-head"><div><small>10월 26일 월요일</small><b>${L.hello}</b></div><span class="m-search">${role === 'owner' || role === 'teacher' ? '학생 · 반 · 메뉴 찾기' : '메뉴 찾기'}</span></div>
+        <div class="m-stats">${L.stats.map(([k, v, u, n, up]) => `<div><small>${k}</small><b>${v}<em>${u}</em></b><i class="${up ? 'up' : ''}">${n}</i></div>`).join('')}</div>
         <div class="m-cols">
-          <div class="m-panel"><b class="m-pt">오늘 챙길 일</b>
-            ${[['미납 6건 · 학부모 안내', '안내 보내기'], ['입금 확인 2건', '확인하기'], ['원천세 신고 마감 D-5', '서류 보기'], ['체험수업 16:00 · 2명', '상담 카드']].map(([t, b], i) => `<div class="m-li" style="--i:${i}"><span>${t}</span><em>${b}</em></div>`).join('')}
-          </div>
-          <div class="m-panel"><b class="m-pt">월별 매출</b>
-            <div class="m-chart">${[52, 61, 58, 70, 66, 78].map((h, i) => `<i style="--h:${h}%;--i:${i}"><span>${5 + i}월</span></i>`).join('')}</div>
-          </div>
+          <div class="m-panel"><b class="m-pt">${L.left[0]}</b>${L.left[1]}</div>
+          <div class="m-panel"><b class="m-pt">${L.right[0]}</b>${L.right[1]}</div>
         </div>
       </main>
     </div></div>
     <div class="m-base"></div>
-  </div>`, 'fit-laptop');
+  </div>`, 'fit-laptop'); };
 
 // 첫 화면 그림: 노트북 + 휴대폰(학부모) + 떠오르는 알림
 const heroMock = () => `

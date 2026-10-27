@@ -632,3 +632,48 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 .d-hero .btn.line:hover { background: rgba(255, 255, 255, .1); }
 .d-hero .m-window { box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .55); }
 .d-hero .d-art.is-phone .fit { filter: drop-shadow(0 30px 50px rgba(0, 0, 0, .45)); }
+
+/* 휴대폰 · 노트북에서: 역할 버튼을 눌러 보게 · 휴대폰 ↔ 노트북 */
+.tap-hint { display: flex; align-items: center; gap: 12px; margin: 4px 0 0; padding: 12px 16px; border-radius: 14px; background: rgba(255, 255, 255, .1); color: #fff; font-size: 15px; line-height: 1.5; }
+.tap-hint b { color: #ffd66b; }
+.tap-dot { position: relative; flex: none; width: 12px; height: 12px; border-radius: 50%; background: #ffd66b; }
+.motion .mob:not(.touched) .tap-dot::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid #ffd66b; animation: tapPulse 1.6s ease-out infinite; }
+@keyframes tapPulse { from { transform: scale(.5); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+.rt { grid-template-columns: auto 1fr auto; align-items: center; column-gap: 14px; cursor: pointer; }
+.rt-av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: #fff; background: var(--rc); opacity: .55; transition: opacity .2s, transform .2s; }
+.rt.on .rt-av { opacity: 1; transform: scale(1.06); }
+.rt-tx { display: grid; gap: 2px; min-width: 0; }
+.rt-go { font-size: 13px; font-weight: 700; padding: 6px 11px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .28); color: #fff; white-space: nowrap; transition: background .2s; }
+.rt:hover .rt-go { background: rgba(255, 255, 255, .14); }
+.rt.on .rt-go { background: var(--rc); border-color: var(--rc); }
+.sec.navy .rt { background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.motion .mob:not(.touched) .rt:not(.on) .rt-go { animation: goNudge 2.4s ease-in-out infinite; }
+@keyframes goNudge { 0%, 70%, 100% { transform: none; } 80% { transform: translateX(4px); } 90% { transform: none; } }
+.dev-switch { display: inline-flex; padding: 4px; border-radius: 99px; background: rgba(255, 255, 255, .1); margin-bottom: 20px; position: relative; z-index: 2; }
+.dev-switch button { border: 0; background: transparent; color: rgba(255, 255, 255, .75); font-weight: 700; font-size: 14px; padding: 9px 16px; border-radius: 99px; cursor: pointer; }
+.dev-switch button.on { background: #fff; color: var(--navy-800, #101876); }
+.mob-laps { display: none; width: 100%; }
+.ml { grid-area: 1 / 1; opacity: 0; transition: opacity .4s; pointer-events: none; filter: drop-shadow(0 30px 50px rgba(0, 0, 0, .45)); }
+.ml.on { opacity: 1; pointer-events: auto; }
+.mob.lap { grid-template-columns: 1fr; }
+.mob.lap .mob-text { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; align-items: start; }
+.mob.lap .mob-text > :not(.role-tabs) { grid-column: 1; }
+.mob.lap .role-tabs { grid-column: 2; grid-row: 1 / span 5; align-self: center; }
+.mob.lap .mob-phones, .mob.lap .mc-nav, .mob.lap .mc-dots { display: none; }
+.mob.lap .mob-laps { display: grid; }
+.mob.lap .mob-cap { width: min(720px, 92%); }
+.mob.lap .mob-cap p { min-height: 0; }
+@media (max-width: 900px) { .mob.lap .mob-text { grid-template-columns: 1fr; } .mob.lap .role-tabs { grid-column: 1; grid-row: auto; } .rt-go { display: none; } .rt-av { width: 32px; height: 32px; font-size: 12px; } .rt { column-gap: 10px; } }
+/* 강사 노트북 화면: 이번 주 시간표 칸 색 */
+.m-tt { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+.m-tt > div { display: grid; gap: 4px; align-content: start; }
+.m-tt small { font-size: 11px; color: var(--muted); font-weight: 700; text-align: center; }
+.m-tt i { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 6px 5px; border-radius: 6px; border-left: 3px solid var(--tc); background: color-mix(in srgb, var(--tc) 14%, #fff); color: color-mix(in srgb, var(--tc) 70%, #1b1f2a); }
+.tc-blue { --tc: #2f6bff; } .tc-green { --tc: #22a35a; } .tc-orange { --tc: #f07818; } .tc-purple { --tc: #8257e6; } .tc-red { --tc: #e5484d; }
+/* 분야 상세(운영 프로그램) 안의 휴대폰 · 노트북 구간 */
+.d-dev { margin: 8px 0 40px; }
+.d-dev .sec.navy { border-radius: 28px; padding-left: clamp(16px, 3vw, 40px); padding-right: clamp(16px, 3vw, 40px); }
+.d-dev .wrap { padding: 0; }
+@media (max-width: 560px) { .rt small { display: none; } .rt { padding: 12px; grid-template-columns: auto 1fr; } .rt-av { width: 30px; height: 30px; font-size: 13px; } .rt b { font-size: 14.5px; } .tap-hint { font-size: 14px; padding: 10px 12px; } }
+.mob > *, .mob-text > * { min-width: 0; }
+.d-dev { max-width: 100%; min-width: 0; overflow: hidden; border-radius: 28px; }
