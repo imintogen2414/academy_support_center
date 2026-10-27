@@ -73,6 +73,11 @@
       </ul>
     </details>
 
+    <div id="savedAcc" hidden>
+      <div class="divider">이 기기에서 로그인한 계정</div>
+      <div class="demo" id="savedList"></div>
+      <div class="divider">다른 계정으로 로그인</div>
+    </div>
     <form id="loginForm" novalidate>
       <div class="field"><label for="lid">아이디</label><input id="lid" name="uid" placeholder="아이디" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="lpw">비밀번호</label><input id="lpw" name="pw" type="password" placeholder="비밀번호를 입력하세요" autocomplete="current-password"></div>
@@ -808,6 +813,7 @@ function setTab(t) {
   tabs.forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
   document.getElementById('loginForm').hidden = t !== 'login';
   document.getElementById('signupForm').hidden = t !== 'signup';
+  const sa = document.getElementById('savedAcc'); if (sa) sa.style.display = t === 'login' ? '' : 'none';
   document.getElementById('title').textContent = t === 'login' ? '다시 오셨네요' : '학원지원센터 시작하기';
   document.getElementById('lede').textContent = t === 'login' ? '아이디로 로그인하거나, 예시 계정으로 들어가 보세요.' : '역할을 고르면 그에 맞는 화면으로 안내해 드려요.';
 }
@@ -904,7 +910,25 @@ if (SB) SB.auth.getSession().then(({ data }) => {
   document.getElementById('signedIn').hidden = false;
   const t = document.getElementById('topLogin'); t.textContent = '프로그램 열기'; t.href = '/app';
 });
-document.getElementById('signOut').onclick = async () => { await SB.auth.signOut(); location.reload(); };
+document.getElementById('signOut').onclick = async () => {
+  const { data } = await SB.auth.getSession();
+  await SB.auth.signOut({ scope: 'local' });
+  if (data.session) forgetAccount(data.session.user.id);
+  location.reload();
+};
+// 계정 전환: 이 기기에서 로그인했던 계정은 누르면 비밀번호 없이 바로 들어가요 (assets/supa.js savedAccounts)
+const ROLE_LABEL = { owner: '원장', teacher: '강사', parent: '학부모', student: '학생', admin: '센터 관리자' };
+function renderSaved() {
+  const list = SB ? savedAccounts() : [], box = document.getElementById('savedAcc');
+  box.hidden = !list.length;
+  document.getElementById('savedList').innerHTML = list.map(a => `<button type="button" class="r-${ROLE_LABEL[a.role] ? a.role : 'owner'}" data-saved="${esc(a.id)}"><span class="av">${esc((a.name || '?')[0])}</span><div><div class="t">${esc(a.name || '이름 없음')}</div><div class="d">${esc([a.label || ROLE_LABEL[a.role], a.acad].filter(Boolean).join(' · '))}</div></div><span class="go">이 계정으로 →</span></button>`).join('');
+  document.querySelectorAll('[data-saved]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    if (await switchAccount(b.dataset.saved)) { location.href = '/app'; return; }
+    showMsg(loginMsg, '이 계정은 다시 로그인해야 해요. 아래에 아이디와 비밀번호를 넣어 주세요.'); renderSaved();
+  });
+}
+renderSaved();
 
 renderPanel();
 </script>

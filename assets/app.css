@@ -1133,3 +1133,27 @@ body.kiosk-on #view { max-width: none; padding: 0 !important; }
 .chat-who > div { display: grid; }
 .who-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 4px 2px 0; border-radius: 10px; color: inherit; font: inherit; }
 button.who-btn:hover b { text-decoration: underline; }
+
+/* ---------- 계정 전환 · 로그아웃 ---------- */
+.nav-acc { display: grid; gap: 2px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.1); }
+.nav-acc .nav-item { border: 0; background: none; width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: 14px; }
+.acc-btn { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 6px; border-radius: 8px; cursor: pointer; }
+.acc-btn:hover { background: var(--bg); color: var(--ink); }
+.acc-btn .icon { width: 16px; height: 16px; }
+.acc-btn.out:hover { color: var(--crit); }
+@media (max-width: 960px) { .acc-btn span { display: none; } .acc-btn { padding: 6px 4px; } }
+.acc-list { display: grid; gap: 8px; }
+.acc-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; cursor: pointer; color: inherit; font: inherit; }
+.acc-row:hover:not([disabled]) { border-color: var(--blue-400); }
+.acc-row.on { border-color: var(--blue-500); background: var(--blue-50); cursor: default; }
+.acc-row .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; }
+.acc-row > span:nth-child(2) { flex: 1; min-width: 0; display: grid; }
+.acc-row small { color: var(--muted); font-size: 12px; }
+.acc-row .go { color: var(--blue-600); font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+/* ---------- 직책 · 권한 ---------- */
+.perm-list { display: grid; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; max-height: 46vh; overflow-y: auto; }
+.perm-list .set-line { cursor: pointer; }
+.perm-list .switch { display: inline-block; }
+.perm-list small { color: var(--muted); font-size: 12px; }
+.stamp { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
