@@ -68,9 +68,9 @@ const PHONE_PAGES = {
     <div class="m-card m-split"><div><small>받을 돈</small><b>3,840만</b></div><div><small>받은 돈</small><b>92%</b></div></div>
     <div class="m-card"><small class="m-cap">입금 확인</small>${mk.row('박준호 · 320,000원', '', mk.chip('확인', 'blue'))}${mk.row('최유나 · 270,000원', '', mk.chip('확인', 'blue'))}</div>
     <div class="m-card"><small class="m-cap">미납 6건</small>${mk.row('이하은 · 300,000원', 'D+3', '')}${mk.row('한지우 · 300,000원', 'D+1', '')}<div class="m-btn sm">미납 안내 한 번에 보내기</div></div>`],
-    ['학부모 공지', 1, ['공지 · 읽음 확인', '전체나 반별로 공지를 보내면 학부모 휴대폰에 바로 떠요. 읽은 가족 · 안 읽은 가족이 보여서 다시 알릴 사람만 골라요.'], `
-    <div class="m-card"><small class="m-cap">어제 보낸 공지</small><b class="m-big-t">겨울방학 특강 안내</b><div class="m-meter"><i style="--w:82%"></i></div><small class="m-note">28가족 중 23가족 읽음</small></div>
-    <div class="m-card"><small class="m-cap">안 읽은 가족 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`],
+    ['학부모 공지', 1, ['공지 · 읽음 확인', '전체나 반별로 공지를 보내면 학부모 휴대폰에 바로 떠요. 읽은 사람 · 안 읽은 사람이 보여서 다시 알릴 사람만 골라요.'], `
+    <div class="m-card"><small class="m-cap">어제 보낸 공지</small><b class="m-big-t">겨울방학 특강 안내</b><div class="m-meter"><i style="--w:82%"></i></div><small class="m-note">28명 중 23명 읽음</small></div>
+    <div class="m-card"><small class="m-cap">안 읽은 학부모 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`],
     ['직책 · 권한', 3, ['직책 · 권한', '매니저 · 재정 담당처럼 학원 안 직책을 정하고, 원장님만 쓰던 기능을 강사마다 하나씩 켜 줘요. 켜 준 화면만 강사 메뉴에 생겨요.'], `
     <div class="m-card m-hi"><span class="m-av2">김</span><div><b>김민지 · 매니저</b><small>초등 B반 · 중등 A반 담당</small></div></div>
     <div class="m-card"><small class="m-cap">켜 준 기능</small>${[['모든 원생', 1], ['수납', 1], ['결재 처리', 1], ['공지', 1], ['재정', 0], ['원천세', 0]].map(([t, on]) => mk.row(t, '', mk.chip(on ? '켬' : '끔', on ? 'blue' : ''))).join('')}</div>
@@ -220,7 +220,7 @@ const AREA_MOCK = {
     <div class="m-kanban">${[['문의', ['이도윤 · 초4', '최서아 · 중1']], ['상담', ['강하준 · 초6']], ['체험수업', ['윤지호 · 초5', '임채원 · 중2']], ['등록', ['한예린 · 초3']]].map(([c, list], i) => `
       <div class="m-col" style="--i:${i}"><small>${c} <em>${list.length}</em></small>${list.map(n => `<div class="m-kc">${n}</div>`).join('')}</div>`).join('')}
     </div>
-    <div class="m-read"><div><b>겨울방학 특강 안내</b><small>전체 공지 · 어제</small></div><div class="m-meter"><i style="--w:82%"></i></div><span>23/28 가족 읽음</span></div>`),
+    <div class="m-read"><div><b>겨울방학 특강 안내</b><small>전체 공지 · 어제</small></div><div class="m-meter"><i style="--w:82%"></i></div><span>23/28명 읽음</span></div>`),
   teachers: () => fitBox(PHONE_W, PHONE_H, PHONE_SCREENS.teacher(), 'fit-phone'),
   promo: () => winMock('내 의뢰 · 블로그 정기 포스팅', `
     <ol class="m-steps">${['접수', '담당자 연락', '작업 중', '시안 확인', '완료'].map((s, i) => `<li class="${i < 3 ? 'done' : i === 3 ? 'now' : ''}">${s}</li>`).join('')}</ol>

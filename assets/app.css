@@ -1184,8 +1184,10 @@ button.tt-blk.tint:hover { background: color-mix(in srgb, var(--cc) 19%, var(--s
 .subj-chip button { border: 0; background: var(--sunk, var(--line)); color: var(--muted); width: 20px; height: 20px; border-radius: 50%; cursor: pointer; line-height: 1; }
 .subj-add { display: flex; gap: 6px; }
 .subj-add input { flex: 1; min-width: 0; }
-.del-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.del-pick b { margin-right: 4px; }
+.dlg .acts.picking > :not(.del-pick) { display: none; }
+.del-pick { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; }
+.del-pick b { font-size: 15px; }
+.del-pick .btn { justify-content: center; }
 /* 우리 학원 사람들 */
 .ppl { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px; }
 .ppl > div { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border-radius: 12px; background: var(--sunk, var(--blue-50)); }
@@ -1229,3 +1231,36 @@ button.tt-blk.tint:hover { background: color-mix(in srgb, var(--cc) 19%, var(--s
 .n-imgs.n1 .n-img { aspect-ratio: auto; max-height: 480px; }
 .n-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .n-imgs.n1 .n-img img { object-fit: contain; }
+
+/* 사진 크게 보기 (채팅 · 공지) */
+.img-view { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgba(6, 10, 30, .97); color: #fff; }
+.img-view::backdrop { background: rgba(6, 10, 30, .6); }
+.img-view[open] { display: flex; flex-direction: column; }
+.iv-top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.iv-top b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.iv-n { font-size: 13px; opacity: .75; flex-shrink: 0; }
+.iv-top .btn { flex-shrink: 0; background: #fff; color: #0b1150; border-color: #fff; }
+.iv-x { border: 0; background: rgba(255, 255, 255, .14); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 22px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+.iv-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; padding: 0 12px 16px; }
+.iv-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.iv-load { position: absolute; font-size: 14px; opacity: .8; }
+.iv-nav { position: absolute; top: 50%; transform: translateY(-50%); border: 0; background: rgba(255, 255, 255, .16); color: #fff; width: 44px; height: 44px; border-radius: 50%; font-size: 28px; line-height: 1; cursor: pointer; z-index: 1; }
+.iv-nav.prev { left: 12px; } .iv-nav.next { right: 12px; }
+
+/* 접어 둘 수 있는 묶음 */
+details.fold > summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 15px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary b { flex: 1; }
+details.fold .fold-t::after { content: '펼치기 +'; font-size: 13px; font-weight: 700; color: var(--blue-600); }
+details.fold[open] .fold-t::after { content: '접기 −'; }
+details.fold .fold-b { margin-top: 14px; }
+
+/* 사용 안내 · 단계 설명 닫기 × */
+.howto-x { border: 0; background: var(--surface-2, rgba(0, 0, 0, .05)); color: var(--muted); width: 30px; height: 30px; border-radius: 50%; font-size: 20px; line-height: 1; cursor: pointer; flex-shrink: 0; margin-left: auto; }
+.howto-x:hover { color: var(--ink); background: var(--blue-100); }
+.state-guide summary .howto-x { margin-left: 8px; order: 3; }
+
+/* 분야 첫 화면: 세부 메뉴 작은 묶음 */
+.sub-group + .sub-group { margin-top: 6px; }
+.sub-group .sec-title small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.center-hint { margin-top: 16px; }

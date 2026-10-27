@@ -37,6 +37,7 @@ const ICON = {
   pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.1-2.4 3.8M12 17h.01"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 19h16"/>',
   logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>'
 };
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
@@ -299,7 +300,7 @@ function kioskPage() {
         <div class="k-code-img" id="kQr"><span class="spin"></span></div>
         <div class="k-day" id="kDay">${kioskDay()} 출석 QR</div>
         <h2>휴대폰 카메라로 QR을 찍어 주세요</h2>
-        <p>학생 · 학부모 계정으로 로그인돼 있으면 바로 출석돼요. QR은 오늘 하루만 쓰고 내일이면 새 QR로 바뀌어요.<span class="k-tip"> 화면을 계속 켜 두기 어려우면 "QR 인쇄"로 뽑아서 입구에 붙여 두세요.</span></p>
+        <p>학생 계정으로 로그인돼 있으면 바로 출석되고, 학부모님께는 출석 알림이 가요. QR은 오늘 하루만 쓰고 내일이면 새 QR로 바뀌어요.<span class="k-tip"> 화면을 계속 켜 두기 어려우면 "QR 인쇄"로 뽑아서 입구에 붙여 두세요.</span></p>
       </section>
       <section class="k-pad">
         <h3>휴대폰이 없어요</h3>
@@ -373,12 +374,14 @@ let CHECKIN = null; // { token, state: 'busy'|'ok'|'err', list, err }
 const CHECKIN_ERR = {
   qr_expired: '지난 날짜의 QR이에요. 오늘 입구에 있는 QR을 다시 찍어 주세요.',
   bad_qr: '우리 학원 출석 QR이 아니에요. 입구 화면의 QR을 다시 찍어 주세요.',
-  not_family: 'QR 출석은 학생 · 학부모 계정으로 해요. 원장님 · 강사님은 출결 화면에서 넣어 주세요.',
+  not_family: 'QR 출석은 학생 계정으로 해요. 원장님 · 강사님은 출결 화면에서 넣어 주세요.',
+  parent_no_qr: '학부모님은 QR을 찍지 않아도 돼요. 아이가 학원 입구에서 QR을 찍거나 출석 번호를 누르면 홈 "오늘 출석 알림"으로 바로 알려 드려요.',
   not_linked: '아직 원생과 연결되지 않았어요. 원장님께 앱 연결을 요청해 주세요.',
   not_signed_in: '로그인한 뒤 다시 찍어 주세요.'
 };
 async function runCheckin(token) {
   CHECKIN = { token, state: 'busy' };
+  if (ROLE === 'parent') { CHECKIN = { token, state: 'err', parent: true, err: CHECKIN_ERR.parent_no_qr }; render(); return; }
   if (!REAL) { await new Promise(r => setTimeout(r, 600)); CHECKIN = { token, state: 'ok', list: [{ name: DATA.child.name, status: 'present', already: false, at: new Date().toISOString() }] }; render(); return; }
   const { data, error } = await SB.rpc('qr_check_in', { p_token: token });
   const code = error && Object.keys(CHECKIN_ERR).find(k => (error.message || '').includes(k));
@@ -389,15 +392,57 @@ async function runCheckin(token) {
 function checkinPage(token) {
   if (!CHECKIN || CHECKIN.token !== token) { setTimeout(() => runCheckin(token)); return `<section class="card checkin"><span class="spin"></span><h2>출석하는 중이에요…</h2></section>`; }
   if (CHECKIN.state === 'busy') return `<section class="card checkin"><span class="spin"></span><h2>출석하는 중이에요…</h2></section>`;
-  if (CHECKIN.state === 'err') return `<section class="card checkin err"><span class="ck-ic">!</span><h2>출석하지 못했어요</h2><p>${CHECKIN.err}</p><a class="btn primary" href="#home">홈으로</a></section>`;
+  if (CHECKIN.state === 'err') return `<section class="card checkin err"><span class="ck-ic">!</span><h2>${CHECKIN.parent ? '학부모님은 QR을 찍지 않아도 돼요' : '출석하지 못했어요'}</h2><p>${CHECKIN.err}</p><a class="btn primary" href="#home">홈으로</a></section>`;
   return `<section class="card checkin ok">${CHECKIN.list.map(r => `
     <div class="ck-one ${r.status === 'late' ? 'late' : ''}"><span class="ck-ic">✓</span><h2>${esc(r.name)} ${r.already ? '이미 출석했어요' : r.status === 'late' ? '지각으로 출석했어요' : '출석했어요'}</h2>
       <p class="muted">${r.at ? `${msgTime(r.at)} · ` : ''}${REAL ? esc(REAL.academy.name) : DATA.academy.name}${r.status === 'late' && !r.already ? ' · 수업 시작 10분이 지났어요' : ''}</p></div>`).join('')}
     <p class="muted small">${ROLE === 'parent' ? '출결 화면에도 바로 보여요.' : '부모님 화면에도 바로 보여요.'}</p>
     <div class="row-btns" style="justify-content:center"><a class="btn" href="#${ROLE === 'parent' ? 'kid/attend' : isStaff() ? 'admin/attend' : 'attend'}">출결 보기</a><a class="btn primary" href="#home">홈으로</a></div></section>`;
 }
-const checkinHint = () => ROLE === 'student' || ROLE === 'parent'
-  ? `<div class="hint">${ic('attend')}<span>학원에 도착하면 입구 화면의 <b>QR을 휴대폰 카메라로 찍어</b> 출석해요${ROLE === 'parent' ? ' (아이와 함께 왔을 때)' : ''}</span>${DEMO ? '<button type="button" class="btn sm primary" data-act="demoScan">예시로 QR 찍어 보기</button>' : ''}</div>` : '';
+// 오늘 우리 학원 수업이 있는지 (학생 QR 안내 · 학부모 출석 알림): 실제는 아이 반 시간표 · 휴원, 예시는 아이 오늘 일정
+function classToday() {
+  if (!REAL) return DATA.child.today.filter(t => t.what.includes(DATA.academy.name)).map(t => ({ time: t.time, cls: t.what.split(' · ')[1] || '' }));
+  const mon = mondayOf(TODAY), wd = day0(TODAY).getDay(), cls = REAL.kids.map(k => k.class_name).filter(Boolean);
+  const off = (REAL.events || []).some(e => e.kind === '휴원' && evOn(e, TODAY) && (!e.target_class || cls.includes(e.target_class)));
+  if (off) return [];
+  return REAL.timetable.filter(t => +t.weekday === wd && ttOn(t, mon) && cls.includes(t.class_name)).sort(ttSort).map(t => ({ time: hm(t.start_time), cls: t.class_name }));
+}
+// 학생: 수업이 있는 날만 QR 출석 안내 (학부모는 찍지 않고 출석 알림만 받아요)
+const checkinHint = () => ROLE === 'student' && classToday().length
+  ? `<div class="hint">${ic('attend')}<span>오늘 ${classToday()[0].time} 수업이 있어요. 학원에 도착하면 입구 화면의 <b>QR을 휴대폰 카메라로 찍어</b> 출석해요</span>${DEMO ? '<button type="button" class="btn sm primary" data-act="demoScan">예시로 QR 찍어 보기</button>' : ''}</div>` : '';
+// 학부모: 출석 알림 — 아이가 학원 입구에서 QR · 출석 번호로 출석하거나 선생님이 출결을 넣으면 바로 보여요
+const ATT_WORD = { present: '출석했어요', late: '지각으로 출석했어요', absent: '결석으로 기록됐어요', early: '조퇴했어요' };
+const METHOD_WORD = { qr: 'QR', kiosk: '출석 번호', staff: '선생님 입력' };
+const attRow = (who, a, place) => `<div class="li"><span class="av" style="background:var(--${a.status === 'absent' ? 'crit' : a.status === 'present' ? 'good' : 'warn'})">${ic('attend')}</span><div><div class="t">${who} ${ATT_WORD[a.status] || '출결이 바뀌었어요'}</div><div class="d">${a.day !== TODAY ? `${md(a.day)} (${WD[day0(a.day).getDay()]}) ` : ''}${a.at ? `${a.at} · ` : ''}${METHOD_WORD[a.method] || '선생님 입력'} · ${place}</div></div><span></span></div>`;
+const waitRow = (who, t) => `<div class="li"><span class="av" style="background:var(--muted)">${ic('attend')}</span><div><div class="t">${who} 아직 출석 전이에요</div><div class="d">오늘 ${t.time} ${esc(t.cls)} 수업 · 도착해서 출석하면 여기에 바로 떠요</div></div><span></span></div>`;
+const minus = (hhmm, n) => { const m = +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5) - n; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+function attendAlert() {
+  if (ROLE !== 'parent') return '';
+  const today = classToday();
+  let rows = [], recent = false;
+  if (REAL) {
+    rows = REAL.kids.map(k => {
+      const a = REAL.kidAttend.find(x => x.student_id === k.id && x.day === TODAY), t = today.find(x => x.cls === k.class_name);
+      if (a) return attRow(kidName(k), { ...a, at: a.checked_at && msgTime(a.checked_at) }, esc(REAL.academy.name));
+      if (t) return waitRow(kidName(k), t);
+      // 오늘 수업이 없으면 가장 최근 출결
+      const last = REAL.kidAttend.find(x => x.student_id === k.id);
+      if (last) { recent = true; return attRow(kidName(k), { ...last, at: last.checked_at && msgTime(last.checked_at) }, esc(REAL.academy.name)); }
+      return '';
+    }).filter(Boolean);
+  } else {
+    const t = today[0], c = DATA.child;
+    if (t) rows = [new Date().toTimeString().slice(0, 5) >= t.time ? attRow(c.name, { day: TODAY, status: 'present', method: 'qr', at: minus(t.time, 2) }, DATA.academy.name) : waitRow(c.name, t)];
+    else {
+      // 예시: 하늘영어학원 수업이 있던 가장 가까운 지난 날
+      const w = c.week.find(x => x.what.includes(DATA.academy.name));
+      for (let n = 1; n <= 7 && w; n++) { const d = addDays(TODAY, -n); if (w.days.includes(day0(d).getDay())) { rows = [attRow(c.name, { day: d, status: 'present', method: 'qr', at: minus(w.time, 2) }, DATA.academy.name)]; recent = true; break; } }
+    }
+  }
+  if (!rows.length) return '';
+  return `<section class="card att-alert"><div class="card-head"><h2>${recent ? '최근 출석 알림' : '오늘 출석 알림'}</h2>${recent ? '<span class="sub">오늘은 수업이 없어요</span>' : ''}<a class="sub" href="${REAL ? '#kid/attend' : '#kid/record'}">출결 보기 ›</a></div><div class="list">${rows.join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">아이가 학원 입구에서 QR을 찍거나 출석 번호를 누르면, 학부모님은 따로 하지 않아도 여기와 종 모양에 알림이 와요.</p></section>`;
+}
 // 예시 계정: 카메라로 입구 QR을 찍는 모습 → 찍으면 출석 완료 화면
 const demoToken = () => `demo.${Math.floor((Date.now() + 9 * 3600000) / 86400000) - 10957}.demo`;
 function demoScanDialog() {
@@ -1846,7 +1891,7 @@ function realOwnerTodo() {
   const review = REAL.promoReqs.filter(r => r.status === 'review');
   if (review.length) items.push([`홍보 시안 ${review.length}건 확인하기`, review.slice(0, 2).map(r => `${esc(r.service)} · ${esc(r.title)}`).join(' / '), '#promo/requests', '<span class="chip warn">확인 필요</span>']);
   const waiting = REAL.family.filter(f => !f.students.length);
-  if (waiting.length && REAL.students.length) items.push([`앱 가입한 가족 ${waiting.length}명 아이와 연결하기`, waiting.slice(0, 3).map(f => esc(f.name)).join(' · '), '#members/students', '<span class="chip info">앱 연결</span>']);
+  if (waiting.length && REAL.students.length) items.push([`앱 가입한 학부모 · 수강생 ${waiting.length}명 아이와 연결하기`, waiting.slice(0, 3).map(f => esc(f.name)).join(' · '), '#members/students', '<span class="chip info">앱 연결</span>']);
   // 자동 처리: 최근 3일 동안 저절로 한 일 · 아직 안 켠 것은 한 줄로 권해요
   const recent = REAL.autoLogs.filter(l => dday(l.created_at.slice(0, 10)) >= -3);
   if (recent.length) items.push([`저절로 처리한 일 ${recent.length}건`, recent.slice(0, 2).map(l => esc(l.message)).join(' · '), '#admin/auto', '<span class="chip good">자동</span>']);
@@ -1877,7 +1922,9 @@ let SCH_WEEK = null; // 주간 시간표에서 보고 있는 주의 월요일
 const isStaff = () => ROLE === 'owner' || ROLE === 'teacher';
 const hm = t => t ? t.slice(0, 5) : '';
 // 예시 계정: 원장님이 넣고 강사님이 고친 칸도 있게 (누가 고쳤는지 보여 주기)
-const demoStamp = list => { if (!list.stamped) { list.stamped = true; list.forEach((t, i) => { t.created_by_name ||= DATA.users.owner.name; if (i % 3 === 1) { t.updated_by_name = DATA.users.teacher.name; t.updated_at = `${TODAY}T09:12:00`; } }); } return list; };
+// 예시 계정: 누가 고쳤는지(칸 아래) · 바뀐 기록이 같은 예시에서 나와요 — 고친 칸은 DEMO_EDITS에 정해 둬요
+const DEMO_EDITS = { tt2: ['teacher', 0, '09:12'], tt4: ['teacher', -1, '17:40'], tt9: ['owner', -2, '20:05'], ev4: ['teacher', -1, '10:30'] };
+const demoStamp = list => { if (!list.stamped) { list.stamped = true; list.forEach(t => { t.created_by_name ||= DATA.users.owner.name; const e = DEMO_EDITS[t.id]; if (e) { t.updated_by_name = DATA.users[e[0]].name; t.updated_at = `${addDays(TODAY, e[1])}T${e[2]}:00`; } }); } return list; };
 const schData = () => REAL ? { tt: REAL.timetable, ev: REAL.events } : { tt: demoStamp(DATA.timetable), ev: demoStamp(DATA.events) };
 const myClasses = () => REAL && !isStaff() ? [...new Set(REAL.kids.map(k => k.class_name).filter(Boolean))] : !REAL && !isStaff() ? [DATA.child.cls] : [];
 const allClasses = () => [...new Set([...schData().tt.map(t => t.class_name), ...(REAL ? REAL.students.map(s => s.class_name) : DATA.students.map(s => s.cls))].filter(Boolean))].sort();
@@ -1894,12 +1941,19 @@ const stampLine = r => {
   const t = [r.created_by_name && `${esc(r.created_by_name)} 넣음`, r.updated_by_name && `${esc(r.updated_by_name)} 고침${r.updated_at ? ` ${md(r.updated_at.slice(0, 10))}` : ''}`].filter(Boolean);
   return t.length ? `<span class="stamp">${t.join(' · ')}</span>` : '';
 };
-const LOG_ACT = { add: ['good', '넣음'], edit: ['info', '고침'], delete: ['crit', '지움'] };
-const demoSchedLogs = () => [
-  { action: 'edit', kind: 'timetable', summary: '초등 B반 · 수요일 16:00~17:30 · 영어 리딩', who_name: DATA.users.teacher.name, who_role: 'teacher', created_at: `${addDays(TODAY, 0)}T09:12:00` },
-  { action: 'add', kind: 'event', summary: `${md(addDays(TODAY, 9))} · 11월 단어 시험`, who_name: DATA.users.owner.name, who_role: 'owner', created_at: `${addDays(TODAY, -1)}T18:40:00` },
-  { action: 'delete', kind: 'timetable', summary: '중등 1반 · 금요일 18:00~19:30 · 문법', who_name: DATA.users.owner.name, who_role: 'owner', created_at: `${addDays(TODAY, -3)}T11:05:00` }
-];
+const LOG_ACT = { add: ['good', '넣음'], edit: ['info', '고침'], delete: ['crit', '지움'], skip: ['warn', '이 주 뺌'] };
+const ttSummary = t => `${t.class_name} · ${WD[t.weekday]}요일 ${hm(t.start_time)}~${hm(t.end_time)}${t.subject ? ` · ${t.subject}` : ''}`;
+const evSummary = e => `${md(e.day)} · ${e.title}`;
+function demoSchedLogs() {
+  const { tt, ev } = schData();
+  const edits = [...tt, ...ev].filter(r => DEMO_EDITS[r.id]).map(r => ({ action: 'edit', kind: r.weekday != null ? 'timetable' : 'event', summary: r.weekday != null ? ttSummary(r) : evSummary(r),
+    who_name: r.updated_by_name, who_role: DEMO_EDITS[r.id][0], created_at: r.updated_at }));
+  const e2 = ev.find(e => e.id === 'ev2');
+  return [...edits,
+    ...(e2 ? [{ action: 'add', kind: 'event', summary: evSummary(e2), who_name: DATA.users.owner.name, who_role: 'owner', created_at: `${addDays(TODAY, -3)}T18:40:00` }] : []),
+    { action: 'delete', kind: 'timetable', summary: '중등 기초반 · 금요일 18:00~19:30 · 문법', who_name: DATA.users.owner.name, who_role: 'owner', created_at: `${addDays(TODAY, -4)}T11:05:00` }
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
 // 바뀐 기록: 시간표 · 일정을 누가 넣고 고치고 지웠는지 (원장 · 강사만)
 function schedLogCard() {
   const list = REAL ? REAL.schedLogs || [] : demoSchedLogs();
@@ -2046,11 +2100,13 @@ function ttDialog(t) {
     },
     // 지우기: 같은 수업 모두 / 이 칸만 · 이 주만 빼기
     del: async () => {
-      const opts = [...(weekly ? [['week', `${wkLabel(mon)}만 빼기${many ? ' (같은 수업 모두)' : ''}`]] : []), ...(many ? [['group', `같은 수업 ${group.length}칸 모두 지우기`, 1]] : []), ['one', many ? `이 칸만 지우기 (${WD[t.weekday]})` : weekly ? '매주에서 지우기' : '지우기', 1]];
+      const opts = [...(many ? [['group', `같은 수업 ${group.length}칸 모두 지우기 (${gDays.map(d => WD[d]).join(' · ')})`, 1]] : []), ['one', many ? `이 칸만 지우기 (${WD[t.weekday]}요일)` : weekly ? '매주에서 지우기' : '지우기', 1], ...(weekly ? [['week', `${wkLabel(mon)}만 빼기${many ? ' (같은 수업 모두)' : ''} · 다른 주는 그대로`]] : [])];
+      // 고르는 버튼은 아래 버튼 줄 자리에 띄워요 (창이 길어도 바로 보이게)
       const how = await new Promise(res => {
-        const m = $('#dlgMsg'); m.hidden = false;
-        m.innerHTML = `<span class="del-pick"><b>어떻게 지울까요?</b>${opts.map(([k, l, danger]) => `<button type="button" class="btn sm ${danger ? 'danger' : ''}" data-how="${k}">${l}</button>`).join('')}<button type="button" class="btn sm" data-how="">그만두기</button></span>`;
-        m.querySelectorAll('[data-how]').forEach(b => b.onclick = () => { m.hidden = true; res(b.dataset.how); });
+        const bar = $('#dlg .acts');
+        bar.classList.add('picking');
+        bar.insertAdjacentHTML('beforeend', `<div class="del-pick"><b>어떻게 지울까요?</b>${opts.map(([k, l, danger]) => `<button type="button" class="btn ${danger ? 'danger' : ''}" data-how="${k}">${l}</button>`).join('')}<button type="button" class="btn" data-how="">그만두기</button></div>`);
+        bar.querySelectorAll('[data-how]').forEach(b => b.onclick = () => { bar.classList.remove('picking'); bar.querySelector('.del-pick').remove(); res(b.dataset.how); });
       });
       if (!how) return false;
       const list = how === 'one' ? [t] : group.length ? group : [t];
@@ -2455,7 +2511,7 @@ const LIB_CATS = ['수업 자료', '교재 · 문제', '학부모 안내', '행�
 const LIB_VIS = {
   private: ['🔒 나만 보기', 'mute', '올린 사람만 봐요 (원장님은 볼 수 있어요)'],
   staff: ['원장 · 강사', 'info', '원장님과 강사님만 봐요'],
-  class: ['반 가족', 'warn', '원장 · 강사 + 고른 반 아이의 학부모 · 학생'],
+  class: ['반 학부모 · 수강생', 'warn', '원장 · 강사 + 고른 반 아이의 학부모 · 학생'],
   everyone: ['학원 모두', 'good', '원장 · 강사 · 학부모 · 학생 모두']
 };
 const LIB_MAX = 50 * 1024 * 1024, LIB_MANY = 30; // 한 번에 30개까지 (사진 여러 장 등)
@@ -2637,7 +2693,7 @@ async function openLib(id, download) {
 /* ================= 채팅: 카톡처럼 친구 · 채팅 (Supabase friends · conversations · messages) =================
    친구: 이름 · 아이디 · 아이 이름으로 찾아서 내가 추가한 사람만 보여요(find_people은 한 글자 이상 쳐야 나와요).
    채팅: 1:1과 그룹. 누구와 이야기할 수 있는지는 DB(private.message_academy)가 정해요:
-   원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 가족만).
+   원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 사이만).
    새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
 const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false, readAt: {}, reads: {}, urls: {} };
 const CHAT_MAX_FILES = 10, CHAT_MAX_SIZE = 20 * 1024 * 1024;
@@ -3010,7 +3066,7 @@ function settingsPage() {
       ${row('학원', DATA.academy.name)}
       ${row('지역', DATA.academy.area || '-')}
       ${row('내 역할', ROLE_NAMES[ROLE])}
-      <div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}<button class="btn sm" data-act="peopleList">누가 있는지 보기</button></div>
+      ${isStaff() ? `<div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}<button class="btn sm" data-act="peopleList">누가 있는지 보기</button></div>` : ''}
       ${ROLE === 'owner' ? row('함께하는 사람', REAL ? `원생 ${REAL.students.length}명 · 강사 ${REAL.members.filter(m => m.role === 'teacher').length}명` : `원생 ${DATA.academy.students}명 · 강사 ${DATA.staff.length}명`) : ''}
       ${ROLE === 'teacher' ? row('담당 반', REAL ? (REAL.myClasses && REAL.myClasses.length ? REAL.myClasses.map(esc).join(' · ') : '<span class="muted">원장님이 정하면 보여요</span>') : DEMO_MY_CLASSES.join(' · ')) : ''}
       ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
@@ -3079,7 +3135,8 @@ function pwDialog() {
 // 우리 학원 사람들: 원장부터 학생까지 몇 명이 함께 쓰는지 (홈 · 설정)
 const peopleCounts = () => REAL ? REAL.people : { owner: 1, teacher: DATA.staff.length, parent: Math.round(DATA.academy.students * 0.8), student: Math.round(DATA.academy.students * 0.35), enrolled: DATA.academy.students };
 function peopleCard(compact) {
-  const p = peopleCounts(); if (!p || ROLE === 'admin' || SEEKER) return '';
+  // 학원 사람 수는 원장 · 강사만 (학부모 · 학생 화면에는 없어요)
+  const p = peopleCounts(); if (!p || !isStaff() || SEEKER) return '';
   const fam = famOn();
   const cells = [['owner', '원장'], ['teacher', '강사'], ...(fam ? [['parent', '학부모']] : []), ['student', fam ? '학생' : '수강생']];
   const total = cells.reduce((a, [k]) => a + (+p[k] || 0), 0);
@@ -3106,7 +3163,7 @@ async function peopleListDialog() {
     return `<h3 class="ct-h">${l} ${n}명</h3>${xs.length ? `<div class="list">${xs.map(x => `<div class="li"><span class="av" style="background:${ROLE_COLOR[r]}">${esc((x.name || '?')[0])}</span>
       <div><div class="t">${esc(x.name)}${x.title ? ` <span class="chip info">${esc(x.title)}</span>` : ''}${USER && x.user_id === USER.id ? ' <span class="chip mute">나</span>' : ''}</div><div class="d">${x.kids ? `${r === 'parent' ? '아이' : '원생'} ${esc(x.kids)} · ` : ''}${x.joined_at ? `${md(x.joined_at.slice(0, 10))} 합류` : ''}</div></div>
       <div class="r">${canKick && r !== 'owner' && (ROLE === 'owner' || r === 'teacher') && !(USER && x.user_id === USER.id) ? `<button class="btn sm danger" data-kick="${x.user_id}">내보내기</button>` : ''}</div></div>`).join('')}</div>`
-      : `<p class="muted small" style="margin:0 0 6px">${n && !isStaff() ? '다른 가족 이름은 원장님 · 선생님만 볼 수 있어요' : '아직 없어요'}</p>`}`; }).join('');
+      : `<p class="muted small" style="margin:0 0 6px">${n && !isStaff() ? '다른 학부모 · 수강생 이름은 원장님 · 선생님만 볼 수 있어요' : '아직 없어요'}</p>`}`; }).join('');
   d.innerHTML = `<div class="dlg"><h2>우리 학원 사람들</h2><p class="muted small" style="margin:-6px 0 0">${esc(DATA.academy.name)} · 학원 코드로 가입한 사람이에요${isStaff() ? '' : ' · 원장님 · 선생님 이름만 보여요'}</p>
     <div id="pplBody">${draw()}</div><p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
@@ -3216,7 +3273,13 @@ document.addEventListener('click', e => {
   personDialog((MSG.people[id] || []).find(p => p.user_id === b.dataset.person), c);
 });
 // 채팅 사진 · 파일 열기 (대화창은 새 메시지마다 다시 그려서 위임으로 받아요)
-document.addEventListener('click', e => { const b = e.target.closest('[data-chat-open]'); if (b && SB && USER) openChatFile(b.dataset.chatOpen, b.dataset.name, !!b.dataset.down); });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-chat-open]'); if (!b || !SB || !USER) return;
+  // 사진은 웹 안에서 크게 (같은 말풍선 사진끼리 넘겨 보기), 파일은 내려받기
+  if (b.dataset.down) { openChatFile(b.dataset.chatOpen, b.dataset.name, true); return; }
+  const list = [...b.closest('.bub-imgs').querySelectorAll('[data-chat-open]')];
+  imgViewer(list.map(x => ({ bucket: 'chat', path: x.dataset.chatOpen, name: x.dataset.name })), list.indexOf(b));
+});
 document.addEventListener('visibilitychange', () => { const m = (location.hash || '').match(/^#messages\/([0-9a-f-]{36})$/); if (m && USER && SB && chatOpen(m[1])) markRead(m[1]); });
 async function loadFriends() {
   const { data } = await SB.rpc('my_friends');
@@ -3259,6 +3322,38 @@ async function hydrateChatFiles(root) {
   const imgs = [...root.querySelectorAll('img[data-chat-img]')], need = [...new Set(imgs.map(i => i.dataset.chatImg).filter(p => !MSG.urls[p]))];
   if (need.length && SB) { const { data } = await SB.storage.from('chat').createSignedUrls(need, 3600); (data || []).forEach(x => { if (x.signedUrl) MSG.urls[x.path] = x.signedUrl; }); }
   imgs.forEach(i => { const u = MSG.urls[i.dataset.chatImg]; if (u && i.src !== u) { i.src = u; i.onload = () => { const log = $('#chatLog'); if (log && log.dataset.first === '1' && log.scrollHeight - log.scrollTop - log.clientHeight < 400) log.scrollTop = log.scrollHeight; }; } });
+}
+// 사진 크게 보기: 새 창으로 가지 않고 웹 안에서 넘겨 보고 내려받아요 (채팅 · 공지 사진)
+// items: [{ bucket, path, name }] — 비공개 버킷이라 볼 때 1시간 주소, 내려받을 때 10분짜리 내려받기 주소를 받아요
+function imgViewer(items, at = 0) {
+  let v = $('#imgView');
+  if (!v) { document.body.insertAdjacentHTML('beforeend', '<dialog id="imgView" class="img-view" aria-label="사진 보기"></dialog>'); v = $('#imgView'); }
+  let i = at;
+  const url = async it => {
+    const k = `${it.bucket}:${it.path}`;
+    if (!IMG_URLS[k] && it.bucket === 'chat' && MSG.urls[it.path]) IMG_URLS[k] = MSG.urls[it.path];
+    if (!IMG_URLS[k]) { const { data } = await SB.storage.from(it.bucket).createSignedUrl(it.path, 3600); if (data) IMG_URLS[k] = data.signedUrl; }
+    return IMG_URLS[k];
+  };
+  const draw = async () => {
+    const it = items[i], many = items.length > 1;
+    v.innerHTML = `<div class="iv-top"><b>${esc(it.name || '사진')}</b>${many ? `<span class="iv-n">${i + 1} / ${items.length}</span>` : ''}<span style="flex:1"></span>
+      <button type="button" class="btn sm" data-iv-down>${ic('download')}내려받기</button><button type="button" class="iv-x" data-iv-close aria-label="닫기">×</button></div>
+      <div class="iv-stage">${many ? '<button type="button" class="iv-nav prev" data-iv-go="-1" aria-label="이전 사진">‹</button>' : ''}<img alt="${esc(it.name || '사진')}"><span class="iv-load">불러오는 중…</span>${many ? '<button type="button" class="iv-nav next" data-iv-go="1" aria-label="다음 사진">›</button>' : ''}</div>`;
+    v.querySelector('[data-iv-close]').onclick = () => v.close();
+    v.querySelectorAll('[data-iv-go]').forEach(b => b.onclick = () => { i = (i + +b.dataset.ivGo + items.length) % items.length; draw(); });
+    v.querySelector('[data-iv-down]').onclick = async () => {
+      const { data, error } = await SB.storage.from(it.bucket).createSignedUrl(it.path, 600, { download: it.name || true });
+      if (error || !data) { toast('내려받지 못했어요'); return; }
+      const a = document.createElement('a'); a.href = data.signedUrl; a.download = it.name || ''; document.body.appendChild(a); a.click(); a.remove();
+    };
+    const u = await url(it), img = v.querySelector('img');
+    if (!img) return;
+    if (u) { img.onload = () => { const l = v.querySelector('.iv-load'); if (l) l.remove(); }; img.src = u; } else v.querySelector('.iv-load').textContent = '사진을 열지 못했어요';
+  };
+  v.onclick = e => { if (e.target === v || e.target.classList.contains('iv-stage')) v.close(); };
+  v.onkeydown = e => { if (items.length > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { i = (i + (e.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length; draw(); } };
+  draw(); if (!v.open) v.showModal();
 }
 async function openChatFile(path, name, down) {
   const { data, error } = await SB.storage.from('chat').createSignedUrl(path, 600, down ? { download: name || true } : undefined);
@@ -3998,7 +4093,7 @@ function realStudentsPage() {
   const waiting = canEdit ? REAL.family.filter(f => !f.students.length) : [];
   const wait = waiting.length && all.length ? `
   <section class="card" style="margin-bottom:16px">
-    <div class="card-head"><h2>앱 연결을 기다리는 가족 ${waiting.length}명</h2></div>
+    <div class="card-head"><h2>앱 연결을 기다리는 학부모 · 수강생 ${waiting.length}명</h2></div>
     <p class="muted small" style="margin:0">학부모·학생용 코드로 가입했지만 아직 아이와 이어지지 않았어요. 아이 줄의 "앱 연결"을 눌러 이어 주면 그 아이의 출결 · 수납 · 반 공지가 앱에 보여요.</p>
     <div class="needs" style="margin-top:10px">${waiting.map(f => `<span class="chip warn">${esc(f.name)} · ${ROLE_NAMES[f.role]}</span>`).join('')}</div>
   </section>` : '';
@@ -4094,7 +4189,7 @@ function linkDialog(s) {
   d.innerHTML = `
   <form method="dialog" class="dlg" id="dlgForm" novalidate>
     <h2>${esc(s.name)} 학생 앱 연결</h2>
-    <p class="muted small" style="margin:0">학부모·학생용 초대 코드로 가입한 사람이에요. 이 아이의 가족을 골라 주세요. 연결하면 앱에서 이 아이의 출결 · 수납 · 반 공지를 볼 수 있어요. (학생 계정에는 수납이 보이지 않아요)</p>
+    <p class="muted small" style="margin:0">학부모·학생용 초대 코드로 가입한 사람이에요. 이 아이의 학부모 · 수강생 계정을 골라 주세요. 연결하면 앱에서 이 아이의 출결 · 수납 · 반 공지를 볼 수 있어요. (학생 계정에는 수납이 보이지 않아요)</p>
     ${fam.length ? `<div class="checks">${fam.map(f => {
       const other = f.students.filter(x => x !== s.id).map(x => (REAL.students.find(y => y.id === x) || {}).name).filter(Boolean);
       return `<label class="chk"><input type="checkbox" name="fam" value="${f.user_id}" ${f.students.includes(s.id) ? 'checked' : ''}><span><b>${esc(f.name)} · ${ROLE_NAMES[f.role]}</b><small>${md(f.joined_at.slice(0, 10))} 가입${other.length ? ` · ${other.map(esc).join(', ')}와도 연결됨` : ''}</small></span></label>`;
@@ -4364,7 +4459,7 @@ function leadDialog(l) {
 }
 
 /* ---------- 실제 데이터: 공지 (Supabase notices · notice_reads) ---------- */
-const noticeTo = n => n.target_class ? `${esc(n.target_class)} 가족` : '전체 학부모·학생';
+const noticeTo = n => n.target_class ? `${esc(n.target_class)} 학부모 · 수강생` : '전체 학부모·학생';
 function realNoticesPage() {
   const list = REAL.notices;
   const add = `<button class="btn primary" data-act="newNotice">${ic('plus')}새 공지 쓰기</button>`;
@@ -4372,7 +4467,7 @@ function realNoticesPage() {
   <section class="card empty">
     <span class="tile-ic">${ic('notice')}</span>
     <h2>아직 보낸 공지가 없어요</h2>
-    <p class="muted">공지를 쓰면 학부모·학생 앱의 "공지"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 가족에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
+    <p class="muted">공지를 쓰면 학부모·학생 앱의 "공지"에 바로 올라가요. 반을 고르면 그 반 아이와 연결된 학부모 · 수강생에게만 가요. 누가 읽었는지도 여기서 확인할 수 있어요.</p>
     ${add}
   </section>`;
   return head('공지', '보낸 공지는 학부모·학생 앱 "공지"에 올라가요. 제목을 누르면 누가 읽었는지 볼 수 있어요.', add) + `
@@ -4386,7 +4481,7 @@ function realNoticesPage() {
         <div class="r"><span class="time">읽음</span><b class="num">${st.read}/${st.total}</b></div>
       </a>`;
     }).join('')}
-  </div></section>` + (REAL.family.length ? '' : `<a class="hint" href="#members/invite">${ic('users')}<span>아직 앱에 가입한 가족이 없어요. 학부모·학생용 초대 코드를 먼저 보내 주세요</span><b>초대 코드 →</b></a>`);
+  </div></section>` + (REAL.family.length ? '' : `<a class="hint" href="#members/invite">${ic('users')}<span>아직 앱에 가입한 학부모 · 수강생이 없어요. 학부모·학생용 초대 코드를 먼저 보내 주세요</span><b>초대 코드 →</b></a>`);
 }
 let READERS = {}; // 공지 id → 받는 사람과 읽은 시각 (열 때 불러와요)
 function noticeDetail(id) {
@@ -4401,9 +4496,9 @@ function noticeDetail(id) {
     <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}</section>
     <section class="card">
       <div class="card-head"><h2>읽음 확인</h2><span class="sub">${rs ? `${read.length}/${rs.length}명` : '불러오는 중'}</span></div>
-      ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? `<p class="muted" style="margin:0">${n.target_class ? `${esc(n.target_class)} 아이와 앱으로 연결된 가족이 아직 없어요. 원생 명단에서 "앱 연결"을 해 주세요.` : '아직 앱에 가입한 가족이 없어요.'}</p>` : `
+      ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? `<p class="muted" style="margin:0">${n.target_class ? `${esc(n.target_class)} 아이와 앱으로 연결된 학부모 · 수강생이 아직 없어요. 원생 명단에서 "앱 연결"을 해 주세요.` : '아직 앱에 가입한 학부모 · 수강생이 없어요.'}</p>` : `
       <div class="list">${unread.map(person).join('')}${read.map(person).join('')}</div>`}
-      ${unread.length ? `<button class="btn sm" data-copy-notice="${n.id}" style="margin-top:12px">안 읽은 가족에게 보낼 문구 복사</button>` : ''}
+      ${unread.length ? `<button class="btn sm" data-copy-notice="${n.id}" style="margin-top:12px">안 읽은 분께 보낼 문구 복사</button>` : ''}
     </section>
   </div>`;
 }
@@ -4421,7 +4516,7 @@ function noticeDialog(n) {
     label: r => `"${r.title}" 공지를`,
     fields: [
       ['title', '제목', { required: true, max: 100, placeholder: '예: 11월 학부모 설명회 안내' }],
-      ['target_class', '받는 사람', { type: 'select', blank: '전체 학부모·학생', options: classes.map(c => [c, `${c} 가족만`]) }],
+      ['target_class', '받는 사람', { type: 'select', blank: '전체 학부모·학생', options: classes.map(c => [c, `${c} 학부모 · 수강생만`]) }],
       ['body', '내용', { type: 'area', max: 3000, rows: 7, placeholder: '날짜 · 시간 · 준비물처럼 꼭 알아야 할 내용을 적어 주세요.' }],
       ['images', '사진', { type: 'images', max: 10, bucket: 'notices', prefix: () => REAL.academy.id }]
     ]
@@ -4761,6 +4856,10 @@ async function stepAbroad(id, status, list, reload) {
 }
 
 // 학부모: 유학 프로그램 보고 상담 신청
+// 접어 둘 수 있는 묶음 (학생 유학 · 캠프 안내 등): 접은 상태는 이 기기에 기억해요 (localStorage asc-fold-이름)
+const foldOpen = k => { try { return localStorage.getItem(`asc-fold-${k}`) !== '0'; } catch (e) { return true; } };
+const foldWrap = (on, k, title, body) => on ? `<details class="card fold" data-fold="${k}" ${foldOpen(k) ? 'open' : ''}><summary><b>${title}</b><span class="fold-t"></span></summary><div class="fold-b">${body}</div></details>` : body;
+document.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details[data-fold]')) try { localStorage.setItem(`asc-fold-${d.dataset.fold}`, d.open ? '1' : '0'); } catch (er) { /* 이번 화면에서만 */ } }, true);
 function parentAbroadPage() {
   const { promos, requests } = abroadData();
   const active = promos.filter(p => p.active);
@@ -4768,13 +4867,13 @@ function parentAbroadPage() {
   const asked = id => mine.some(r => r.promo_id === id && r.status !== 'done');
   const me = ROLE === 'student';
   return head('유학 상담', `${REAL ? esc(REAL.academy.name) : DATA.academy.name}에서 안내하는 ${me ? '캠프 · 어학연수 · 유학' : '유학 · 캠프'} 프로그램이에요. ${me ? (famOn() ? '보호자와 함께, 또는 직접 ' : '수강생 본인이 직접 ') : ''}상담을 신청하면 원장님이 확인하고, 유학 전문 상담사(인투유학)와 연결해 드려요.`) +
-    (active.length ? `<div class="grid3">${active.map(p => `
+    (active.length ? foldWrap(me, 'abroad', `학원이 안내하는 캠프 · 유학 ${active.length}개`, `<div class="grid3">${active.map(p => `
       <div class="perk">
         <span class="who">${esc(p.program)}${p.event_date ? ` · ${md(p.event_date)}` : ''}</span>
         <span class="t">${esc(p.title)}</span>
         ${p.body ? `<span class="d">${esc(p.body)}</span>` : ''}
         <div class="row">${asked(p.id) ? '<span class="chip info">상담 신청함</span>' : `<button class="btn sm primary" data-ab-apply="${p.id}">상담 신청</button>`}</div>
-      </div>`).join('')}</div>` : `
+      </div>`).join('')}</div>`) : `
     <section class="card empty"><span class="tile-ic">${ic('globe')}</span><h2>아직 안내된 프로그램이 없어요</h2><p class="muted">궁금한 점이 있으면 바로 상담을 신청해도 돼요.</p></section>`) + `
     <section class="card" style="margin-top:16px">
       <div class="card-head"><h2>내 상담 신청</h2><button class="btn sm" data-ab-apply="">다른 유학 상담 신청</button></div>
@@ -4899,7 +4998,7 @@ function kidBillsPage() {
     ${DATA.child.bills.map((b, i) => `
       <div class="li">
         <span class="av" style="background:var(--navy-700)">${b.acad[0]}</span>
-        <div><div class="t">${b.acad}</div><div class="d">${b.month} 수강료</div></div>
+        <div><div class="t">${b.acad}</div><div class="d">${b.month} 수강료${b.list ? ` · ${discLine({ amount: b.amount * 1e4, list_amount: b.list * 1e4, discount_note: b.note })}` : ''}</div></div>
         <div class="r"><b class="num">${won(b.amount * 1e4)}</b>${b.paid ? '<span class="chip good">납부 완료</span>' : b.reported ? '<span class="chip warn">학원 확인 중</span>' : `<button class="btn sm primary" data-pay="${i}">내기</button>`}</div>
       </div>`).join('')}
   </div></section>`;
@@ -5006,7 +5105,7 @@ function familyTodo() {
   });
   REAL.kids.forEach(k => {
     const a = REAL.kidAttend.find(x => x.student_id === k.id && x.day === TODAY);
-    if (a) items.push([`오늘 ${ROLE === 'student' ? '' : `${esc(k.name)} `}${ATT[a.status][0]}`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''}`, ROLE === 'student' ? '#attend' : '#kid/attend', `<span class="chip ${ATT[a.status][1]}">${ATT[a.status][0]}</span>`]);
+    if (a && ROLE !== 'parent') items.push([`오늘 ${ROLE === 'student' ? '' : `${esc(k.name)} `}${ATT[a.status][0]}`, `${esc(REAL.academy.name)}${k.class_name ? ` · ${esc(k.class_name)}` : ''}`, ROLE === 'student' ? '#attend' : '#kid/attend', `<span class="chip ${ATT[a.status][1]}">${ATT[a.status][0]}</span>`]);
   });
   if (ROLE === 'parent') abroadData().promos.filter(p => p.active).slice(0, 1)
     .forEach(p => items.push([esc(p.title), `${esc(p.program)} · 학원에서 안내한 유학 프로그램`, '#abroad', '<span class="chip info">상담 신청</span>']));
@@ -5822,7 +5921,7 @@ function acadOverview(home) {
       <details class="ov-row${cons(a) ? ' ask' : ''}" data-ov-row="${a.id}" ${OV_OPEN.has(a.id) ? 'open' : ''}>
         <summary>
           <span class="ov-name"><b>${esc(a.name)}</b><small>${esc(a.region || '')} · 원장 ${esc(a.owners || '-')}</small>${cons(a) ? '<span class="chip warn">열어 달라는 신청</span>' : ''}</span>
-          <span class="ov-count"><span>강사 <b>${a.teachers}</b></span><span>원생 <b>${a.students}</b></span><span>가족 <b>${a.families ?? '-'}</b></span></span>
+          <span class="ov-count"><span>강사 <b>${a.teachers}</b></span><span>원생 <b>${a.students}</b></span><span>학부모·수강생 <b>${a.families ?? '-'}</b></span></span>
           <span class="ov-svcs">${Object.keys(SVC_AREAS).map(k => pill(a, k)).join('')}</span>
         </summary>
         <div class="ov-mem">${ms.length ? ms.map(person).join('') : '<p class="muted small">가입한 회원이 없어요</p>'}
@@ -6105,6 +6204,7 @@ const NEWS = {
     'kid/todos': () => notMine(REAL.todos, 'created_by'),
     'kid/reports': () => REAL.reports.map(r => r.issued_at),
     'kid/bills': () => REAL.kidBills.filter(b => !b.paid_at).map(b => b.created_at),
+    'kid/attend': () => REAL.kidAttend.filter(a => a.day >= addDays(TODAY, -1)).map(a => a.checked_at || a.updated_at),
     news: () => REAL.notices.map(n => n.created_at),
     library: () => notMine(REAL.library, 'uploaded_by'),
     abroad: () => REAL.abroad.promos.filter(p => p.active).map(p => p.created_at).concat(REAL.abroad.requests.map(r => r.updated_at))
@@ -6188,8 +6288,8 @@ function markSeen(path) {
 
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
-  owner: [['학원 운영', '출결 · 돈 · 서류 · 학생 · 일정', ['admin', 'members', 'schedule']], ['강사 · 소통', '강사 교육 · 채용 · 채팅 · 자료', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
-  teacher: [['학원 운영', '출결 · 원생 · 상담 · 할 일 · 리포트 · 시간표', ['admin', 'members', 'schedule']], ['소통 · 자료', '채팅 · 자료실 · 결재', ['messages', 'library', 'approvals', 'teachers']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
+  owner: [['학원 운영', '학생 · 출결 · 수납 · 시간표', ['members', 'admin', 'schedule']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '제휴 · 홍보를 센터가 연결', ['mou', 'promo', 'center']]],
+  teacher: [['학원 운영', '학생 · 출결 · 시간표 · 결재', ['members', 'admin', 'schedule', 'approvals', 'teachers']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 제휴 · 홍보', ['learn', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 출결', ['todos', 'schedule', 'reports', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library']], ['유학 · 캠프', '학원이 안내하는 캠프 · 어학연수 · 유학', ['abroad', 'center']]],
   admin: [['센터', '센터 관리 · 채팅', ['center', 'messages']]]
@@ -6291,14 +6391,14 @@ let HOWTO_OPEN = ''; // 숨긴 안내를 "사용법" 버튼으로 잠깐 연 화
 const howtoList = steps => `<ol class="howto-steps">${steps.map(([t, d], i) => `<li><span class="n">${i + 1}</span><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>`;
 const howtoCard = (key, steps, hidden) => `
   <section class="card howto" data-howto="${key}">
-    <div class="card-head"><h2>${ic('help')}이렇게 써요</h2>${hidden ? `<button class="btn sm" type="button" data-howto-close>접기</button>` : `<button class="btn sm" type="button" data-howto-hide="${key}">다시 보지 않기</button>`}</div>
+    <div class="card-head"><h2>${ic('help')}이렇게 써요</h2>${hidden ? `<button class="howto-x" type="button" data-howto-close aria-label="닫기" title="닫기">×</button>` : `<button class="howto-x" type="button" data-howto-hide="${key}" aria-label="닫기 (다시 보지 않기)" title="닫기 · 제목 옆 &quot;사용법&quot;으로 다시 볼 수 있어요">×</button>`}</div>
     ${howtoList(steps)}
   </section>`;
 const stateKind = key => ROLE === 'partner' ? { promo: 'promo', abroad: 'abroad', partners: 'partner' }[key] : STATE_PAGES[key];
-const stateGuide = (kind, open, side) => {
+const stateGuide = (kind, open, side, closable) => {
   const g = STATE_GUIDE[kind]; if (!g) return '';
   const center = side ?? (ROLE === 'admin' || ROLE === 'partner');
-  return `<details class="card state-guide" ${open ? 'open' : ''}><summary>${ic('help')}<b>${g.name} 단계가 무슨 뜻이에요?</b><span class="muted small">센터 관리자 · 원장님 쪽에서 각각</span></summary>
+  return `<details class="card state-guide" ${open ? 'open' : ''}><summary>${ic('help')}<b>${g.name} 단계가 무슨 뜻이에요?</b><span class="muted small">센터 관리자 · 원장님 쪽에서 각각</span>${closable ? `<button class="howto-x" type="button" ${closable === 'open' ? 'data-howto-close' : `data-howto-hide="sg:${kind}"`} aria-label="닫기" title="닫기 · 제목 옆 &quot;단계 설명&quot;으로 다시 볼 수 있어요">×</button>` : ''}</summary>
     <div class="sg-table"><div class="sg-row th"><span>단계</span><span class="${center ? 'me' : ''}">센터 관리자에게는</span><span class="${center ? '' : 'me'}">원장님에게는</span></div>
     ${g.rows.map(([l, c, o]) => `<div class="sg-row"><b>${l}</b><span class="${center ? 'me' : ''}"><i>센터</i>${c}</span><span class="${center ? '' : 'me'}"><i>원장님</i>${o}</span></div>`).join('')}</div></details>`;
 };
@@ -6316,7 +6416,16 @@ function addHowto(parts) {
       if (acts) acts.insertAdjacentHTML('afterbegin', btn); else ph.insertAdjacentHTML('beforeend', `<div class="acts">${btn}</div>`);
     }
   }
-  if (kind) html += stateGuide(kind, false, ROLE === 'admin' || ROLE === 'partner' || key.startsWith('center/'));
+  // 단계 설명도 ×로 닫으면 숨기고, 제목 옆 "단계 설명" 버튼으로 다시 봐요
+  if (kind) {
+    const side = ROLE === 'admin' || ROLE === 'partner' || key.startsWith('center/'), sk = `sg:${kind}`;
+    if (!howtoHidden(sk)) html += stateGuide(kind, false, side, true);
+    else if (HOWTO_OPEN === sk) html += stateGuide(kind, true, side, 'open');
+    else if (ph) {
+      const btn = `<button class="btn sm howto-btn" type="button" data-howto-open="${sk}">${ic('help')}단계 설명</button>`, acts = ph.querySelector('.acts');
+      if (acts) acts.insertAdjacentHTML('afterbegin', btn); else ph.insertAdjacentHTML('beforeend', `<div class="acts">${btn}</div>`);
+    }
+  }
   if (!html) return;
   if (ph) ph.insertAdjacentHTML('afterend', html); else { const v = $('#view'), c = v.querySelector('.crumb-row'); (c || v).insertAdjacentHTML(c ? 'afterend' : 'afterbegin', html); }
 }
@@ -6537,7 +6646,7 @@ function home() {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
       `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
-      checkinHint() + todayTodoCard() + todo(familyTodo()) + favCard() + peopleCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      checkinHint() + attendAlert() + todayTodoCard() + todo(familyTodo()) + favCard() + peopleCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -6551,7 +6660,7 @@ function home() {
         c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
         ...promos
-      ]) + checkinHint() + favCard() + peopleCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      ]) + attendAlert() + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
   }
   // 학생
   const c = DATA.child;
@@ -6561,7 +6670,7 @@ function home() {
       ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
     </div></section>
     <section class="card"><div class="card-head"><h2>오늘 할 숙제</h2><span class="sub">다 하면 체크!</span></div>${homeworkList()}</section>
-  </div>` + favCard() + peopleCard() + phoneHint() + startGuide();
+  </div>` + favCard() + phoneHint() + startGuide();
 }
 
 /* ---------- 영역 첫 화면 (세부 메뉴 고르기) ---------- */
@@ -6604,15 +6713,29 @@ const AREA_INTRO = {
     ['비용은 어떻게 정해져요?', '작업 내용에 따라 달라서, 인투마케팅 담당자가 상담하면서 견적을 안내해요. 견적을 보고 진행 여부를 정하면 돼요.'],
     ['의뢰를 취소할 수 있나요?', '센터가 연결하기 전(접수 단계)이면 "내 의뢰"에서 바로 취소할 수 있어요.']])}`
 };
-function subTiles(id, a) {
-  return `<div class="tiles">${Object.entries(a.subs).map(([sid, s]) => `
+// 분야 첫 화면: 세부 메뉴가 많으면 하는 일끼리 작은 묶음으로 나눠 보여요 ("센터에 맡기기"는 아래 한 줄로)
+const SUB_GROUPS = {
+  admin: [['매일 쓰는 것', '출석 체크 · 수강료 받기 · 결재', ['attend', 'billing', 'approvals']], ['돈 · 세금', '매출 · 지출 · 강사 원천세', ['finance', 'payroll']], ['서류 · 자동 처리', '교육청 · 세무 서류와 저절로 하는 일', ['paper', 'auto']]],
+  members: [['상담 · 원생', '문의부터 등록 · 명단 · 앱 초대까지', ['leads', 'students', 'invite']], ['수업 관리', '학생 할 일 · 성장 리포트', ['todos', 'reports']], ['학부모 소통', '공지 · 읽음 확인', ['notices']]],
+  teachers: [['우리 강사', '강사 · 담당 반 · 직책과 권한', ['staff', 'roles']], ['교육 · 채용', '강사 교육 영상 · 채용 공고', ['training', 'hire']]]
+};
+const subTile = (id, sid, s) => `
     <a class="tile" href="#${id}/${sid}">
       <span class="tile-ic">${ic(s.icon)}</span>
       <b>${s.name}${ndot(`${id}/${sid}`)}</b>
       <span class="d">${s.desc}</span>
       <span class="stat-line">${svcLocked(`${id}/${sid}`) ? svcChip(svcLocked(`${id}/${sid}`)) : s.stat()}</span>
       <span class="go">열기 →</span>
-    </a>`).join('')}</div>`;
+    </a>`;
+function subTiles(id, a) {
+  const subs = Object.keys(a.subs), groups = SUB_GROUPS[id], center = a.subs.center;
+  const rest = subs.filter(k => k !== 'center' && !(groups || []).some(g => g[2].includes(k)));
+  const gs = (groups || []).map(([l, d, ks]) => [l, d, ks.filter(k => subs.includes(k))]).filter(g => g[2].length);
+  if (rest.length) gs.push(['그 밖에', '', rest]);
+  const centerRow = center ? `<a class="hint center-hint" href="#${id}/center">${ic(center.icon)}<span><b>${center.name}</b> · ${center.desc}${svcLocked(`${id}/center`) ? '' : ` · ${center.stat()}`}</span><b>센터에 맡기기 →</b></a>` : '';
+  // 묶음이 하나뿐이거나 메뉴가 4개 이하면 그냥 한 줄로
+  if (gs.length < 2 || subs.length <= 4) return `<div class="tiles">${subs.filter(k => k !== 'center').map(k => subTile(id, k, a.subs[k])).join('')}</div>` + centerRow;
+  return gs.map(([l, d, ks]) => `<div class="sub-group"><h2 class="sec-title">${l}${d ? ` <small>${d}</small>` : ''}</h2><div class="tiles">${ks.map(k => subTile(id, k, a.subs[k])).join('')}</div></div>`).join('') + centerRow;
 }
 
 // 이 화면이 분야가 꺼져서 잠겨 있으면 그 분야 id
@@ -7013,7 +7136,7 @@ function bind() {
   const sq = $('#stuQ');
   if (sq) { sq.oninput = () => { clearTimeout(sq.t); sq.t = setTimeout(() => { STU_Q = sq.value.trim(); render(); const n = $('#stuQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); }; }
   on('[data-act="hideGuide"]', () => { try { localStorage.setItem(`asc-guide-${ROLE}`, '0'); } catch (e) { /* 이번 화면에서만 숨겨요 */ } render(); toast('안내를 숨겼어요 · "전체 메뉴 안내"에서 다시 띄울 수 있어요'); });
-  on('[data-howto-hide]', b => { try { localStorage.setItem(howtoStore(b.dataset.howtoHide), '1'); } catch (e) { /* 이번 화면에서만 */ } HOWTO_OPEN = ''; render(); toast('사용법을 숨겼어요 · 제목 옆 "사용법"이나 설정에서 다시 볼 수 있어요'); });
+  on('[data-howto-hide]', b => { try { localStorage.setItem(howtoStore(b.dataset.howtoHide), '1'); } catch (e) { /* 이번 화면에서만 */ } HOWTO_OPEN = ''; render(); toast(b.dataset.howtoHide.startsWith('sg:') ? '단계 설명을 닫았어요 · 제목 옆 "단계 설명"으로 다시 볼 수 있어요' : '사용법을 닫았어요 · 제목 옆 "사용법"이나 설정에서 다시 볼 수 있어요'); });
   on('[data-howto-open]', b => { HOWTO_OPEN = b.dataset.howtoOpen; render(); });
   on('[data-howto-close]', () => { HOWTO_OPEN = ''; render(); });
   on('[data-act="howtoReset"]', () => { howtoHiddenAll().forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* 그대로 */ } }); render(); toast('숨긴 사용법을 다시 띄웠어요'); });
@@ -7024,7 +7147,7 @@ function bind() {
   on('[data-temp-pw]', tempPwDialog);
   on('[data-act="peopleList"]', peopleListDialog);
   hydrateImgs($('#main') || document);
-  on('[data-open-img]', async (b, e) => { e.preventDefault(); const w = window.open('about:blank', '_blank'); const { data } = await SB.storage.from(b.dataset.bucket).createSignedUrl(b.dataset.openImg, 600); if (data) w.location = data.signedUrl; else { w.close(); toast('사진을 열지 못했어요'); } });
+  on('[data-open-img]', (b, e) => { e.preventDefault(); const list = [...b.closest('.n-imgs').querySelectorAll('[data-open-img]')]; imgViewer(list.map((x, k) => ({ bucket: x.dataset.bucket, path: x.dataset.openImg, name: `공지 사진 ${k + 1}.${(x.dataset.openImg.split('.').pop() || 'jpg')}` })), list.indexOf(b)); });
   on('[data-act="leaveAcad"]', leaveAcademy);
   on('[data-act="moveAcad"]', moveAcademyDialog);
   on('[data-act="adminExport"]', (b, e) => { e.preventDefault(); adminExportDialog(); });
@@ -7431,7 +7554,7 @@ async function loadMyClasses() { const { data } = await SB.rpc('my_teacher_class
 async function loadTeacherClasses() { const { data } = await SB.rpc('list_teacher_classes', { p_academy: REAL.academy.id }); REAL.teacherClasses = data || []; }
 // 원장: 강사마다 직책 · 권한, 우리 학원 직책
 // 우리 학원 사람 수 (원장 · 강사 · 학부모 · 학생 계정 + 다니는 원생) — 학원에 속한 누구나
-async function loadPeople() { const { data } = await SB.rpc('academy_people_counts', { p_academy: REAL.academy.id }); REAL.people = data || null; }
+async function loadPeopleCounts() { if (!isStaff()) return; const { data } = await SB.rpc('academy_people_counts', { p_academy: REAL.academy.id }); REAL.people = data || null; }
 async function loadStaffPerms() {
   const [s, t] = await Promise.all([SB.rpc('list_staff_perms', { p_academy: REAL.academy.id }), SB.from('academy_titles').select('*').eq('academy_id', REAL.academy.id).order('created_at')]);
   REAL.staffPerms = s.data || []; REAL.titles = t.data || [];
@@ -7548,7 +7671,7 @@ async function loadFamily() {
   ]);
   REAL.kids = (k.data || []).filter(x => x.academy_id === REAL.academy.id);
   const ids = REAL.kids.map(x => x.id);
-  const a = ids.length ? await SB.from('attendance').select('student_id, day, status').in('student_id', ids).order('day', { ascending: false }).limit(1000) : { data: [] };
+  const a = ids.length ? await SB.from('attendance').select('student_id, day, status, method, checked_at, updated_at').in('student_id', ids).order('day', { ascending: false }).limit(1000) : { data: [] };
   REAL.kidAttend = a.data || [];
   REAL.kidBills = (b.data || []).filter(i => ids.includes(i.student_id));
   REAL.notices = n.data || [];
@@ -7707,7 +7830,7 @@ async function boot() {
       can('students') ? loadFamilyMembers() : null, can('notices') ? loadNotices() : null]);
     if (ROLE === 'teacher') MY = teacherMenus();
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
-    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen(), loadPeople()]);
+    await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen(), loadPeopleCounts()]);
     tailorMenus();
     autoPaperOnOpen();
     if (CENTER && CENTER.partner) MY = { ...MY, ...partnerAreas() }; // 학원에도 속한 파트너 담당자

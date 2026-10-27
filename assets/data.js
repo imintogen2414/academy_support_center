@@ -27,7 +27,7 @@ const DATA = {
     { name: '김도하', cls: '초등 A반', amount: 30, days: 3 },
     { name: '윤채아', cls: '고등 심화반', amount: 38, days: 2 },
     { name: '박시우', cls: '초등 A반', amount: 30, days: 1 },
-    { name: '이서연', cls: '초등 B반', amount: 30, days: 0 }
+    { name: '이서연', cls: '초등 B반', amount: 27, days: 0 } // 형제 할인 10% (discountSamples · 학부모 예시 수납과 같아요)
   ],
   finance: { income: 1480, expense: 960, items: [['강사 급여', 620], ['임대료', 220], ['교재비', 95], ['공과금·기타', 25]] },
   paperwork: [
@@ -200,7 +200,7 @@ const DATA = {
       { what: '리딩 워크북 p.30', acad: '하늘영어학원', done: false }
     ],
     bills: [
-      { acad: '하늘영어학원', month: '10월', amount: 30, due: 'D-0', paid: false },
+      { acad: '하늘영어학원', month: '10월', amount: 27, list: 30, note: '형제 할인 10%', due: 'D-0', paid: false },
       { acad: '한빛태권도', month: '10월', amount: 15, due: '완료', paid: true },
       { acad: '바른수학학원', month: '10월', amount: 32, due: '완료', paid: true }
     ],
