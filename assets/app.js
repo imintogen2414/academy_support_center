@@ -107,6 +107,13 @@ function toast(msg) {
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2200);
 }
+// 버튼 하나가 붙은 알림 (예: "받은 걸 남겼어요 · 영수증") — 5초 동안 보여요
+function toastAct(msg, label, fn) {
+  const t = $('#toast');
+  t.innerHTML = `${esc(msg)} <button type="button" class="toast-btn">${esc(label)}</button>`; t.hidden = false;
+  t.querySelector('button').onclick = () => { t.hidden = true; fn(); };
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 5000);
+}
 
 /* ---------- 공통 조각 ---------- */
 const head = (title, desc, acts = '') => `
@@ -152,10 +159,13 @@ const shiftMonth = (m, n) => ymd(new Date(+m.slice(0, 4), +m.slice(5) - 1 + n, 1
 const monthBar = () => `
   <div class="pager"><button class="btn sm" data-month="-1" aria-label="이전 달">‹</button><b>${monthLabel(MONTH)}</b><button class="btn sm" data-month="1" aria-label="다음 달">›</button>${MONTH !== TODAY.slice(0, 7) ? '<button class="btn sm" data-month="0">이번 달</button>' : ''}</div>`;
 // 원생을 반별로 묶기 (반이 없으면 "반 미지정")
+// 반별로 묶기: 반 이름 가나다(숫자는 크기대로) · "반 미지정"은 맨 뒤 · 반 안에서는 이름 가나다
+const koSort = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko', { numeric: true });
 const byClass = list => {
   const g = {};
   list.forEach(s => (g[s.class_name || '반 미지정'] ||= []).push(s));
-  return Object.entries(g).sort(([a], [b]) => a.localeCompare(b, 'ko'));
+  return Object.entries(g).map(([k, ss]) => [k, [...ss].sort((a, b) => koSort(a.name, b.name))])
+    .sort(([a], [b]) => (a === '반 미지정') - (b === '반 미지정') || koSort(a, b));
 };
 const noStudents = () => `
   <section class="card empty">
@@ -266,9 +276,11 @@ function realAttendPage() {
   const when = day === TODAY ? '오늘' : `${md(day)}`;
   const pager = `
     <div class="pager"><button class="btn sm" data-day="-1" aria-label="전날">‹</button><input type="date" id="attDay" value="${day}"><button class="btn sm" data-day="1" aria-label="다음 날">›</button>${day !== TODAY ? '<button class="btn sm" data-day="0">오늘</button>' : ''}</div>`;
-  if (!list.length) return head('출결', '학생이 QR · 출석 번호로 직접 출석하는 입구 화면은 지금도 열 수 있어요.', `<a class="btn primary" href="#kiosk">${ic('attend')}입구 출석 화면 열기</a>`) + noStudents();
+  // 원생 추가는 늘 위에 (한 명 넣은 뒤에도 계속 넣을 수 있게)
+  const acts = `<button class="btn" data-act="addStudent">${ic('plus')}원생 추가</button><button class="btn" data-act="quickStudents">${ic('users')}여러 명 넣기</button><a class="btn primary" href="#kiosk">${ic('attend')}입구 출석 화면 열기</a>`;
+  if (!list.length) return head('출결', '원생을 넣으면 반별로 출결을 바로 넣을 수 있어요. 학생이 QR · 출석 번호로 직접 출석하는 입구 화면은 지금도 열 수 있어요.', acts) + noStudents();
   const cnt = k => list.filter(s => map[s.id] === k).length;
-  return head('출결', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요. 입구 출석 화면을 켜 두면 학생이 QR · 출석 번호로 직접 출석해요.`, `<a class="btn primary" href="#kiosk">${ic('attend')}입구 출석 화면 열기</a>`) + pager + `
+  return head('출결', `${when} · 버튼을 누르면 바로 저장돼요. 같은 버튼을 한 번 더 누르면 취소돼요. 입구 출석 화면을 켜 두면 학생이 QR · 출석 번호로 직접 출석해요.`, acts) + pager + `
   <div class="stats">
     <div class="stat good"><span>출석</span><b class="num">${cnt('present')}명</b></div>
     <div class="stat"><span>지각 · 조퇴</span><b class="num">${cnt('late') + cnt('early')}명</b></div>
@@ -474,35 +486,44 @@ async function markAttendance(ids, status) {
 }
 
 /* ---------- 실제 데이터: 수납 (Supabase invoices) ---------- */
+let INV_SEL = new Set(); // 납부 확인할 청구 (여러 건 고르기)
 function realBillingPage() {
   const list = REAL.invoices.filter(i => i.month === MONTH);
   const paid = list.filter(i => i.paid_at), unpaid = list.filter(i => !i.paid_at);
-  const acts = `<button class="btn" data-act="onsitePay">${ic('card')}현장에서 받기</button><button class="btn" data-act="addInvoice">${ic('plus')}한 건 추가</button><button class="btn primary" data-act="billMonth">${ic('card')}이 달 청구서 만들기</button>`;
+  [...INV_SEL].forEach(id => { if (!unpaid.some(i => i.id === id)) INV_SEL.delete(id); });
+  // 위쪽은 꼭 쓰는 것만: 이 달 청구서 만들기 + 더 보기
+  const more = [`<button type="button" data-act="addInvoice">${ic('plus')}청구 한 건 추가</button>`, `<button type="button" data-act="onsitePay">${ic('card')}청구 없이 받은 돈 넣기 <small>교재비 · 명단 밖 · 영수증</small></button>`,
+    `<button type="button" data-act="cardMatch">${ic('upload')}카드 단말기 매출로 납부 맞추기 <small>토스 등 매출 엑셀</small></button>`, `<button type="button" data-photo="tuition">${ic('image')}수강료표 사진으로 올리기</button>`];
+  const acts = `<button class="btn primary" data-act="billMonth">${ic('card')}이 달 청구서 만들기</button><details class="more-menu"><summary class="btn">더 보기 ▾</summary><div class="mm-pop">${more.join('')}</div></details>`;
   const row = i => `
-    <div class="li">
-      <span class="av" style="background:${i.paid_at ? 'var(--good)' : 'var(--blue-500)'}">${esc(i.student_name[0])}</span>
+    <div class="li ${INV_SEL.has(i.id) ? 'picked' : ''}">
+      ${i.paid_at ? `<span class="av" style="background:var(--good)">${esc(i.student_name[0])}</span>` : `<label class="inv-chk" title="고르기"><input type="checkbox" data-inv-sel="${i.id}" ${INV_SEL.has(i.id) ? 'checked' : ''} aria-label="${esc(i.student_name)} 고르기"></label>`}
       <div><div class="t"><span class="nm-link" data-edit-inv="${i.id}" role="button" tabindex="0">${esc(i.student_name)}</span> <span class="muted small">${esc(i.class_name || '')}</span></div>
         <div class="d">${esc(i.title)}${i.paid_at ? ` · ${md(i.paid_at)} 납부${i.method ? ` · ${esc(i.method)}` : ''}` : i.due ? ` · 기한 ${md(i.due)}` : ''}</div>
         ${!i.paid_at && i.reported_at ? `<div class="d" style="color:var(--warn)">학부모가 ${md(i.reported_at.slice(0, 10))}에 보냈다고 알렸어요${i.reported_note ? ` · ${esc(i.reported_note)}` : ''}</div>` : ''}</div>
       <div class="r"><b class="num">${won(i.amount)}</b>${discLine(i)}${i.paid_at ? `<span class="btns"><span class="chip good">납부 완료</span><button class="btn sm" data-receipt="${i.id}">영수증</button></span>`
         : `<span class="btns">${i.reported_at ? '<span class="chip warn">입금 확인</span>' : i.due && i.due < TODAY ? ddChip(i.due) : ''}<button class="btn sm" data-copy-inv="${i.id}">안내 문구</button><button class="btn sm primary" data-pay-inv="${i.id}">납부 확인</button></span>`}</div>
     </div>`;
+  const n = INV_SEL.size, allOn = unpaid.length && n === unpaid.length;
   const body = !list.length ? (REAL.students.length ? `
   <section class="card empty">
     <span class="tile-ic">${ic('card')}</span>
     <h2>${monthLabel(MONTH)} 청구서가 아직 없어요</h2>
-    <p class="muted">반마다 금액을 넣으면 그 반 학생 모두에게 한 번에 청구서가 만들어져요.</p>
+    <p class="muted">수강료를 붙여 둔 학생은 금액이 저절로 들어가고, 나머지는 반마다 금액을 넣으면 그 반 학생 모두에게 한 번에 만들어져요.</p>
     <button class="btn primary" data-act="billMonth">이 달 청구서 만들기</button>
   </section>` : noStudents()) : `
   ${unpaid.length ? `<section class="card" style="margin-bottom:16px">
     <div class="card-head"><h2>미납 ${unpaid.length}건</h2><button class="btn sm" data-act="copyAllInv">안내 문구 모두 복사</button></div>
+    <div class="inv-bar ${n ? 'on' : ''}"><label class="chk-line"><input type="checkbox" data-inv-all ${allOn ? 'checked' : ''}><span>${n ? `${n}건 골랐어요 · ${won(sum(unpaid.filter(i => INV_SEL.has(i.id)), i => i.amount))}` : '전체 고르기'}</span></label>
+      ${unpaid.some(i => i.reported_at) ? '<button type="button" class="btn sm ghost" data-inv-told>입금 알림 온 것만</button>' : ''}
+      <span style="flex:1"></span>${n ? `<button type="button" class="btn sm ghost" data-inv-none>풀기</button><button type="button" class="btn sm primary" data-act="paySel">${ic('check')}고른 ${n}건 납부 확인</button>` : `<button type="button" class="btn sm" data-act="payAll">${ic('check')}모두 납부 확인 (${unpaid.length}건)</button>`}</div>
     <div class="list stack">${unpaid.map(row).join('')}</div>
   </section>` : ''}
   ${paid.length ? `<section class="card">
     <div class="card-head"><h2>납부 완료 ${paid.length}건</h2><span class="sub">이름을 누르면 결제 방법·메모를 고칠 수 있어요</span></div>
     <div class="list stack">${paid.map(row).join('')}</div>
   </section>` : ''}`;
-  return head('수납', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료`, acts) + plansCard() + monthBar() + `
+  return head('수납', `${monthLabel(MONTH)} 청구 ${list.length}건 중 ${paid.length}건 납부 완료 · 그 자리에서 받은 수강료는 원생 명단 "받았어요"나 여기 "납부 확인"을 누르면 끝이에요.`, acts) + plansCard() + monthBar() + `
   <div class="stats">
     <div class="stat"><span>청구 합계</span><b class="num">${won(sum(list, i => i.amount))}</b></div>
     <div class="stat good"><span>받은 금액</span><b class="num">${won(sum(paid, i => i.amount))}</b></div>
@@ -510,7 +531,110 @@ function realBillingPage() {
     ${list.some(i => i.list_amount > i.amount) ? `<div class="stat"><span>할인 ${list.filter(i => i.list_amount > i.amount).length}건</span><b class="num">${won(sum(list, i => Math.max((i.list_amount || i.amount) - i.amount, 0)))}</b></div>` : ''}
   </div>` + body;
 }
-
+// 여러 건 납부 확인: 결제 방법 · 받은 날을 한 번 고르고 한꺼번에 (영수증도 함께 뽑을 수 있어요)
+const PAY_LAST = () => { try { return localStorage.getItem('asc-pay-method') || '카드'; } catch (e) { return '카드'; } };
+function payManyDialog(ids) {
+  const list = ids.map(id => REAL.invoices.find(i => i.id === id)).filter(i => i && !i.paid_at);
+  if (!list.length) return toast('납부 확인할 청구를 골라 주세요');
+  const d = dialogEl(), last = PAY_LAST();
+  d.innerHTML = `<form method="dialog" class="dlg" id="pmForm" novalidate>
+    <h2>${list.length}건 납부 확인</h2>
+    <p class="muted small" style="margin:-6px 0 0">${list.slice(0, 5).map(i => esc(i.student_name)).join(' · ')}${list.length > 5 ? ` 외 ${list.length - 5}명` : ''} · 합계 <b>${won(sum(list, i => i.amount))}</b></p>
+    <div class="f">결제 방법<div class="pick-chips multi">${PAY_METHODS.map(m => `<label><input type="radio" name="method" value="${m}" ${m === last ? 'checked' : ''}><span>${m}</span></label>`).join('')}</div></div>
+    <label class="f">받은 날<input type="date" name="day" value="${TODAY}" max="${TODAY}"></label>
+    <label class="chk-line"><input type="checkbox" name="print"><span>영수증도 뽑기 (학생마다 한 장)</span></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${list.length}건 납부 확인</button></div></form>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#pmForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, method = el.method.value, day = el.day.value || TODAY, btn = d.querySelector('.btn.primary');
+    try { localStorage.setItem('asc-pay-method', method); } catch (er) { /* 다음에도 카드로 */ }
+    btn.disabled = true;
+    const { error } = await SB.from('invoices').update({ paid_at: day, method }).in('id', list.map(i => i.id));
+    if (error) { btn.disabled = false; const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
+    list.forEach(i => { i.paid_at = day; i.method = method; });
+    INV_SEL.clear(); d.close(); render(); toast(`${list.length}건 납부를 확인했어요 · ${won(sum(list, i => i.amount))}`);
+    if (el.print.checked) { const by = {}; list.forEach(i => (by[i.student_id || i.student_name] ||= []).push(i)); Object.values(by).slice(0, 20).forEach(printReceipt); }
+  };
+}
+/* ---------- 카드 단말기 매출로 납부 맞추기 ----------
+   토스 단말기 같은 카드 단말기는 이 웹과 바로 이어지는 공개 연결 방법이 없어요.
+   대신 단말기 관리 화면(토스 포스 · 사장님 앱 등)에서 받은 매출 엑셀을 올리면, 금액이 같은 미납 청구를 찾아 한 번에 "납부 확인"해요.
+   같은 승인번호는 두 번 넣지 않아요(invoices.pay_ref). */
+function cardMatchDialog() {
+  const d = dialogEl();
+  const start = msg => {
+    d.innerHTML = `<form method="dialog" class="dlg" id="cmForm" novalidate>
+      <h2>카드 단말기 매출로 납부 맞추기</h2>
+      <p class="muted small" style="margin:-6px 0 0">토스 단말기 등으로 결제를 받은 뒤, 단말기 관리 화면(토스 포스 · 사장님 앱의 매출 내역)에서 <b>엑셀로 받은 파일</b>을 올려 주세요. 금액이 같은 미납 청구를 찾아 짝을 지어 드리고, 확인하면 한 번에 "납부 확인"해요.</p>
+      <ol class="muted small cm-steps"><li>단말기 관리 화면 → 매출 · 결제 내역 → 기간 고르기 → 엑셀 다운로드</li><li>여기에 파일 올리기 (.xlsx · .csv)</li><li>짝이 맞는지 보고 "납부 확인"</li></ol>
+      <label class="btn primary" style="justify-self:start">${ic('upload')}매출 엑셀 파일 고르기<input type="file" id="cmFile" accept=".xlsx,.csv" hidden></label>
+      ${msg ? `<p class="msg">${msg}</p>` : ''}
+      <p class="muted small" style="margin:0">단말기와 바로 이어지게 하려면 토스플레이스 · 카드 단말기 회사(VAN)의 연동 계약이 필요해요. 계약이 되면 센터에서 이어 드릴게요 — "센터에 문의하기"로 알려 주세요.</p>
+      <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></form>`;
+    if (!d.open) d.showModal();
+    $('#dlgCancel').onclick = () => d.close();
+    $('#cmFile').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      let rows; try { rows = await readSheet(f); } catch (err) { return start(err.message === 'old_xls' ? '예전 엑셀(.xls) 파일이에요. .xlsx로 저장해서 올려 주세요.' : '파일을 읽지 못했어요. .xlsx · .csv 파일인지 확인해 주세요.'); }
+      const sales = readSales(rows);
+      if (sales.error) return start(sales.error);
+      match(sales.list);
+    };
+  };
+  const match = sales => {
+    const open = REAL.invoices.filter(i => !i.paid_at), used = new Set(), refs = new Set(REAL.invoices.map(i => i.pay_ref).filter(Boolean));
+    const pairs = sales.map(x => {
+      if (x.ref && refs.has(x.ref)) return { ...x, done: true };
+      // 금액이 같은 미납 중 날짜(청구 월 · 기한)가 가까운 것
+      const cand = open.filter(i => i.amount === x.amount && !used.has(i.id)).sort((a, b) => Math.abs(daysBetween(a.due || `${a.month}-01`, x.day)) - Math.abs(daysBetween(b.due || `${b.month}-01`, x.day)));
+      const pick = cand.length === 1 || (cand[0] && cand[0].month === x.day.slice(0, 7)) ? cand[0] : null;
+      if (pick) used.add(pick.id);
+      return { ...x, cand: open.filter(i => i.amount === x.amount), pick: pick ? pick.id : '' };
+    });
+    const ok = pairs.filter(p => !p.done);
+    d.innerHTML = `<form method="dialog" class="dlg wide" id="cmForm" novalidate>
+      <h2>매출 ${sales.length}건 · 짝 맞추기</h2>
+      <p class="muted small" style="margin:-6px 0 0">금액이 같은 미납 청구를 골라 두었어요. 다르면 바꾸고, 아닌 건 "넣지 않음"으로 두세요. ${pairs.length - ok.length ? `이미 넣은 승인번호 ${pairs.length - ok.length}건은 뺐어요.` : ''}</p>
+      <div class="cm-list">${ok.map((p, k) => `<div class="cm-row"><span><b class="num">${won(p.amount)}</b><small>${md(p.day)}${p.time ? ` ${p.time}` : ''}${p.card ? ` · ${esc(p.card)}` : ''}${p.ref ? ` · 승인 ${esc(p.ref)}` : ''}</small></span>
+        <select data-cm="${k}"><option value="">넣지 않음</option>${p.cand.map(i => `<option value="${i.id}" ${p.pick === i.id ? 'selected' : ''}>${esc(i.student_name)}${i.class_name ? ` · ${esc(i.class_name)}` : ''} · ${+i.month.slice(5)}월 ${esc(i.title)}</option>`).join('')}</select>
+        ${p.cand.length ? '' : '<small class="muted">같은 금액 미납 없음</small>'}</div>`).join('') || '<p class="muted">새로 맞출 매출이 없어요.</p>'}</div>
+      <p class="msg" id="dlgMsg" hidden></p>
+      <div class="acts"><button type="button" class="btn" id="cmBack">다른 파일</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">고른 것 납부 확인</button></div></form>`;
+    $('#dlgCancel').onclick = () => d.close();
+    $('#cmBack').onclick = () => start();
+    $('#cmForm').onsubmit = async e => {
+      e.preventDefault();
+      const picks = [...d.querySelectorAll('[data-cm]')].map(sel => [ok[+sel.dataset.cm], sel.value]).filter(([, v]) => v);
+      if (new Set(picks.map(x => x[1])).size < picks.length) { const m = $('#dlgMsg'); m.textContent = '같은 청구를 두 매출에 골랐어요. 하나만 골라 주세요.'; m.hidden = false; return; }
+      if (!picks.length) { const m = $('#dlgMsg'); m.textContent = '납부 확인할 짝을 하나 이상 골라 주세요.'; m.hidden = false; return; }
+      for (const [x, id] of picks) {
+        const { error } = await SB.from('invoices').update({ paid_at: x.day > TODAY ? TODAY : x.day, method: '카드', pay_ref: x.ref || null, memo: [x.card, x.ref && `승인 ${x.ref}`, '카드 단말기'].filter(Boolean).join(' · ').slice(0, 300) }).eq('id', id);
+        if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
+      }
+      d.close(); await loadInvoices(); render(); toast(`카드 매출 ${picks.length}건을 납부 확인했어요`);
+    };
+  };
+  start();
+}
+// 매출 엑셀 읽기: 칸 이름은 단말기마다 달라서 비슷한 말을 찾아요 (금액 · 승인일시 · 승인번호 · 카드사 · 상태)
+function readSales(rows) {
+  const norm = x => String(x || '').replace(/\s/g, '');
+  const want = { amount: ['결제금액', '승인금액', '거래금액', '매출금액', '판매금액', '금액', '합계'], day: ['승인일시', '거래일시', '결제일시', '승인일자', '거래일자', '결제일', '거래일', '일시', '날짜', '일자'], ref: ['승인번호', '거래번호', '결제번호'], card: ['카드사', '발급사', '매입사', '결제수단', '카드종류'], state: ['상태', '거래상태', '승인구분', '구분', '거래구분'] };
+  const at = rows.findIndex(r => r.some(c => want.amount.includes(norm(c))) && r.some(c => want.day.some(w => norm(c).includes(w))));
+  if (at < 0) return { error: '"결제금액(승인금액)"과 "승인일시(거래일시)" 칸을 찾지 못했어요. 단말기 관리 화면에서 받은 매출 엑셀인지 확인해 주세요.' };
+  const h = rows[at].map(norm), col = k => { for (const w of want[k]) { const i = h.findIndex(c => k === 'amount' || k === 'ref' ? c === w : c.includes(w)); if (i >= 0) return i; } return -1; };
+  const c = Object.fromEntries(Object.keys(want).map(k => [k, col(k)]));
+  const list = rows.slice(at + 1).map(r => {
+    const raw = String(r[c.day] || ''), amt = Math.round(numOf(r[c.amount]));
+    const day = toYmd(raw.slice(0, 10)) || toYmd(raw), tm = (raw.match(/(\d{1,2}):(\d{2})/) || [])[0] || '';
+    const st = c.state >= 0 ? String(r[c.state] || '') : '';
+    return { day, time: tm, amount: amt, ref: c.ref >= 0 ? String(r[c.ref] || '').trim().slice(0, 60) : '', card: c.card >= 0 ? String(r[c.card] || '').trim() : '', cancel: /취소|환불|거절|실패/.test(st) || amt < 0 };
+  }).filter(x => x.day && x.amount > 0 && !x.cancel);
+  return list.length ? { list } : { error: '읽을 수 있는 승인 매출이 없어요. 취소된 결제는 빼고 읽어요.' };
+}
 // 학부모님께 보낼 납부 안내 문구 (문자·카톡에 붙여 넣기)
 const invNotice = i => `[${REAL.academy.name}] ${i.student_name} 학생 ${+i.month.slice(5)}월 ${i.title} ${won(i.amount)} 납부 안내드려요.${i.due ? ` 납부 기한은 ${md(i.due)}이에요.` : ''} 이미 내셨다면 이 메시지는 넘겨 주세요. 감사합니다.`;
 const copyText = (text, ok) => navigator.clipboard.writeText(text).then(() => toast(ok), () => prompt('아래 문구를 복사해 주세요', text));
@@ -570,15 +694,19 @@ function bindDiscount(form, base) {
 }
 function discountDialog(x) {
   formDialog({
-    title: x ? '할인 고치기' : '자주 쓰는 할인 추가', table: 'discount_presets', row: x, after: loadPlans,
+    title: x ? '할인 고치기' : '자주 쓰는 할인 추가', table: 'discount_presets', row: x, after: loadPlans, extra: x ? {} : { sort_order: nextOrder(REAL.discounts || []) },
     label: r => `${r.name} 할인을`,
     fields: [
       ['name', '이름', { required: true, max: 30, placeholder: '예: 형제 할인', chips: ['형제 할인', '장기 등록', '재원생 추천', '다자녀', '첫 달 할인', '조기 등록'] }],
       ['kind', '할인 방식', { type: 'select', required: true, options: [['pct', '퍼센트 (%)'], ['won', '금액 (원)']], value: 'pct', half: true }],
-      ['value', '얼마나', { type: 'number', required: true, placeholder: '예: 10 (10%) · 20000 (2만 원)', half: true }]
+      ['value', '얼마나', { type: 'won', required: true, placeholder: '예: 10', half: true }]
     ],
     check: d => d.kind === 'pct' && (d.value < 1 || d.value > 100) ? '퍼센트는 1~100 사이로 넣어 주세요.' : !(d.value > 0) ? '할인 크기를 넣어 주세요.' : ''
   });
+  // 퍼센트면 "%", 금액이면 "원" (금액은 치는 동안 1,000 쉼표)
+  const f = $('#dlgForm'), kind = f.querySelector('[name=kind]'), unit = f.querySelector('[name=value]').closest('.won-wrap').querySelector('i'), val = f.querySelector('[name=value]');
+  const sync = () => { const pct = kind.value === 'pct'; unit.textContent = pct ? '%' : '원'; val.placeholder = pct ? '예: 10' : '예: 20,000'; };
+  kind.addEventListener('change', sync); sync();
 }
 // 늘 받는 할인을 학생에게 한 번에 붙이기
 function applyDiscountDialog() {
@@ -613,6 +741,71 @@ function applyDiscountDialog() {
 /* ---------- 수강료 미리 정해 두기 (tuition_plans) ---------- */
 const planOf = s => s && s.tuition_plan_id ? (REAL.plans || []).find(p => p.id === s.tuition_plan_id) : null;
 const planLabel = p => `${p.name} · ${won(p.amount)}`;
+// 수강료 묶음 (초등 · 중등 …): 정한 순서 그대로 묶음마다 [묶음 이름, 수강료들]
+const planGroups = (list = REAL.plans || []) => { const g = []; list.forEach(p => { const k = p.group_name || ''; let x = g.find(y => y[0] === k); if (!x) g.push(x = [k, []]); x[1].push(p); }); return g; };
+const PLAN_GROUPS = ['초등', '중등', '고등', '성인', '특강 · 방학', '교재 · 기타'];
+// 고르기 칸: 묶음이 있으면 <optgroup>으로 나눠 보여 줘요 (formDialog select · 직접 만든 select 모두)
+const planOpts = () => { const g = planGroups(); return g.length > 1 || (g[0] && g[0][0]) ? g.map(([k, ps]) => ({ group: k || '묶음 없음', options: ps.map(p => [p.id, `${p.name} · ${won(p.amount)}`]) })) : (REAL.plans || []).map(p => [p.id, planLabel(p)]); };
+const optHtml = (opts, v) => opts.map(x => x && x.group ? `<optgroup label="${esc(x.group)}">${optHtml(x.options, v)}</optgroup>` : (([ov, ol]) => `<option value="${esc(ov)}" ${v != null && String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`)(Array.isArray(x) ? x : [x, x])).join('');
+const nextOrder = list => Math.max(0, ...list.map(x => x.sort_order || 0)) + 1;
+/* 순서 · 묶음 정리: 끌어서 놓거나 ▲▼로 순서를 바꾸고, 수강료는 묶음 이름도 정해요 (원장 · 수납 권한) */
+function orderDialog({ title, table, items, groups, after }) {
+  const d = dialogEl();
+  let rows = items.map(x => ({ ...x }));
+  const draw = () => {
+    d.querySelector('#odList').innerHTML = rows.map((r, i) => `<div class="od-row" draggable="true" data-i="${i}">
+      <span class="od-grip" aria-hidden="true">⋮⋮</span>
+      <span class="od-name"><b>${esc(r.name)}</b><small>${esc(r.sub || '')}</small></span>
+      ${groups ? `<input class="od-group" data-g="${i}" value="${esc(r.group || '')}" placeholder="묶음 (예: 초등)" maxlength="30" list="odGroups">` : ''}
+      <span class="od-btns"><button type="button" class="btn sm" data-up="${i}" ${i ? '' : 'disabled'} aria-label="위로">▲</button><button type="button" class="btn sm" data-down="${i}" ${i < rows.length - 1 ? '' : 'disabled'} aria-label="아래로">▼</button></span></div>`).join('');
+    const box = d.querySelector('#odList'), move = (a, b) => { const [x] = rows.splice(a, 1); rows.splice(b, 0, x); draw(); };
+    box.querySelectorAll('[data-up]').forEach(b => b.onclick = () => move(+b.dataset.up, +b.dataset.up - 1));
+    box.querySelectorAll('[data-down]').forEach(b => b.onclick = () => move(+b.dataset.down, +b.dataset.down + 1));
+    box.querySelectorAll('[data-g]').forEach(inp => inp.oninput = () => { rows[+inp.dataset.g].group = inp.value.trim(); });
+    let from = null;
+    box.querySelectorAll('.od-row').forEach(el => {
+      el.ondragstart = e => { from = +el.dataset.i; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+      el.ondragend = () => el.classList.remove('dragging');
+      el.ondragover = e => { e.preventDefault(); el.classList.add('drop-on'); };
+      el.ondragleave = () => el.classList.remove('drop-on');
+      el.ondrop = e => { e.preventDefault(); el.classList.remove('drop-on'); if (from != null && from !== +el.dataset.i) move(from, +el.dataset.i); from = null; };
+    });
+  };
+  d.innerHTML = `<form method="dialog" class="dlg" id="odForm" novalidate>
+    <h2>${title}</h2>
+    <p class="muted small" style="margin:-6px 0 0">끌어서 놓거나 ▲ ▼ 로 순서를 바꿔요.${groups ? ' 같은 묶음 이름을 적으면 수납 · 원생 명단 · 고르기 칸에서 그 묶음끼리 모여 보여요.' : ''} 이 순서가 고르는 칸에도 그대로 나와요.</p>
+    ${groups ? `<datalist id="odGroups">${[...new Set([...items.map(x => x.group).filter(Boolean), ...groups])].map(g => `<option value="${esc(g)}">`).join('')}</datalist>
+    <div class="pick-chips od-sortby"><span class="muted small">한 번에 정렬:</span><button type="button" data-sort="group">묶음끼리</button><button type="button" data-sort="amt">금액 낮은 순</button><button type="button" data-sort="name">이름 가나다</button></div>` : `<div class="pick-chips od-sortby"><span class="muted small">한 번에 정렬:</span><button type="button" data-sort="name">이름 가나다</button></div>`}
+    <div id="odList" class="od-list"></div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">순서 저장</button></div></form>`;
+  d.showModal(); draw();
+  $('#dlgCancel').onclick = () => d.close();
+  d.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => {
+    const k = b.dataset.sort, gi = g => { const f = rows.findIndex(r => (r.group || '') === g); return f < 0 ? 999 : f; };
+    const first = Object.fromEntries(rows.map(r => [r.group || '', gi(r.group || '')]));
+    rows = [...rows].sort(k === 'amt' ? (a, b) => (a.amount || 0) - (b.amount || 0) : k === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ko') : (a, b) => (a.group ? 0 : 1) - (b.group ? 0 : 1) || first[a.group || ''] - first[b.group || '']);
+    draw();
+  });
+  $('#odForm').onsubmit = async e => {
+    e.preventDefault();
+    // 같은 묶음은 붙어 있게: 묶음이 처음 나온 자리 순서 → 그 안에서는 지금 순서
+    if (groups) { const first = {}; rows.forEach((r, i) => { const g = r.group || ''; if (!(g in first)) first[g] = i; }); rows = rows.map((r, i) => [r, i]).sort((a, b) => first[a[0].group || ''] - first[b[0].group || ''] || a[1] - b[1]).map(x => x[0]); }
+    const m = $('#dlgMsg'), btn = d.querySelector('.btn.primary'); btn.disabled = true;
+    for (const [i, r] of rows.entries()) {
+      const ch = { sort_order: i + 1, ...(groups ? { group_name: r.group || null } : {}) };
+      const old = items.find(x => x.id === r.id);
+      if (old.sort_order === ch.sort_order && (!groups || (old.group || null) === ch.group_name)) continue;
+      const { error } = await SB.from(table).update(ch).eq('id', r.id);
+      if (error) { btn.disabled = false; m.textContent = dbErr(error); m.hidden = false; return; }
+    }
+    d.close(); await after(); render(); toast('순서를 저장했어요');
+  };
+}
+const planOrderDialog = () => orderDialog({ title: '수강료 순서 · 묶음 정리', table: 'tuition_plans', groups: PLAN_GROUPS, after: loadPlans,
+  items: REAL.plans.map(p => ({ id: p.id, name: p.name, sub: `${won(p.amount)}${p.class_name ? ` · ${p.class_name}` : ''}`, group: p.group_name || '', amount: p.amount, sort_order: p.sort_order || 0 })) });
+const discOrderDialog = () => orderDialog({ title: '할인 순서 바꾸기', table: 'discount_presets', after: loadPlans,
+  items: REAL.discounts.map(x => ({ id: x.id, name: x.name, sub: x.kind === 'pct' ? `${x.value}%` : won(x.value), sort_order: x.sort_order || 0 })) });
 // 앱 없이 쓰기(academies.app_off): 학생 · 학부모 앱을 안 쓰고 원장님 · 강사님만 명단 · 출결 · 수강료를 관리해요
 const appOn = () => REAL ? !REAL.academy.app_off : true;
 // 학생 한 명의 한 달 수강료 (정해 둔 수강료 - 늘 받는 할인)
@@ -624,15 +817,15 @@ function plansCard() {
   const ps = REAL.plans, with_ = REAL.students.filter(planOf).length;
   return `
   <section class="card" style="margin-bottom:16px">
-    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm" data-photo="tuition">${ic('image')}사진으로 올리기</button><button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
-    ${ps.length ? `<div class="plan-list">${ps.map(p => {
+    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length > 1 ? `<button class="btn sm" data-act="orderPlans">${ic('move')}순서 · 묶음 정리</button>` : ''}${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm" data-photo="tuition">${ic('image')}사진으로 올리기</button><button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
+    ${ps.length ? `${planGroups().map(([g, list], gi, all) => `${all.length > 1 || g ? `<h3 class="plan-gh">${esc(g || '묶음 없음')} <small>${list.length}개</small></h3>` : ''}<div class="plan-list">${list.map(p => {
       const n = REAL.students.filter(x => x.tuition_plan_id === p.id).length;
       return `<button class="plan" data-edit-plan="${p.id}"><b>${esc(p.name)}</b><span class="num">${won(p.amount)}</span><small>${p.class_name ? `${esc(p.class_name)} · ` : ''}학생 ${n}명</small></button>`;
-    }).join('')}</div>
+    }).join('')}</div>`).join('')}
     <p class="muted small" style="margin:10px 0 0">수강료를 붙인 학생 ${with_}명은 "이 달 청구서 만들기"에서 금액이 저절로 들어가요. 학생마다 하나하나 칠 필요 없어요.</p>`
     : `<p class="muted small" style="margin:0">"초등 주 3회 300,000원"처럼 수강료를 미리 만들어 두고 학생(반 전체도 한 번에)에게 붙이면, 매달 청구서를 만들 때 금액이 저절로 들어가요.</p>`}
     <div class="disc-row">
-      <div class="card-head" style="margin:0"><h3>자주 쓰는 할인 ${(REAL.discounts || []).length}개</h3><span class="btns">${(REAL.discounts || []).length ? '<button class="btn sm" data-act="applyDisc">늘 받는 학생 정하기</button>' : ''}<button class="btn sm" data-act="addDisc">${ic('plus')}할인 추가</button></span></div>
+      <div class="card-head" style="margin:0"><h3>자주 쓰는 할인 ${(REAL.discounts || []).length}개</h3><span class="btns">${(REAL.discounts || []).length > 1 ? `<button class="btn sm" data-act="orderDiscs">${ic('move')}순서 바꾸기</button>` : ''}${(REAL.discounts || []).length ? '<button class="btn sm" data-act="applyDisc">늘 받는 학생 정하기</button>' : ''}<button class="btn sm" data-act="addDisc">${ic('plus')}할인 추가</button></span></div>
       ${(REAL.discounts || []).length ? `<div class="pick-chips">${REAL.discounts.map(x => `<button type="button" data-edit-disc="${x.id}">${esc(discLabel(x))} <span class="muted small">${REAL.students.filter(s => s.discount_id === x.id).length}명</span></button>`).join('')}</div>`
         : '<p class="muted small" style="margin:0">"형제 할인 10%" · "장기 등록 20,000원"처럼 한 번 만들어 두면 청구할 때 눌러서 고르고, 원가와 실제 받은 금액이 함께 남아요.</p>'}
     </div>
@@ -640,10 +833,11 @@ function plansCard() {
 }
 function planDialog(p) {
   formDialog({
-    title: p ? '수강료 고치기' : '수강료 추가', table: 'tuition_plans', row: p, after: loadPlans,
+    title: p ? '수강료 고치기' : '수강료 추가', table: 'tuition_plans', row: p, after: loadPlans, extra: p ? {} : { sort_order: nextOrder(REAL.plans) },
     label: r => `${r.name} 수강료를`,
     fields: [
       ['name', '이름', { required: true, max: 50, placeholder: '예: 초등 주 3회', chips: ['초등 주 2회', '초등 주 3회', '중등 주 3회', '고등 주 3회', '특강'] }],
+      ['group_name', '묶음 (같은 묶음끼리 모여 보여요 · 비워도 돼요)', { max: 30, placeholder: '예: 초등', chips: [...new Set([...REAL.plans.map(x => x.group_name).filter(Boolean), ...PLAN_GROUPS])].slice(0, 8) }],
       ['amount', '한 달 금액', { type: 'won', required: true, placeholder: '예: 300,000', half: true }],
       ['class_name', '주로 쓰는 반', { type: 'select', options: allClassNames(), blank: '반 상관없음', half: true }],
       ['memo', '메모', { max: 200, placeholder: '예: 교재비 별도', chips: ['교재비 별도', '교재비 포함', '형제 할인 가능', '차량비 별도'] }]
@@ -657,7 +851,7 @@ function applyPlanDialog() {
   d.innerHTML = `
   <form method="dialog" class="dlg" id="planForm" novalidate>
     <h2>수강료를 학생에게 붙이기</h2>
-    <label class="f">수강료<select name="plan">${REAL.plans.map(p => `<option value="${p.id}">${esc(planLabel(p))}</option>`).join('')}<option value="">수강료 떼기</option></select></label>
+    <label class="f">수강료<select name="plan">${optHtml(planOpts())}<option value="">수강료 떼기</option></select></label>
     <div class="apply-groups">${groups.map(([cls, ss], n) => `
       <fieldset><legend><label><input type="checkbox" data-all="${n}"> ${esc(cls)} 모두 <span class="muted small">${ss.length}명</span></label></legend>
         <div class="checks">${ss.map(x => `<label class="chk"><input type="checkbox" name="st" value="${x.id}" data-g="${n}"><span><b>${esc(x.name)}</b><small>${planOf(x) ? esc(planLabel(planOf(x))) : '수강료 없음'}</small></span></label>`).join('')}</div></fieldset>`).join('')}</div>
@@ -896,6 +1090,9 @@ function finChart(r, all) {
   </section>`;
 }
 
+// 재정은 세 칸으로 나눠 봐요: 한눈에 · 거래 내역 · 매달 나가는 돈 (한 화면에 다 쌓지 않게)
+let FIN_TAB = 'sum', FIN_KIND = 'all';
+const FIN_MAIN = [['month', '월별'], ['m3', '3개월'], ['y1', '1년']], FIN_MORE = [['day', '오늘'], ['week', '최근 7일'], ['m6', '6개월'], ['custom', '기간 직접 고르기']];
 function realFinancePage() {
   const r = finRange(), all = ledger();
   const list = all.filter(e => inRange(e, r.from, r.to)).sort((a, b) => b.day.localeCompare(a.day) || (a.kind === b.kind ? 0 : a.kind === 'in' ? -1 : 1));
@@ -903,38 +1100,43 @@ function realFinancePage() {
   // 못 받은 돈: 이 기간에 걸친 달의 청구 중 아직 납부 확인 안 한 것
   const months = new Set(FIN === 'month' ? [MONTH] : FIN === 'day' || FIN === 'week' ? [TODAY.slice(0, 7)] : r.buckets.map(b => b.from.slice(0, 7)).concat(FIN === 'custom' ? [r.from.slice(0, 7), r.to.slice(0, 7)] : []));
   const unpaid = REAL.invoices.filter(i => !i.paid_at && months.has(i.month));
-  const rate = t.inc ? Math.round(t.net / t.inc * 100) : null;
-  const acts = `<button class="btn" data-act="finXlsx" title="이 화면의 거래 내역을 엑셀 파일로 받아요">${ic('download')}엑셀로 받기</button><button class="btn" data-import="expenses" title="엑셀에 적어 둔 지출을 여기로 넣어요">${ic('upload')}엑셀 파일로 넣기</button>
-    <button class="btn" data-act="addIncome">${ic('plus')}수입 추가</button><button class="btn primary" data-act="addExpense">${ic('plus')}지출 추가</button>`;
-  return head('재정', `${r.label} · 매출은 수납에서 "납부 확인"한 금액에 직접 넣은 수입(교재 판매 · 특강 등)을 더한 거예요.`, acts) + `
-  <div class="filters">${Object.entries(FIN_PERIODS).map(([k, l]) => `<button class="${FIN === k ? 'on' : ''}" data-fin="${k}">${l}</button>`).join('')}</div>
+  const check = REAL.expenses.filter(e => e.need_check).length, fx = fixedData().filter(f => f.active);
+  const more = `<details class="more-menu"><summary class="btn">더 보기 ▾</summary><div class="mm-pop"><button type="button" data-act="finXlsx">${ic('download')}엑셀로 받기 <small>이 기간 거래 내역</small></button><button type="button" data-import="expenses">${ic('upload')}엑셀 파일로 넣기 <small>적어 둔 지출 한꺼번에</small></button></div></details>`;
+  const acts = `<button class="btn primary" data-act="addExpense">${ic('plus')}나간 돈</button><button class="btn" data-act="addIncome">${ic('plus')}들어온 돈</button>${more}`;
+  const tabs = [['sum', '한눈에'], ['list', `거래 내역 ${list.length}`], ['fixed', `매달 나가는 돈 ${fx.length}${check ? ' · 확인 필요' : ''}`]];
+  const kinds = [['all', '전체'], ['in', '들어온 돈'], ['out', '나간 돈']], shown = list.filter(e => FIN_KIND === 'all' || e.kind === FIN_KIND);
+  const isMore = FIN_MORE.some(([k]) => k === FIN);
+  return head('재정', '들어온 돈(납부 확인한 수강료 + 직접 넣은 수입)에서 나간 돈을 빼면 남은 돈이에요.', acts) + `
+  <div class="fin-bar">
+    <div class="filters">${FIN_MAIN.map(([k, l]) => `<button class="${FIN === k ? 'on' : ''}" data-fin="${k}">${l}</button>`).join('')}</div>
+    <select id="finMore" class="${isMore ? 'on' : ''}" aria-label="다른 기간"><option value="">다른 기간 ▾</option>${FIN_MORE.map(([k, l]) => `<option value="${k}" ${FIN === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  </div>
   ${FIN === 'month' ? monthBar() : ''}
   ${FIN === 'custom' ? `<div class="range-pick"><label>시작일<input type="date" id="finFrom" value="${r.from}"></label><span>~</span>
     <label>끝 날<input type="date" id="finTo" value="${r.to}" min="${r.from}" max="${r.maxTo}"></label><span class="muted small">시작일부터 최대 1년까지 볼 수 있어요</span></div>` : ''}
-  <div class="stats">
-    <div class="stat"><span>매출</span><b class="num">${won(t.inc)}</b><small class="muted">${versus(t.inc, p.inc, r.prevLabel)}</small></div>
-    <div class="stat"><span>지출</span><b class="num">${won(t.out)}</b><small class="muted">${versus(t.out, p.out, r.prevLabel)}</small></div>
-    <div class="stat ${t.net < 0 ? 'crit' : 'good'}"><span>순이익</span><b class="num">${signWon(t.net)}</b><small class="muted">${rate === null ? '매출이 없어요' : `이익률 ${rate}%`}</small></div>
-    <div class="stat ${unpaid.length ? 'crit' : ''}"><span>아직 못 받은 돈 ${unpaid.length}건</span><b class="num">${won(sum(unpaid, i => i.amount))}</b><small class="muted">${months.size > 3 ? `최근 ${months.size}개월` : [...months].map(m => `${+m.slice(5)}월`).join(' · ')} 청구 중 미납</small></div>
-  </div>
-  ${fixedCard()}
+  <section class="card fin-sum">
+    <div class="fs-main"><span>${esc(r.label)} 남은 돈</span><b class="num ${t.net < 0 ? 'neg' : ''}">${signWon(t.net)}</b><small class="muted">${versus(t.net, p.net, r.prevLabel) || '&nbsp;'}</small></div>
+    <div class="fs-eq"><div><span>들어온 돈</span><b class="num">${won(t.inc)}</b></div><i>−</i><div><span>나간 돈</span><b class="num">${won(t.out)}</b></div></div>
+    ${unpaid.length ? `<a class="fs-due" href="#admin/billing"><span>아직 못 받은 수강료 ${unpaid.length}건</span><b class="num">${won(sum(unpaid, i => i.amount))}</b><i>수납 ›</i></a>` : ''}
+  </section>
+  <div class="tabs fin-tabs">${tabs.map(([k, l]) => `<button class="${FIN_TAB === k ? 'on' : ''}" data-fin-tab="${k}">${l}</button>`).join('')}</div>
+  ${FIN_TAB === 'sum' ? `
   ${r.buckets.length ? finChart(r, all) : ''}
   <div class="grid2 even">
-    <section class="card"><div class="card-head"><h2>매출 구성</h2><span class="sub">수강료 · 직접 넣은 수입</span></div>
-      ${t.inc ? catBars(groupCats(list.filter(e => e.kind === 'in')), '') : '<p class="muted small" style="margin:0">이 기간에 들어온 돈이 없어요.</p>'}</section>
-    <section class="card"><div class="card-head"><h2>지출 항목</h2></div>
+    <section class="card"><div class="card-head"><h2>들어온 돈</h2><span class="sub">수강료 · 직접 넣은 수입</span></div>
+      ${t.inc ? catBars(groupCats(list.filter(e => e.kind === 'in')), '') : '<p class="muted small" style="margin:0">이 기간에 들어온 돈이 없어요. 수납에서 "납부 확인"을 누르면 저절로 들어와요.</p>'}</section>
+    <section class="card"><div class="card-head"><h2>나간 돈</h2><span class="sub">항목별</span></div>
       ${t.out ? catBars(groupCats(list.filter(e => e.kind === 'out')), 'out') : '<p class="muted small" style="margin:0">이 기간에 적은 지출이 없어요. 급여 · 임대료부터 넣어 보세요.</p>'}</section>
-  </div>
+  </div>` : FIN_TAB === 'list' ? `
   <section class="card">
-    <div class="card-head"><h2>거래 내역 ${list.length}건</h2><span class="sub">누르면 고칠 수 있어요 · 수강료는 수납에서 고쳐요</span></div>
-    ${list.length ? `<div class="list">${list.slice(0, 200).map(e => `
+    <div class="card-head"><div class="filters sm">${kinds.map(([k, l]) => `<button class="${FIN_KIND === k ? 'on' : ''}" data-fin-kind="${k}">${l}</button>`).join('')}</div><span class="sub">누르면 고칠 수 있어요</span></div>
+    ${shown.length ? `<div class="list">${shown.slice(0, 200).map(e => `
       <a class="li link" href="#admin/finance" data-ledger="${e.src}:${e.id}">
         <span class="av time-av num">${md(e.day)}</span>
-        <div><div class="t">${esc(e.cat)} <span class="chip ${e.kind === 'in' ? 'info' : 'mute'}">${e.kind === 'in' ? (e.src === 'inv' ? '수납' : '수입') : '지출'}</span>${e.fixed ? ' <span class="chip info">고정</span>' : ''}${e.check ? ' <span class="chip warn">금액 확인</span>' : ''}</div><div class="d">${esc(e.memo)}</div></div>
+        <div><div class="t">${esc(e.cat)} <span class="chip ${e.kind === 'in' ? 'info' : 'mute'}">${e.kind === 'in' ? (e.src === 'inv' ? '수강료' : '들어온 돈') : '나간 돈'}</span>${e.fixed ? ' <span class="chip info">고정</span>' : ''}${e.check ? ' <span class="chip warn">금액 확인</span>' : ''}</div><div class="d">${esc(e.memo)}</div></div>
         <div class="r"><b class="num ${e.kind === 'out' ? 'neg' : ''}">${e.kind === 'out' ? '-' : '+'}${won(e.amount)}</b></div>
-      </a>`).join('')}</div>${list.length > 200 ? '<p class="muted small">최근 200건까지 보여 줘요. 전부 보려면 "엑셀로 받기"를 눌러 주세요.</p>' : ''}` : '<p class="muted small" style="margin:0">아직 없어요.</p>'}
-  </section>
-  <a class="hint" href="#admin/billing">${ic('card')}<span>수강료 매출은 수납에서 "납부 확인"을 누르면 저절로 들어와요</span><b>수납 →</b></a>`;
+      </a>`).join('')}</div>${shown.length > 200 ? '<p class="muted small">최근 200건까지 보여 줘요. 전부 보려면 "더 보기 → 엑셀로 받기"를 눌러 주세요.</p>' : ''}` : '<p class="muted small" style="margin:0">아직 없어요.</p>'}
+  </section>` : fixedCard()}`;
 }
 
 // 보고 있는 기간의 거래 내역을 엑셀로
@@ -1009,7 +1211,7 @@ function suppliesPage() {
       <div><div class="t"><span class="nm-link" data-sup-edit="${x.id}" role="button" tabindex="0">${esc(x.name)}</span> <span class="muted small">${esc(x.category)}</span>${supLow(x) ? ' <span class="chip crit">모자람</span>' : ''}</div>
         <div class="d">${x.place ? `${esc(x.place)} · ` : ''}${x.min_qty ? `${x.min_qty}${esc(x.unit)} 아래면 알림` : '알림 없음'}${x.lent ? ` · <b>${x.lent}${esc(x.unit)} 빌려줌</b>` : ''}${x.price ? ` · 하나 ${won(x.price)}` : ''}</div></div>
       <div class="r"><b class="num sup-qty">${x.qty}<small>${esc(x.unit)}</small></b>
-        <span class="btns"><button class="btn sm" data-sup-move="${x.id}:in">+ 들어옴</button><button class="btn sm" data-sup-move="${x.id}:out">− 씀</button>${x.category.startsWith('교재') || x.category === '전자기기' || x.lent ? `<button class="btn sm" data-sup-move="${x.id}:lend">빌려줌</button>` : ''}${x.lent ? `<button class="btn sm" data-sup-move="${x.id}:return">돌려받음</button>` : ''}</span></div>
+        <span class="btns"><button class="btn sm ghost" data-sup-edit="${x.id}" title="이름 · 수 · 둔 곳 고치기">${ic('pen')}수정</button><button class="btn sm" data-sup-move="${x.id}:in">+ 들어옴</button><button class="btn sm" data-sup-move="${x.id}:out">− 씀</button>${x.category.startsWith('교재') || x.category === '전자기기' || x.lent ? `<button class="btn sm" data-sup-move="${x.id}:lend">빌려줌</button>` : ''}${x.lent ? `<button class="btn sm" data-sup-move="${x.id}:return">돌려받음</button>` : ''}</span></div>
     </div>`).join('')}</div></section>`
     : `<section class="card empty"><span class="tile-ic">${ic('folder')}</span><h2>${all.length ? '찾는 품목이 없어요' : '아직 넣은 품목이 없어요'}</h2><p class="muted">교재 · 도서 · 문구 · 전자기기 · 청소 용품처럼 학원에 있는 물건을 넣어 보세요. "엑셀 파일로 넣기"로 한 번에 넣어도 돼요.</p>
       <div class="row-btns" style="justify-content:center"><button class="btn primary" data-act="addSupply">${ic('plus')}품목 추가</button><button class="btn" data-import="supplies">${ic('upload')}엑셀 파일로 한꺼번에 넣기</button></div></section>`}
@@ -1025,10 +1227,18 @@ function supplyDialog(x) {
   formDialog({
     title: x ? '품목 고치기' : '품목 추가', table: 'supplies', row: x, after: loadSupplies, noDelete: ROLE !== 'owner',
     label: r => `${r.name}을(를)`,
+    // 고칠 때: 수는 바로 못 바꾸고(기록이 남게) "수량 맞춤"으로, 나머지는 그대로 저장
+    ...(x ? { save: async d => {
+      const { qty, ...rest } = d;
+      const { error } = await SB.from('supplies').update(rest).eq('id', x.id);
+      if (error) return dbErr(error);
+      if (qty !== x.qty) { const r = await SB.rpc('move_supply', { p_item: x.id, p_kind: 'fix', p_qty: qty, p_who: null, p_memo: '품목 고치기에서 수 맞춤', p_cost: null }); if (r.error) return dbErr(r.error, '수를 맞추지'); }
+      return null;
+    } } : {}),
     fields: [
       ['name', '이름', { required: true, max: 80, placeholder: '예: Reading Explorer 2 (학생용)' }],
       ['category', '종류', { type: 'select', required: true, options: SUPPLY_CATS, value: '교재 · 도서', half: true }],
-      ...(x ? [] : [['qty', '지금 있는 수', { type: 'number', required: true, value: 0, half: true }]]),
+      ['qty', x ? '지금 있는 수 (바꾸면 "수량 맞춤"으로 기록돼요)' : '지금 있는 수', { type: 'number', required: true, value: 0, half: true }],
       ['unit', '단위', { max: 10, value: '개', chips: ['권', '개', '박스', '대', '통', '세트'], half: true }],
       ['min_qty', '이 수보다 적으면 알림 (0이면 알림 없음)', { type: 'number', value: 0, half: true }],
       ['place', '둔 곳', { max: 40, placeholder: '예: 교무실 책장 2칸', chips: ['교무실', '자습실', '복사실', '창고', '1강의실'] }],
@@ -1077,17 +1287,27 @@ const SUPPLY_AREA = { name: '비품 · 교재', icon: 'folder', desc: '교재 ·
 /* ---------- 고정 지출: 월세 · 관리비 · 공과금 · 렌탈 … 한 번 넣어 두면 매달 정한 날 지출에 저절로 (fixed_costs → expenses) ----------
    DB가 매일 아침(asc-automations) · 재정 권한이 앱을 열 때(apply_fixed_costs) 이번 달 것을 넣어요. 지운 지출은 다시 넣지 않아요(last_month). */
 const FIXED_PRESETS = [['상가 월세', '임대료', 25, '자동이체'], ['관리비', '공과금', 25, '자동이체', 1], ['전기요금', '공과금', 20, '자동이체', 1], ['수도요금', '공과금', 20, '자동이체', 1], ['가스요금', '공과금', 20, '자동이체', 1],
-  ['인터넷 · 전화', '통신비', 15, '자동이체'], ['정수기 · 복합기 렌탈', '렌탈', 10, '자동이체'], ['세무 기장료', '세무 · 회계', 10, '계좌이체'], ['화재 · 배상 보험', '보험', 5, '자동이체'], ['대출 이자', '이자 · 할부', 15, '자동이체'], ['프로그램 · 앱 구독', '구독', 1, '카드']];
+  ['인터넷 · 전화', '통신비', 15, '자동이체'], ['정수기 · 복합기 렌탈', '렌탈', 10, '자동이체'], ['렌탈 (3개월마다)', '렌탈', 10, '카드', 0, 3], ['세무 기장료', '세무 · 회계', 10, '계좌이체'], ['화재 · 배상 보험 (1년)', '보험', 5, '자동이체', 0, 12], ['대출 이자', '이자 · 할부', 15, '자동이체'], ['프로그램 · 앱 구독', '구독', 1, '카드']];
 const DEMO_FIXED = [
   { id: 'fx1', name: '상가 월세', category: '임대료', amount: 2200000, pay_day: 25, method: '자동이체', active: true, start_month: '2026-01' },
   { id: 'fx2', name: '관리비', category: '공과금', amount: 320000, pay_day: 31, method: '자동이체', vary: true, active: true, start_month: '2026-01' },
   { id: 'fx3', name: '전기요금', category: '공과금', amount: 180000, pay_day: 20, method: '자동이체', vary: true, active: true, start_month: '2026-01' },
   { id: 'fx4', name: '인터넷 · 전화', category: '통신비', amount: 55000, pay_day: 15, method: '자동이체', active: true, start_month: '2026-01' },
   { id: 'fx5', name: '복합기 렌탈', category: '렌탈', amount: 45000, pay_day: 10, method: '자동이체', active: true, start_month: '2026-01' },
-  { id: 'fx6', name: '세무 기장료', category: '세무 · 회계', amount: 110000, pay_day: 10, method: '계좌이체', active: true, start_month: '2026-01' }
+  { id: 'fx6', name: '세무 기장료', category: '세무 · 회계', amount: 110000, pay_day: 10, method: '계좌이체', active: true, start_month: '2026-01' },
+  { id: 'fx7', name: '정수기 렌탈 (3개월 선납)', category: '렌탈', amount: 120000, pay_day: 5, method: '카드', active: true, start_month: '2026-01', every_months: 3 },
+  { id: 'fx8', name: '화재 · 배상 보험 (1년)', category: '보험', amount: 360000, pay_day: 1, method: '자동이체', active: true, start_month: '2026-03', every_months: 12 }
 ];
-const fixedData = () => REAL ? REAL.fixed_costs || [] : DEMO_FIXED.map(f => ({ ...f, last_month: Math.min(f.pay_day, +monthEnd(TODAY.slice(0, 7)).slice(8)) <= +TODAY.slice(8) ? TODAY.slice(0, 7) : null }));
+const fixedData = () => REAL ? REAL.fixed_costs || [] : DEMO_FIXED.map(f => ({ ...f, last_month: !fixedDue(f) ? null : Math.min(f.pay_day, +monthEnd(TODAY.slice(0, 7)).slice(8)) <= +TODAY.slice(8) ? TODAY.slice(0, 7) : null }));
 const payDayText = d => +d >= 31 ? '말일' : `${+d}일`;
+// 몇 달마다: 1 매달 · 2 · 3 · 6개월 · 12 1년 (시작하는 달부터 그 간격마다 나가요)
+const EVERY = [[1, '매달'], [2, '2개월마다'], [3, '3개월마다'], [6, '6개월마다'], [12, '1년에 한 번']];
+const everyText = n => (EVERY.find(x => x[0] === (+n || 1)) || EVERY[0])[1];
+const monthGap = (a, b) => (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + +b.slice(5, 7) - +a.slice(5, 7);
+// 이번 달이 나가는 달인지 · 다음에 나가는 달
+const fixedDue = (f, ym = TODAY.slice(0, 7)) => monthGap(f.start_month, ym) >= 0 && monthGap(f.start_month, ym) % (+f.every_months || 1) === 0;
+const fixedNext = f => { let m = TODAY.slice(0, 7); for (let i = 0; i < 13; i++, m = shiftMonth(m, 1)) if (fixedDue(f, m) && !(i === 0 && f.last_month === m)) return m; return null; };
+const perMonth = f => Math.round(f.amount / (+f.every_months || 1));
 // 이번 달 어떻게 됐는지
 function fixedStatus(f) {
   const ym = TODAY.slice(0, 7);
@@ -1095,6 +1315,7 @@ function fixedStatus(f) {
   if (f.start_month > ym) return ['mute', `${+f.start_month.slice(5)}월부터`];
   if (f.end_month && f.end_month < ym) return ['mute', '끝남'];
   if (f.last_month === ym) return ['good', '이번 달 넣음'];
+  if (!fixedDue(f, ym)) { const n = fixedNext(f); return ['mute', n ? `${+n.slice(5)}월에 나가요` : '쉬는 달']; }
   const left = Math.min(f.pay_day, +monthEnd(ym).slice(8)) - +TODAY.slice(8);
   return left <= 0 ? ['warn', '오늘 넣어요'] : ['info', `${left}일 뒤 넣어요`];
 }
@@ -1102,15 +1323,15 @@ function fixedCard() {
   if (REAL && !can('finance')) return '';
   const list = fixedData().slice().sort((a, b) => b.active - a.active || a.pay_day - b.pay_day), on = list.filter(f => f.active), check = REAL ? REAL.expenses.filter(e => e.need_check) : [];
   return `<section class="card fixed-card">
-    <div class="card-head"><h2>매달 나가는 돈 <span class="muted small">고정 지출</span></h2><span class="sub">한 달 ${won(sum(on, f => f.amount))} · ${on.length}건</span><button class="btn sm primary" data-act="addFixed">${ic('plus')}고정 지출 추가</button></div>
-    <p class="muted small" style="margin:-4px 0 10px">월세 · 관리비 · 공과금처럼 매달 나가는 돈을 한 번 넣어 두면, 정한 날에 지출로 저절로 들어가요. 금액이 달마다 다른 것은 "금액 확인"이 떠서 고지서 금액으로 고치면 돼요.</p>
+    <div class="card-head"><h2>매달 나가는 돈 <span class="muted small">고정 지출</span></h2><span class="sub">한 달에 평균 ${won(sum(on, perMonth))} · ${on.length}건</span><button class="btn sm primary" data-act="addFixed">${ic('plus')}고정 지출 추가</button></div>
+    <p class="muted small" style="margin:-4px 0 10px">월세 · 관리비 · 공과금처럼 정해진 날 나가는 돈을 한 번 넣어 두면, 그날 지출로 저절로 들어가요. 렌탈 · 보험처럼 3개월 · 6개월 · 1년에 한 번 나가는 것도 돼요. 금액이 달마다 다른 것은 "금액 확인"이 떠서 고지서 금액으로 고치면 돼요.</p>
     ${check.length ? `<div class="hint" style="margin:0 0 10px">${ic('bolt')}<span>금액 확인이 필요한 지출 ${check.length}건 · ${check.slice(0, 3).map(e => `<a href="#admin/finance" data-ledger="exp:${e.id}">${esc((e.memo || e.category).split(' · ')[0])} ${won(e.amount)}</a>`).join(' · ')}</span></div>` : ''}
     ${list.length ? `<div class="list fixed-list">${list.map(f => { const [c, l] = fixedStatus(f); return `
       <a class="li link ${f.active ? '' : 'off'}" href="#admin/finance" data-fixed="${f.id}">
         <span class="av time-av num">${payDayText(f.pay_day)}</span>
         <div><div class="t">${esc(f.name)} <span class="muted small">${esc(f.category)}</span>${f.vary ? ' <span class="chip mute">달마다 다름</span>' : ''}</div>
-          <div class="d">매달 ${payDayText(f.pay_day)}${f.method ? ` · ${esc(f.method)}` : ''}${f.end_month ? ` · ${+f.end_month.slice(2, 4)}년 ${+f.end_month.slice(5)}월까지` : ''}${f.memo ? ` · ${esc(f.memo)}` : ''}</div></div>
-        <div class="r"><b class="num">${won(f.amount)}</b><span class="chip ${c}">${l}</span></div></a>`; }).join('')}</div>`
+          <div class="d">${everyText(f.every_months)} ${payDayText(f.pay_day)}${(+f.every_months || 1) > 1 ? ` · ${+f.start_month.slice(5)}월부터` : ''}${f.method ? ` · ${esc(f.method)}` : ''}${f.end_month ? ` · ${+f.end_month.slice(2, 4)}년 ${+f.end_month.slice(5)}월까지` : ''}${f.memo ? ` · ${esc(f.memo)}` : ''}</div></div>
+        <div class="r"><b class="num">${won(f.amount)}</b>${(+f.every_months || 1) > 1 ? `<small class="muted">한 달 ${won(perMonth(f))}꼴</small>` : ''}<span class="chip ${c}">${l}</span></div></a>`; }).join('')}</div>`
       : `<p class="muted small" style="margin:0 0 8px">자주 넣는 것을 눌러 바로 시작해 보세요.</p>`}
     <div class="pick-chips fixed-presets">${FIXED_PRESETS.filter(p => !list.some(f => f.name === p[0])).slice(0, list.length ? 6 : 11).map(p => `<button type="button" data-fixed-preset="${esc(p[0])}">${ic('plus')}${esc(p[0])}</button>`).join('')}</div>
   </section>`;
@@ -1122,15 +1343,16 @@ function fixedDialog(f, preset) {
   formDialog({
     title: f ? '고정 지출 고치기' : '고정 지출 추가', table: 'fixed_costs', row: f, after,
     label: r => `${r.name}을(를)`, doneText: '고정 지출을 넣었어요 · 정한 날에 지출로 저절로 들어가요',
-    check: d => { d.pay_day = +d.pay_day; if (d.end_month && d.end_month < d.start_month) return '끝나는 달이 시작하는 달보다 앞이에요.'; return null; },
+    check: d => { d.pay_day = +d.pay_day; d.every_months = +d.every_months || 1; if (d.end_month && d.end_month < d.start_month) return '끝나는 달이 시작하는 달보다 앞이에요.'; return null; },
     fields: [
       ['name', '이름', { required: true, max: 60, placeholder: '예: 상가 월세', value: pr ? pr[0] : '', chips: f ? null : FIXED_PRESETS.slice(0, 8).map(p => p[0]) }],
       ['category', '지출 항목', { type: 'select', required: true, options: EXP_CATS, value: pr ? pr[1] : '임대료', half: true }],
-      ['amount', '한 달 금액', { type: 'won', required: true, placeholder: '예: 2,200,000', half: true }],
-      ['pay_day', '매달 나가는 날', { type: 'select', required: true, value: String(pr ? pr[2] : 25), options: [...Array(28)].map((_, i) => [String(i + 1), `${i + 1}일`]).concat([['31', '말일']]), half: true }],
+      ['amount', '한 번 나가는 금액', { type: 'won', required: true, placeholder: '예: 2,200,000', half: true }],
+      ['every_months', '얼마마다', { type: 'select', required: true, value: String(pr && pr[5] || 1), options: EVERY.map(([n, l]) => [String(n), l]), half: true }],
+      ['pay_day', '나가는 날', { type: 'select', required: true, value: String(pr ? pr[2] : 25), options: [...Array(28)].map((_, i) => [String(i + 1), `${i + 1}일`]).concat([['31', '말일']]), half: true }],
       ['method', '내는 방법', { max: 30, value: pr ? pr[3] : '자동이체', chips: ['자동이체', '계좌이체', '카드', '현금'], half: true }],
       ['vary', '달마다 금액이 달라요 (관리비 · 전기 · 수도 …) — 들어간 뒤 "금액 확인"이 떠요', { type: 'check', value: !!(pr && pr[4]) }],
-      ['start_month', '시작하는 달', { type: 'month', required: true, value: TODAY.slice(0, 7), half: true }], ['end_month', '끝나는 달 (계약 끝 · 비우면 계속)', { type: 'month', half: true }],
+      ['start_month', '시작하는 달 (몇 달마다면 처음 나가는 달)', { type: 'month', required: true, value: TODAY.slice(0, 7), half: true }], ['end_month', '끝나는 달 (계약 끝 · 비우면 계속)', { type: 'month', half: true }],
       ...(f ? [['active', '켜 두기 (끄면 멈춰요 · 지금까지 들어간 지출은 그대로)', { type: 'check' }]] : []),
       ['memo', '메모', { max: 200, placeholder: '예: 건물주 계좌 · 계약 2027년 2월까지' }]
     ]
@@ -2813,10 +3035,14 @@ function timePickers(d, sk, ek) {
   show();
 }
 function evDialog(e) {
+  // 새 일정은 "여러 날짜에 한 번에 넣기"로 달력에서 날짜를 여러 개 골라 날마다 한 줄씩 넣어요 (매주 · 격주 시험 같은 반복 일정)
+  const picked = new Set();
+  let calM = MONTH;
   formDialog({
     title: e ? '일정 고치기' : '일정 추가', table: 'academy_events', row: e, after: loadSchedule,
     label: r => `${r.title} 일정을`,
-    check: d => d.end_day && d.end_day < d.day ? '끝나는 날이 시작하는 날보다 앞이에요.' : d.end_time && d.start_time && d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    check: d => !picked.size && d.end_day && d.end_day < d.day ? '끝나는 날이 시작하는 날보다 앞이에요.' : d.end_time && d.start_time && d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    doneText: '일정을 넣었어요',
     fields: [
       ['title', '일정', { required: true, max: 100, placeholder: '예: 11월 월말 평가' }],
       ['kind', '종류', { type: 'select', required: true, options: EV_KINDS, value: '행사', half: true }],
@@ -2825,9 +3051,41 @@ function evDialog(e) {
       ['start_time', '시작 시간', { type: 'time', half: true }], ['end_time', '끝 시간', { type: 'time', half: true }],
       ['color', '색 (안 고르면 종류 색)', { type: 'color' }],
       ['detail', '메모 (원장·강사만 보여요)', { type: 'area', rows: 3, max: 1000, placeholder: '예: 시험지 30부 출력 · 2강의실' }]
-    ]
+    ],
+    ...(e ? {} : { save: async (d, base) => {
+      const days = picked.size ? [...picked].sort() : [d.day];
+      const { error } = await SB.from('academy_events').insert(days.map(day => ({ ...d, ...base, day, end_day: picked.size ? null : d.end_day })));
+      if (error) return dbErr(error);
+      if (picked.size) setTimeout(() => toast(`${days.length}개 날짜에 일정을 넣었어요`), 50);
+      return null;
+    } })
   });
-  timePickers($('#dlg'), 'start_time', 'end_time');
+  const dlg = $('#dlg');
+  timePickers(dlg, 'start_time', 'end_time');
+  if (e) return;
+  const dayF = dlg.querySelector('[name=day]'), endF = dlg.querySelector('[name=end_day]');
+  dayF.closest('.two').insertAdjacentHTML('afterend', `<div class="f ev-multi"><label class="chk-line"><input type="checkbox" id="evMulti"><span><b>여러 날짜에 한 번에 넣기</b> · 매주 · 격주처럼 같은 일정을 달력에서 골라 넣어요</span></label><div id="evCal" hidden></div></div>`);
+  const cal = $('#evCal'), multi = $('#evMulti');
+  const draw = () => {
+    const first = day0(`${calM}-01`), last = +monthEnd(calM).slice(8), pad = first.getDay(), base = dayF.value ? day0(dayF.value).getDay() : null;
+    cal.innerHTML = `<div class="evc-head"><button type="button" class="btn sm" data-evc="-1" aria-label="지난달">‹</button><b>${monthLabel(calM)}</b><button type="button" class="btn sm" data-evc="1" aria-label="다음 달">›</button></div>
+      <div class="evc-grid">${[...WD].map((w, i) => `<span class="evc-h ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</span>`).join('')}${'<span></span>'.repeat(pad)}${[...Array(last)].map((_, i) => { const dd = `${calM}-${String(i + 1).padStart(2, '0')}`; return `<button type="button" class="evc-d ${picked.has(dd) ? 'on' : ''} ${dd === TODAY ? 'today' : ''}" data-evd="${dd}">${i + 1}</button>`; }).join('')}</div>
+      <div class="pick-chips">${base != null ? `<button type="button" data-evq="week">${monthLabel(calM)} 매주 ${WD[base]}요일</button><button type="button" data-evq="two">격주 ${WD[base]}요일</button>` : ''}<button type="button" data-evq="none">모두 풀기</button></div>
+      <p class="muted small" style="margin:0">${picked.size ? `<b>${picked.size}일</b> 골랐어요 · ${[...picked].sort().slice(0, 6).map(md).join(', ')}${picked.size > 6 ? ' …' : ''}` : '날짜를 눌러 고르세요. 위 "날짜"의 요일로 매주 · 격주를 한 번에 고를 수도 있어요.'}</p>`;
+    cal.querySelectorAll('[data-evd]').forEach(b => b.onclick = () => { const v = b.dataset.evd; if (picked.has(v)) picked.delete(v); else picked.add(v); draw(); });
+    cal.querySelectorAll('[data-evc]').forEach(b => b.onclick = () => { calM = shiftMonth(calM, +b.dataset.evc); draw(); });
+    cal.querySelectorAll('[data-evq]').forEach(b => b.onclick = () => {
+      if (b.dataset.evq === 'none') picked.clear();
+      else { const start = dayF.value && dayF.value.startsWith(calM) ? dayF.value : `${calM}-01`; let n = 0;
+        for (let i = 1; i <= last; i++) { const dd = `${calM}-${String(i).padStart(2, '0')}`; if (day0(dd).getDay() === base && dd >= start) { if (b.dataset.evq === 'week' || n % 2 === 0) picked.add(dd); n++; } } }
+      draw();
+    });
+  };
+  multi.onchange = () => {
+    cal.hidden = !multi.checked; endF.closest('label').style.opacity = multi.checked ? '.4' : ''; endF.disabled = multi.checked;
+    if (multi.checked) { calM = (dayF.value || `${MONTH}-01`).slice(0, 7); if (!picked.size && dayF.value) picked.add(dayF.value); draw(); } else picked.clear();
+  };
+  dayF.addEventListener('change', () => { if (multi.checked) draw(); });
 }
 // 오늘 시간표 · 일정 → 홈 "오늘 챙길 일"
 function scheduleTodo(link = '#schedule') {
@@ -4847,7 +5105,7 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     if (o.type === 'color') return `<div class="f">${lab}<div class="swatches">${[['', '기본'], ...COLORS].map(([c, n]) => `<label class="sw ${c ? `col-${c}` : 'sw-none'}" title="${n}"><input type="radio" name="${k}" value="${c}" ${(v || '') === c ? 'checked' : ''}><span aria-hidden="true"></span><small>${n}</small></label>`).join('')}</div></div>`;
     if (o.type === 'multi') return `<div class="f">${lab}${o.required ? ' *' : ''}<div class="pick-chips multi">${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<label><input type="checkbox" name="${k}" value="${esc(ov)}" ${[].concat(v ?? []).map(String).includes(String(ov)) ? 'checked' : ''}><span>${esc(ol)}</span></label>`).join('')}</div></div>`;
     const ctl = o.type === 'select'
-      ? `<select name="${k}"><option value="">${o.blank || '선택 안 함'}</option>${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<option value="${esc(ov)}" ${v != null && String(v) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select>`
+      ? `<select name="${k}"><option value="">${o.blank || '선택 안 함'}</option>${optHtml(o.options, v)}</select>`
       : o.type === 'area'
       ? `<textarea name="${k}" rows="${o.rows || 5}" ${o.max ? `maxlength="${o.max}"` : ''} placeholder="${o.placeholder || ''}">${esc(v ?? '')}</textarea>`
       : o.type === 'won'
@@ -4995,7 +5253,7 @@ function studentDialog(s) {
     fields: [
       ['name', '이름', { required: true, max: 50, half: true }],
       ['class_name', '반', { max: 50, placeholder: '예: 초등 B반', half: true, chips: allClassNames().slice(0, 6) }],
-      ['tuition_plan_id', '수강료', { type: 'select', options: REAL.plans.map(p => [p.id, planLabel(p)]), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요', half: ROLE === 'owner' }],
+      ['tuition_plan_id', '수강료', { type: 'select', options: planOpts(), blank: REAL.plans.length ? '정하지 않음' : '수납에서 수강료를 먼저 정해 두세요', half: ROLE === 'owner' }],
       ...(ROLE === 'owner' ? [['discount_id', '늘 받는 할인', { type: 'select', options: (REAL.discounts || []).map(x => [x.id, discLabel(x)]), blank: (REAL.discounts || []).length ? '할인 없음' : '수납에서 할인을 먼저 만들어 두세요', half: true }]] : []),
       ...personFields(),
       ['status', '다니는지', { type: 'select', required: true, options: Object.entries(STU_STATUS).map(([k, [, l]]) => [k, l]), value: 'active', half: true }], ['joined_on', '들어온 날', { type: 'date', value: TODAY, half: true }],
@@ -5021,24 +5279,34 @@ function studentDialog(s) {
 // 여러 명 빠르게 넣기: 줄마다 이름 · 반 · 학년 · 연락처 · 수강료 (앱 가입 없이 명단 · 수강료부터)
 function quickStudentsDialog() {
   const d = dialogEl(), classes = allClassNames(), plans = REAL.plans || [], bill = can('billing'), fam = famOn();
+  // 수강료 고르기: 묶음별로 나눈 짧은 이름 (예: 초등 › 주 3회 300,000원) + 반을 적으면 그 반 수강료를 저절로
+  const planSel = (name, blank) => `<select name="${name}"><option value="">${blank}</option>${optHtml(planOpts())}</select>`;
   const row = () => `<div class="qs-row">
     <input name="n" placeholder="이름 *" maxlength="50"><input name="c" placeholder="반" list="qsCls" maxlength="50"><input name="g" placeholder="${fam ? '학년' : '구분'}" list="qsGr" maxlength="20">
     <input name="p" type="tel" placeholder="${fam ? '학부모 연락처' : '연락처'}" maxlength="13">
-    ${plans.length ? `<select name="t"><option value="">수강료 안 정함</option>${plans.map(x => `<option value="${x.id}">${esc(planLabel(x))}</option>`).join('')}</select>` : ''}
+    ${plans.length ? planSel('t', '수강료 안 정함') : ''}
     <button type="button" class="btn sm ghost" data-qs-del aria-label="이 줄 빼기">×</button></div>`;
   d.innerHTML = `<form method="dialog" class="dlg wide" id="qsForm" novalidate>
     <h2>여러 명 빠르게 넣기</h2>
     <p class="muted small" style="margin:-6px 0 0">이름만 있어도 돼요. 학생이 앱에 가입하지 않아도 명단 · 출결 · 수강료를 바로 관리해요. 수강료를 고르면 ${bill ? `"${+TODAY.slice(5, 7)}월 청구서도 만들기"로 청구까지 한 번에 해요.` : '원장님 수납에 바로 쓰여요.'}</p>
+    ${plans.length ? `<div class="qs-all"><b>모든 줄 수강료 한 번에</b><div class="pick-chips">${plans.slice(0, 12).map(x => `<button type="button" data-qs-plan="${x.id}">${x.group_name ? `<small>${esc(x.group_name)}</small> ` : ''}${esc(x.name)} <span class="muted small">${won(x.amount)}</span></button>`).join('')}<button type="button" data-qs-plan="">비우기</button></div>
+      <p class="muted small" style="margin:0">반을 적으면 그 반으로 정해 둔 수강료가 저절로 골라져요. 줄마다 따로 바꿔도 돼요.</p></div>` : ''}
     <datalist id="qsCls">${classes.map(c => `<option value="${esc(c)}">`).join('')}</datalist><datalist id="qsGr">${GRADES.map(g => `<option value="${g}">`).join('')}</datalist>
+    <div class="qs-head"><span>이름 *</span><span>반</span><span>${fam ? '학년' : '구분'}</span><span>${fam ? '학부모 연락처' : '연락처'}</span>${plans.length ? '<span>수강료</span>' : ''}<span></span></div>
     <div id="qsRows">${[1, 2, 3, 4, 5].map(row).join('')}</div>
     <button type="button" class="btn sm" id="qsMore">${ic('plus')}5줄 더</button>
     ${bill && plans.length ? `<label class="chk-line"><input type="checkbox" id="qsBill" checked><span>${+TODAY.slice(5, 7)}월 수강료 청구서도 만들기 (수강료를 고른 학생만)</span></label>` : ''}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">넣기</button></div></form>`;
   d.showModal();
-  const bindRows = () => d.querySelectorAll('[data-qs-del]').forEach(b => b.onclick = () => b.closest('.qs-row').remove());
+  const bindRows = () => d.querySelectorAll('.qs-row').forEach(r => {
+    r.querySelector('[data-qs-del]').onclick = () => r.remove();
+    const c = r.querySelector('[name=c]'), t = r.querySelector('[name=t]');
+    if (t) { t.onchange = () => { t.dataset.picked = '1'; }; c.onchange = () => { const hit = plans.find(x => x.class_name && x.class_name === c.value.trim()); if (hit && !t.dataset.picked) t.value = hit.id; }; }
+  });
   bindRows();
-  $('#qsMore').onclick = () => { $('#qsRows').insertAdjacentHTML('beforeend', [1, 2, 3, 4, 5].map(row).join('')); bindRows(); };
+  d.querySelectorAll('[data-qs-plan]').forEach(b => b.onclick = () => { d.querySelectorAll('.qs-row [name=t]').forEach(t => { t.value = b.dataset.qsPlan; t.dataset.picked = b.dataset.qsPlan ? '1' : ''; }); d.querySelectorAll('[data-qs-plan]').forEach(x => x.classList.toggle('on', x === b && !!b.dataset.qsPlan)); });
+  $('#qsMore').onclick = () => { $('#qsRows').insertAdjacentHTML('beforeend', [1, 2, 3, 4, 5].map(row).join('')); const on = d.querySelector('[data-qs-plan].on'); if (on) d.querySelectorAll('.qs-row [name=t]').forEach(t => { if (!t.value) t.value = on.dataset.qsPlan; }); bindRows(); };
   $('#dlgCancel').onclick = () => d.close();
   $('#qsForm').onsubmit = async e => {
     e.preventDefault();
@@ -6490,7 +6758,7 @@ const appSwitch = (cls = '') => ROLE !== 'owner' ? '' : `<div class="set-line fa
   <label class="switch" title="학생 · 학부모 앱 같이 쓰기"><input type="checkbox" data-act="appToggle" ${appOn() ? 'checked' : ''}><span></span></label></div>`;
 const feeCell = s => {
   const f = stuFee(s), st = stuBill(s);
-  const chip = st === 'paid' ? '<span class="chip good">납부</span>' : st === 'told' ? '<span class="chip warn">입금 알림</span>' : st === 'due' ? `<button class="btn sm" data-fee-paid="${s.id}">미납 · 받았어요</button>` : f ? `<button class="btn sm" data-fee-bill="${s.id}">청구하기</button>` : `<button class="btn sm ghost" data-edit-student="${s.id}">수강료 정하기</button>`;
+  const chip = st === 'paid' ? '<span class="chip good">납부</span>' : st === 'told' ? '<span class="chip warn">입금 알림</span>' : st === 'due' ? `<button class="btn sm" data-fee-paid="${s.id}">미납 · 받았어요</button>` : f && can('billing') ? `<span class="btns"><button class="btn sm" data-fee-bill="${s.id}">청구하기</button><button class="btn sm primary" data-fee-take="${s.id}" title="청구서를 만들고 바로 납부 완료로 남겨요">받았어요</button></span>` : f ? `<button class="btn sm" data-fee-bill="${s.id}">청구하기</button>` : `<button class="btn sm ghost" data-edit-student="${s.id}">수강료 정하기</button>`;
   return `<span class="fee-cell">${f ? `<b class="num">${won(f.amount)}</b>${f.disc ? `<small class="muted"> ${esc(f.disc.name)}</small>` : ''}` : '<span class="muted small">안 정함</span>'} ${chip}</span>`;
 };
 const SVC_WHOLE = { mou: 'mou', promo: 'promo' }; // 메뉴 전체가 센터 지원인 분야
@@ -7758,10 +8026,19 @@ function bind() {
   on('[data-edit-disc]', b => discountDialog(REAL.discounts.find(x => x.id === b.dataset.editDisc)));
   on('[data-edit-plan]', b => planDialog(REAL.plans.find(p => p.id === b.dataset.editPlan)));
   on('[data-act="applyPlan"]', () => REAL.students.length ? applyPlanDialog() : toast('먼저 원생을 추가해 주세요'));
+  on('[data-act="orderPlans"]', planOrderDialog);
+  on('[data-act="orderDiscs"]', discOrderDialog);
   on('[data-act="addInvoice"]', () => REAL.students.length ? invoiceDialog(null) : billMonthDialog());
   on('[data-edit-inv]', b => invoiceDialog(REAL.invoices.find(i => i.id === b.dataset.editInv)));
   on('[data-pay-inv]', b => payInvoice(b.dataset.payInv));
   on('[data-act="onsitePay"]', () => onsitePayDialog());
+  on('[data-act="cardMatch"]', () => REAL && can('billing') ? cardMatchDialog() : toast('예시 계정에서는 올릴 수 없어요'));
+  document.querySelectorAll('[data-inv-sel]').forEach(c => c.onchange = () => { if (c.checked) INV_SEL.add(c.dataset.invSel); else INV_SEL.delete(c.dataset.invSel); render(); });
+  document.querySelectorAll('[data-inv-all]').forEach(c => c.onchange = () => { const ids = REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).map(i => i.id); INV_SEL = c.checked ? new Set(ids) : new Set(); render(); });
+  on('[data-inv-none]', () => { INV_SEL.clear(); render(); });
+  on('[data-inv-told]', () => { INV_SEL = new Set(REAL.invoices.filter(i => i.month === MONTH && !i.paid_at && i.reported_at).map(i => i.id)); render(); });
+  on('[data-act="paySel"]', () => payManyDialog([...INV_SEL]));
+  on('[data-act="payAll"]', () => payManyDialog(REAL.invoices.filter(i => i.month === MONTH && !i.paid_at).map(i => i.id)));
   on('[data-receipt]', b => { const i = REAL.invoices.find(x => x.id === b.dataset.receipt); printReceipt(REAL.invoices.filter(x => x.student_id === i.student_id && (i.student_id || x.student_name === i.student_name) && x.paid_at === i.paid_at && (x.method || '') === (i.method || ''))); });
   on('[data-copy-inv]', b => copyText(invNotice(REAL.invoices.find(i => i.id === b.dataset.copyInv)), '안내 문구를 복사했어요 · 문자나 카톡에 붙여 넣으세요'));
   on('[data-act="copyAllInv"]', () => {
@@ -7774,6 +8051,9 @@ function bind() {
   on('[data-act="finXlsx"]', finXlsx);
   on('[data-act="demoScan"]', demoScanDialog);
   on('[data-fin]', b => { FIN = b.dataset.fin; render(); });
+  on('[data-fin-tab]', b => { FIN_TAB = b.dataset.finTab; render(); });
+  on('[data-fin-kind]', b => { FIN_KIND = b.dataset.finKind; render(); });
+  const fm = $('#finMore'); if (fm) fm.onchange = () => { if (fm.value) { FIN = fm.value; render(); } };
   const ff = $('#finFrom'), ft = $('#finTo');
   if (ff) ff.onchange = () => { if (!ff.value) return; FIN_FROM = ff.value; const r = customRange(); FIN_TO = r.to; render(); };
   if (ft) ft.onchange = () => { if (!ft.value) return; FIN_TO = ft.value; const r = customRange(); if (r.to !== ft.value) toast('최대 1년까지 볼 수 있어서 끝 날을 맞췄어요'); FIN_TO = r.to; render(); };
@@ -7781,6 +8061,16 @@ function bind() {
   on('[data-act="quickStudents"]', () => REAL ? quickStudentsDialog() : toast('예시 계정에서는 저장되지 않아요'));
   on('[data-act="billUnbilled"]', () => { const l = REAL.students.filter(s => stuFee(s) && !stuBill(s)); if (confirm(`청구 전인 ${l.length}명에게 ${+TODAY.slice(5, 7)}월 수강료 청구서를 만들까요? (정해 둔 수강료 · 할인 그대로)`)) billStudents(l); });
   on('[data-fee-bill]', b => billStudents([REAL.students.find(s => s.id === b.dataset.feeBill)]));
+  // 청구 전인데 그 자리에서 받았을 때: 청구서를 만들면서 바로 납부 완료 (결제 방법은 지난번 고른 것)
+  on('[data-fee-take]', async b => {
+    const st = REAL.students.find(x => x.id === b.dataset.feeTake), inv = st && feeInvoice(st);
+    if (!inv) return;
+    b.disabled = true;
+    const { data, error } = await SB.from('invoices').insert({ ...inv, paid_at: TODAY, method: PAY_LAST() }).select('id').single();
+    if (error) { b.disabled = false; return toast(dbErr(error)); }
+    await loadInvoices(); render();
+    toastAct(`${st.name} ${won(inv.amount)} 받은 걸 남겼어요 · ${PAY_LAST()}`, '영수증', () => printReceipt(REAL.invoices.filter(i => i.id === data.id)));
+  });
   on('[data-fee-paid]', async b => { const ids = REAL.invoices.filter(i => i.student_id === b.dataset.feePaid && i.month === TODAY.slice(0, 7) && !i.paid_at).map(i => i.id); for (const id of ids) await payInvoice(id); });
   on('[data-act="addSupply"]', () => supplyDialog(null));
   on('[data-act="supXlsx"]', supXlsx);
@@ -8450,8 +8740,9 @@ async function loadScheduleLogs() {
   const { data } = await SB.from('schedule_logs').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }).limit(30);
   REAL.schedLogs = data || [];
 }
+// 수강료 · 할인은 원장님이 정한 순서대로 (sort_order, 같으면 금액 · 만든 순)
 const loadPlans = () => Promise.all([loadRows('tuition_plans', 'amount'), can('billing') ? loadRows('discount_presets', 'created_at') : null])
-  .then(() => { REAL.plans = REAL.tuition_plans; REAL.discounts = REAL.discount_presets || []; });
+  .then(() => { REAL.plans = [...REAL.tuition_plans].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.amount - b.amount); REAL.discounts = [...(REAL.discount_presets || [])].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)); });
 // 강사 교육: 배부된 영상 + 내 리플렉션 (원장은 우리 강사 이수 현황까지) → 화면이 쓰는 DATA.training · DATA.staff 모양으로
 async function loadTraining() {
   const [v, mine, rep] = await Promise.all([
