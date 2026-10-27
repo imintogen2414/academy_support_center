@@ -34,7 +34,7 @@
   <div class="wrap top-in">
     <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
     <nav class="top-nav" aria-label="첫 화면 메뉴"><a href="/#program-sec">운영 프로그램</a><a href="/#mobile-sec">휴대폰에서</a><a href="/#service-sec">추가 서비스</a><a href="/#story-sec">이용 사례</a><a href="/jobs">강사 채용</a></nav>
-    <span class="top-r"><button type="button" class="theme-btn" data-theme-toggle aria-label="화면 밝기 바꾸기"></button><a class="btn ghost sm" href="#login" id="topLogin">로그인</a><a class="btn primary sm top-start" href="#signup">무료로 시작하기</a></span>
+    <span class="top-r"><button type="button" class="theme-btn" data-theme-toggle aria-label="화면 밝기 바꾸기"></button><a class="btn ghost sm" href="#login" id="topLogin">로그인</a><a class="btn primary sm top-start" href="#signup"><span class="xs-hide">무료로 </span>시작하기</a></span>
   </div>
 </header>
 
@@ -84,6 +84,7 @@
       <label class="keep"><input type="checkbox" id="keepLogin" checked><span>로그인 유지하기</span><small>공용 PC라면 꺼 주세요 · 끄면 창을 닫을 때 로그아웃돼요</small></label>
       <p class="msg" id="loginMsg" hidden></p>
       <button class="btn primary wide">로그인</button>
+      <p class="find-links"><a href="#find/id">아이디 찾기</a><span aria-hidden="true">·</span><a href="#find/pw">비밀번호 찾기</a></p>
     </form>
 
     <form id="signupForm" hidden novalidate>
@@ -97,6 +98,7 @@
       </div>
       <div class="field"><label for="nm">이름 <small>다른 회원과 겹치지 않게</small></label><input id="nm" name="fullname" placeholder="예: 홍길동" autocomplete="name"></div>
       <div class="field" id="phField"><label for="sph">휴대폰 번호 <small id="phNote">아이디 · 비밀번호를 잊었을 때 확인해요</small></label><input id="sph" name="phone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" autocomplete="tel"></div>
+      <div class="field" id="emField"><label for="sem">이메일 <small id="emNote">아이디 · 비밀번호를 잊었을 때 확인해요</small></label><input id="sem" name="email" type="email" inputmode="email" maxlength="200" placeholder="예: name@gmail.com" autocomplete="email" autocapitalize="none"></div>
       <div class="field"><label for="sid">아이디 <small>영어 소문자·숫자·_ 4~20자</small></label><input id="sid" name="uid" placeholder="예: haneul_owner" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="spw">비밀번호 <small>8자 이상</small></label><input id="spw" name="pw" type="password" placeholder="8자 이상으로 정해 주세요" autocomplete="new-password"></div>
       <div class="field" id="acField"><label for="ac">학원 이름</label><input id="ac" name="academy" placeholder="예: 하늘영어학원"></div>
@@ -526,6 +528,69 @@ function checkResult(list) {
     </div>`).join('');
 }
 
+// 아이디 · 비밀번호 찾기 (#find/id · #find/pw) — Edge Function account-help
+// 아이디: 이름 + 가입한 휴대폰이나 이메일 → 가린 아이디. 비밀번호: 아이디 + 휴대폰/이메일 → 인증번호 → 새 비밀번호
+let found = null, pwStep = null; // 찾은 아이디 목록 · 인증번호를 보낸 뒤 { username, contact, to }
+const contactHelp = '<small class="f-help">가입할 때 적은 휴대폰 번호(010-…)나 이메일 중 하나</small>';
+function findView(tab) {
+  const t = tab === 'pw' ? 'pw' : 'id';
+  const tabs = `<div class="find-tabs" role="tablist">${[['id', '아이디 찾기'], ['pw', '비밀번호 찾기']].map(([k, l]) => `<a role="tab" href="#find/${k}" aria-selected="${k === t}" class="${k === t ? 'on' : ''}">${l}</a>`).join('')}</div>`;
+  const idForm = `
+    <p class="lede">가입할 때 적은 <b>이름</b>과 <b>휴대폰 번호나 이메일</b>을 넣으면 아이디를 알려 드려요.</p>
+    <form class="form" id="findIdForm" novalidate>
+      <label class="f"><span>이름 ${req}</span><input name="name" maxlength="50" placeholder="예: 홍길동" autocomplete="name"></label>
+      <label class="f"><span>휴대폰 번호 또는 이메일 ${req}</span><input name="contact" maxlength="200" placeholder="010-0000-0000 또는 name@gmail.com" autocapitalize="none">${contactHelp}</label>
+      <p class="err" id="findErr" role="alert" hidden></p>
+      <div class="acts"><button class="btn primary">아이디 찾기</button></div>
+    </form>
+    <div id="findOut">${found ? foundList(found) : ''}</div>`;
+  const pwForm = pwStep ? `
+    <p class="lede"><b>${esc(pwStep.to)}</b>(으)로 인증번호 6자리를 보냈어요. 10분 안에 넣고 새 비밀번호를 정해 주세요.</p>
+    <form class="form" id="resetForm" novalidate>
+      <label class="f"><span>인증번호 ${req}</span><input name="code" inputmode="numeric" maxlength="6" placeholder="6자리 숫자" autocomplete="one-time-code"></label>
+      <div class="two">
+        <label class="f"><span>새 비밀번호 ${req}</span><input name="pw" type="password" placeholder="8자 이상" autocomplete="new-password"></label>
+        <label class="f"><span>한 번 더 ${req}</span><input name="pw2" type="password" autocomplete="new-password"></label>
+      </div>
+      <p class="err" id="findErr" role="alert" hidden></p>
+      <div class="acts"><button class="btn primary">비밀번호 바꾸기</button><button type="button" class="btn line" id="resend">인증번호 다시 받기</button></div>
+    </form>` : `
+    <p class="lede"><b>아이디</b>와 가입할 때 적은 <b>휴대폰 번호나 이메일</b>을 넣으면 인증번호를 보내 드려요. 인증번호를 넣고 새 비밀번호로 바꿔요.</p>
+    <form class="form" id="sendCodeForm" novalidate>
+      <label class="f"><span>아이디 ${req}</span><input name="uid" maxlength="20" placeholder="예: haneul_owner" autocapitalize="none" autocomplete="username"></label>
+      <label class="f"><span>인증번호 받을 곳 ${req}</span><input name="contact" maxlength="200" placeholder="010-0000-0000 또는 name@gmail.com" autocapitalize="none">${contactHelp}</label>
+      <p class="err" id="findErr" role="alert" hidden></p>
+      <div class="acts"><button class="btn primary">인증번호 받기</button></div>
+    </form>
+    <p class="muted-note">구글로 가입했다면 비밀번호가 없어요. 로그인 화면에서 <b>구글로 계속하기</b>를 눌러 주세요.</p>`;
+  return page(`
+    <a class="back" href="#login">‹ 로그인으로</a>
+    <h1>${t === 'id' ? '아이디 찾기' : '비밀번호 찾기'}</h1>
+    ${tabs}
+    ${t === 'id' ? idForm : pwForm}
+    <p class="muted-note">휴대폰 번호 · 이메일을 넣지 않고 가입했거나 바뀌었다면 <a class="u" href="#ask">센터에 문의</a>해 주세요. 본인 확인 뒤 임시 비밀번호를 드려요.</p>`, 'narrow');
+}
+const foundList = list => list.length ? `<div class="receipt check-res">${list.map(f => `<div><span>${f.id ? '아이디' : '구글 로그인'}</span><b>${esc(f.id || f.google)} <small class="muted">· ${esc(f.joined.replace(/-/g, '.'))} 가입</small></b></div>`).join('')}</div>
+  <div class="acts"><a class="btn primary" href="#login">로그인하기</a><a class="btn line" href="#find/pw">비밀번호 찾기</a></div>` : '';
+async function accountHelp(body) {
+  const { data, error } = await SB.functions.invoke('account-help', { body });
+  if (error) { try { return await error.context.json(); } catch (e) { return { error: 'network' }; } }
+  return data || { error: 'network' };
+}
+const FIND_ERR = {
+  not_found: '맞는 회원이 없어요. 아이디와 가입할 때 적은 휴대폰 번호 · 이메일을 다시 확인해 주세요.',
+  too_many: '인증번호를 너무 많이 요청했어요. 1시간 뒤에 다시 시도해 주세요.',
+  send_failed: '인증번호를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+  expired: '인증번호 시간이 지났어요. 인증번호를 다시 받아 주세요.',
+  weak_password: '비밀번호는 8자 이상으로 정해 주세요.',
+  update_failed: '비밀번호를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.',
+  bad_input: '입력한 내용을 다시 확인해 주세요.'
+};
+const findErrText = r => r.error === 'not_ready' ? `아직 ${r.kind === 'email' ? '이메일' : '문자'}로 인증번호를 보낼 준비가 안 됐어요.${r.other ? ` ${r.kind === 'email' ? '휴대폰 번호' : '이메일'}로 받아 보세요.` : ' 센터에 문의해 주시면 임시 비밀번호를 드려요.'}`
+  : r.error === 'bad_code' ? `인증번호가 맞지 않아요.${r.left > 0 ? ` ${r.left}번 더 넣어 볼 수 있어요.` : ' 인증번호를 다시 받아 주세요.'}`
+  : FIND_ERR[r.error] || '문제가 생겼어요. 인터넷 연결을 확인하고 다시 시도해 주세요.';
+const contactOk = v => v.includes('@') ? emailOk(v.trim()) : phoneOk(v);
+
 // 가입 전 문의 (프로그램을 쓰는 분은 로그인 후 "문의하기"에서 따로 남겨요)
 const ASK_CATS = ['이용 방법', '비용 · 견적', '가입 · 초대 코드', '제휴 · 유학', '홍보', '기타'];
 function askView() {
@@ -574,7 +639,7 @@ function setMeta(title, desc, path) {
   document.querySelector('link[rel=canonical]').href = `https://academysupportcenter.vercel.app${path || '/'}`;
 }
 // 해시로 여는 화면 (그 밖의 해시 #program-sec 같은 건 처음 화면의 그 자리로 내려가요)
-const VIEWS = ['apply', 'done', 'ask', 'check', 'faq', 'demo', 'login', 'signup', 'job'];
+const VIEWS = ['apply', 'done', 'ask', 'check', 'faq', 'demo', 'login', 'signup', 'job', 'find'];
 let NEXT = ''; // 로그인 · 가입 뒤 갈 곳 (강사 채용에서 오면 #jobs)
 function showAuth(on) {
   document.getElementById('program').hidden = !on;
@@ -692,6 +757,7 @@ function renderPanel() {
   else if (view === 'done') { panel.innerHTML = doneView(); setMeta('접수 완료', '', '/'); }
   else if (view === 'ask') { panel.innerHTML = askView(); setMeta('가입 전 문의', '', '/'); }
   else if (view === 'check') { panel.innerHTML = checkView(); setMeta('진행 상황 보기', '', '/'); }
+  else if (view === 'find') { if (id !== 'pw') pwStep = null; panel.innerHTML = findView(id); setMeta(id === 'pw' ? '비밀번호 찾기' : '아이디 찾기', '', '/'); }
   else if (view === 'faq') { panel.innerHTML = faqView(); setMeta('자주 묻는 질문 · 비용', '', '/'); }
   else if (view === 'demo') { panel.innerHTML = demoView(); setMeta('예시 계정 둘러보기', '', '/'); }
   else { panel.innerHTML = homeView(); setMeta('', '', '/'); }
@@ -762,6 +828,65 @@ function renderPanel() {
     if (!data || !data.length) { checked = null; document.getElementById('checkOut').innerHTML = ''; return fail('맞는 접수 내역이 없어요. 접수 번호와 남기신 연락처를 다시 확인해 주세요.'); }
     checked = data; document.getElementById('checkOut').innerHTML = checkResult(data);
   };
+
+  // 아이디 · 비밀번호 찾기
+  const fid = document.getElementById('findIdForm');
+  if (fid) fid.onsubmit = async e => {
+    e.preventDefault();
+    const el = fid.elements, err = document.getElementById('findErr'), fail = checker(fid, err);
+    if (!el.name.value.trim()) return fail('이름을 적어 주세요.', el.name);
+    if (!contactOk(el.contact.value)) return fail('휴대폰 번호(010-1234-5678)나 이메일을 넣어 주세요.', el.contact);
+    if (!SB) return fail('지금은 찾을 수 없어요. 잠시 후 다시 시도해 주세요.');
+    err.hidden = true;
+    const btn = fid.querySelector('button.primary'); btn.disabled = true; btn.textContent = '찾는 중…';
+    const r = await accountHelp({ action: 'find_id', name: el.name.value.trim(), contact: el.contact.value.trim() });
+    btn.disabled = false; btn.textContent = '아이디 찾기';
+    if (r.error) return fail(findErrText(r));
+    found = r.list || [];
+    document.getElementById('findOut').innerHTML = foundList(found);
+    if (!found.length) fail('맞는 회원이 없어요. 가입할 때 적은 이름과 휴대폰 번호 · 이메일을 다시 확인해 주세요.');
+  };
+  const sendCode = async (username, contact, btn, label) => {
+    const err = document.getElementById('findErr');
+    btn.disabled = true; btn.textContent = '보내는 중…';
+    const r = await accountHelp({ action: 'send_code', username, contact });
+    btn.disabled = false; btn.textContent = label;
+    if (r.error) { err.textContent = findErrText({ ...r, kind: contact.includes('@') ? 'email' : 'phone' }); err.hidden = false; return false; }
+    pwStep = { username, contact, to: r.to };
+    return true;
+  };
+  const sc = document.getElementById('sendCodeForm');
+  if (sc) sc.onsubmit = async e => {
+    e.preventDefault();
+    const el = sc.elements, err = document.getElementById('findErr'), fail = checker(sc, err);
+    const uid = el.uid.value.trim().toLowerCase();
+    if (!ID_RULE.test(uid)) return fail('아이디를 넣어 주세요. (영어 소문자 · 숫자 · _ 4~20자)', el.uid);
+    if (!contactOk(el.contact.value)) return fail('휴대폰 번호(010-1234-5678)나 이메일을 넣어 주세요.', el.contact);
+    if (!SB) return fail('지금은 보낼 수 없어요. 잠시 후 다시 시도해 주세요.');
+    err.hidden = true;
+    if (await sendCode(uid, el.contact.value.trim(), sc.querySelector('button.primary'), '인증번호 받기')) renderPanel();
+  };
+  const rf = document.getElementById('resetForm');
+  if (rf) {
+    document.getElementById('resend').onclick = async e => {
+      if (await sendCode(pwStep.username, pwStep.contact, e.target, '인증번호 다시 받기')) { const m = document.getElementById('findErr'); m.textContent = '인증번호를 다시 보냈어요.'; m.hidden = false; }
+    };
+    rf.onsubmit = async e => {
+      e.preventDefault();
+      const el = rf.elements, err = document.getElementById('findErr'), fail = checker(rf, err);
+      if (!/^\d{6}$/.test(el.code.value.trim())) return fail('인증번호 6자리를 넣어 주세요.', el.code);
+      if (el.pw.value.length < 8) return fail('비밀번호는 8자 이상으로 정해 주세요.', el.pw);
+      if (el.pw.value !== el.pw2.value) return fail('두 비밀번호가 달라요.', el.pw2);
+      err.hidden = true;
+      const btn = rf.querySelector('button.primary'); btn.disabled = true; btn.textContent = '바꾸는 중…';
+      const r = await accountHelp({ action: 'reset', username: pwStep.username, contact: pwStep.contact, code: el.code.value.trim(), password: el.pw.value });
+      btn.disabled = false; btn.textContent = '비밀번호 바꾸기';
+      if (r.error) return fail(findErrText(r));
+      const uid = pwStep.username; pwStep = null;
+      panel.innerHTML = page(`<h1>비밀번호를 바꿨어요</h1><p class="lede">새 비밀번호로 로그인해 주세요.</p><div class="acts"><a class="btn primary" href="#login" id="goLogin">로그인하기</a></div>`, 'narrow');
+      document.getElementById('goLogin').onclick = () => setTimeout(() => { loginForm.elements.uid.value = uid; loginForm.elements.pw.focus(); }, 50);
+    };
+  }
 
   const ask = document.getElementById('askForm');
   if (ask) ask.onsubmit = async e => {
@@ -845,35 +970,40 @@ loginForm.onsubmit = e => {
 };
 
 // 이름 · 아이디 · 전화번호가 다른 회원과 겹치면 가입하지 않고 알려 줘요 (서버도 한 번 더 막아요)
-const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호' };
+const TAKEN_TEXT = { username: '아이디', name: '이름', phone: '전화번호', email: '이메일' };
+const emailOk = v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
 const hasJong = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return c >= 0 && c <= 11171 && c % 28 > 0; };
 const takenMsg = list => { const w = list.map(k => TAKEN_TEXT[k]).join(' · '), j = hasJong(w); return `이미 있는 ${w}${j ? '이에요' : '예요'}! 다른 ${w}${j ? '을' : '를'} 써 주세요.`; };
 function markTaken(list) {
-  const map = { username: 'uid', name: 'fullname', phone: 'phone' };
+  const map = { username: 'uid', name: 'fullname', phone: 'phone', email: 'email' };
   Object.values(map).forEach(n => signupForm.elements[n].classList.remove('bad'));
   list.forEach(k => signupForm.elements[map[k]].classList.add('bad'));
   if (list.length) signupForm.elements[map[list[0]]].focus();
 }
 signupForm.onsubmit = e => {
   e.preventDefault();
-  const f = signupForm, el = f.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value, name = el.fullname.value.trim(), phone = el.phone.value.trim();
+  const f = signupForm, el = f.elements, id = el.uid.value.trim().toLowerCase(), pw = el.pw.value, name = el.fullname.value.trim(), phone = el.phone.value.trim(), email = el.email.value.trim().toLowerCase();
   const needPhone = el.role.value !== 'student';
   markTaken([]);
   if (!name) return showMsg(signupMsg, '이름을 적어 주세요.');
   if (needPhone && !phone) return showMsg(signupMsg, '휴대폰 번호를 적어 주세요.');
   if (phone && !phoneOk(phone)) return showMsg(signupMsg, '휴대폰 번호 형식이 맞지 않아요. 예: 010-1234-5678');
+  // 학생은 휴대폰 · 이메일 중 하나만 있어도 돼요 (아이디 · 비밀번호를 찾을 때 써요)
+  if (needPhone && !email) return showMsg(signupMsg, '이메일을 적어 주세요. 아이디 · 비밀번호를 잊었을 때 써요.');
+  if (!needPhone && !phone && !email) return showMsg(signupMsg, '휴대폰 번호나 이메일 중 하나는 적어 주세요. 아이디 · 비밀번호를 잊었을 때 써요.');
+  if (email && !emailOk(email)) return showMsg(signupMsg, '이메일 형식이 맞지 않아요. 예: name@gmail.com');
   if (!ID_RULE.test(id)) return showMsg(signupMsg, '아이디는 영어 소문자·숫자·_ 로 4~20자예요.');
   if (pw.length < 8) return showMsg(signupMsg, '비밀번호는 8자 이상으로 정해 주세요.');
   if (!SB) return showMsg(signupMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
   setKeepLogin(true);
   busy(f.querySelector('button'), '가입하는 중…', async () => {
-    const { data: taken } = await SB.rpc('check_profile_taken', { p_username: id, p_name: name, p_phone: phone || null });
+    const { data: taken } = await SB.rpc('check_profile_taken', { p_username: id, p_name: name, p_phone: phone || null, p_email: email || null });
     if (taken && taken.length) { markTaken(taken); return showMsg(signupMsg, takenMsg(taken)); }
     const { data, error } = await SB.auth.signUp({
       email: idToEmail(id), password: pw,
-      options: { data: { username: id, name: name.slice(0, 50), phone: phone || null, role: el.role.value, academy_name: el.academy.value.trim().slice(0, 100) } }
+      options: { data: { username: id, name: name.slice(0, 50), phone: phone || null, email: email || null, role: el.role.value, academy_name: el.academy.value.trim().slice(0, 100) } }
     });
-    if (error) return showMsg(signupMsg, /Database error/i.test(error.message || '') ? '이미 있는 이름 · 아이디 · 전화번호예요! 다시 확인해 주세요.' : authErrorText(error));
+    if (error) return showMsg(signupMsg, /Database error/i.test(error.message || '') ? '이미 있는 이름 · 아이디 · 전화번호 · 이메일이에요! 다시 확인해 주세요.' : authErrorText(error));
     if (!data.session) return showMsg(signupMsg, '가입은 됐는데 바로 로그인할 수 없어요. 센터에 문의해 주세요.');
     location.href = '/app' + (el.role.value === 'teacher' && NEXT ? NEXT : '');
   });
@@ -888,6 +1018,7 @@ signupForm.querySelectorAll('[name=role]').forEach(r => r.onchange = () => {
   document.getElementById('ownerHint').hidden = !owner;
   // 학생은 휴대폰이 없을 수 있어서 전화번호를 꼭 받지 않아요 (부모님 번호는 부모님 계정이 써요)
   document.getElementById('phNote').textContent = signupForm.elements.role.value === 'student' ? '없으면 비워 두세요 · 부모님 번호는 넣지 말아 주세요' : '아이디 · 비밀번호를 잊었을 때 확인해요';
+  document.getElementById('emNote').textContent = signupForm.elements.role.value === 'student' ? '휴대폰이 없으면 이메일은 꼭 적어 주세요' : '아이디 · 비밀번호를 잊었을 때 확인해요';
 });
 
 document.getElementById('googleBtn').onclick = async () => {

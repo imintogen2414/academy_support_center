@@ -14,12 +14,12 @@ const SB = (window.ENV && ENV.SUPABASE_URL && ENV.SUPABASE_KEY && window.supabas
   ? supabase.createClient(ENV.SUPABASE_URL, ENV.SUPABASE_KEY, { auth: { flowType: 'pkce', storage: authStore } })
   : null;
 
-/* 계정 전환: 이 기기에서 로그인한 계정을 기억해 두고(localStorage asc-accounts, 최대 5개) 비밀번호 없이 바꿔요.
+/* 계정 전환: 이 기기에서 로그인한 계정을 기억해 두고(localStorage asc-accounts, 최대 10개) 비밀번호 없이 바꿔요.
    "로그인 유지하기"를 켠 계정만 기억해요. 기억하는 건 이름 · 역할 · 다시 로그인용 refresh token이에요(Supabase가 원래 이 기기에 두는 것과 같은 값).
    지금 계정의 토큰은 바꾸기 직전에 새로 저장해서, 다른 계정으로 갈 때 옛 토큰을 다시 쓰지 않아요. */
 const ACC_KEY = 'asc-accounts';
 const savedAccounts = () => { try { return JSON.parse(localStorage.getItem(ACC_KEY) || '[]'); } catch { return []; } };
-const putAccounts = list => { try { localStorage.setItem(ACC_KEY, JSON.stringify(list.slice(0, 5))); } catch {} };
+const putAccounts = list => { try { localStorage.setItem(ACC_KEY, JSON.stringify(list.slice(0, 10))); } catch {} };
 const forgetAccount = id => putAccounts(savedAccounts().filter(a => a.id !== id));
 async function rememberAccount(info, uid) {
   if (!SB || !keepLogin()) return;
