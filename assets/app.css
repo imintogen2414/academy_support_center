@@ -929,7 +929,8 @@ dialog:has(.dlg.wide) { width: min(900px, calc(100vw - 32px)); }
 .mini-stats div { background: var(--sunk); border-radius: 12px; padding: 10px 4px; display: grid; gap: 2px; }
 .mini-stats span { font-size: 12px; color: var(--muted); }
 .mini-stats b { font-size: 18px; }
-.ch-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.ch-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (min-width: 1100px) { .ch-menu { grid-template-columns: repeat(4, 1fr); } }
 .ch-links { display: grid; }
 .ch-links a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 .ch-links a:first-child { border-top: 0; }
@@ -1264,3 +1265,47 @@ details.fold .fold-b { margin-top: 14px; }
 .sub-group + .sub-group { margin-top: 6px; }
 .sub-group .sec-title small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .center-hint { margin-top: 16px; }
+
+/* 학원 · 회원 한눈에: 보는 방법 */
+.ov-tools .ov-view { margin: 0; }
+.ov-roles { margin: 4px 0 10px; }
+.ov-flat { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; padding: 0; border: 0; }
+
+/* 고정 지출 */
+.fixed-list .li.off { opacity: .55; }
+.fixed-presets { margin-top: 10px; }
+.fixed-presets button .icon { width: 13px; height: 13px; margin-right: 2px; vertical-align: -2px; }
+.fixed-card .card-head h2 .muted { font-weight: 600; }
+
+/* 원생 명단: 수강료 칸 · 여러 명 빠르게 넣기 */
+.fee-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.fee-cell .btn.sm { padding: 4px 9px; font-size: 12.5px; }
+.fee-bar { align-items: center; }
+.fee-bar .btn { margin-left: auto; flex-shrink: 0; }
+.qs-row { display: grid; grid-template-columns: 1.2fr 1fr .7fr 1.1fr 1.3fr auto; gap: 6px; margin-bottom: 6px; }
+.qs-row input, .qs-row select { min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); }
+@media (max-width: 720px) { .qs-row { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px dashed var(--line); } .qs-row [data-qs-del] { justify-self: end; } }
+/* 비품 */
+.sup-list .li.low .sup-qty { color: var(--crit); }
+.sup-qty { font-size: 20px; }
+.sup-qty small { font-size: 12px; margin-left: 2px; color: var(--muted); font-weight: 600; }
+.sup-list .r { gap: 6px; }
+
+/* 시간표: 끌어서 옮기기 · 여러 칸 고르기 · 휴강 · 보강 */
+.tt-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.tt-tools .icon { width: 14px; height: 14px; }
+.tt-tip { margin: 4px 0 10px; }
+.tt-selbar { position: sticky; top: 8px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; margin: 0 0 10px; border-radius: 14px; background: var(--navy-900, #0b1150); color: #fff; box-shadow: 0 10px 30px rgba(7, 10, 61, .25); }
+.tt-selbar b { margin-right: auto; font-size: 14px; }
+.tt-selbar .btn:not(.primary):not(.danger) { background: rgba(255, 255, 255, .12); color: #fff; border-color: transparent; }
+.tt-blk { position: relative; }
+.tt-blk[draggable="true"] { cursor: grab; }
+.tt-blk.dragging { opacity: .45; }
+.tt-blk.sel { outline: 3px solid var(--blue-600); outline-offset: 1px; }
+.tt-check { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 6px; border: 2px solid var(--blue-600); background: var(--surface); color: var(--blue-600); font-style: normal; font-size: 12px; font-weight: 800; display: grid; place-items: center; }
+.tt-blk.sel .tt-check { background: var(--blue-600); color: #fff; }
+.tt-day.drop-on { outline: 2px dashed var(--blue-600); outline-offset: -4px; background: var(--blue-50); }
+.tt-blk.cancel { background: var(--sunk); border-left-color: var(--muted) !important; opacity: .85; }
+.tt-blk.cancel b, .tt-blk.cancel > span:not(.tm):not(.note) { text-decoration: line-through; color: var(--muted); }
+.wk-only.mk { background: var(--good-soft, #e3f6ee); color: var(--good); }
+.wk-only.off { background: var(--crit-soft, #fde8e6); color: var(--crit); }
