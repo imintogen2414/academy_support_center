@@ -1106,6 +1106,27 @@ const PHOTO_IMPORTS = {
   }
 };
 // 사진을 긴 쪽 1600px JPEG로 줄여요 (보내는 시간 · 크기 줄이기)
+// 올릴 사진을 긴 쪽 1600px JPEG Blob으로 (공지 사진)
+function shrinkBlob(file, side = 1600) {
+  return new Promise((ok, no) => {
+    if (/gif/.test(file.type)) return ok(file);
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, side / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); c.toBlob(b => b ? ok(b) : no(new Error('bad_image')), 'image/jpeg', 0.85); };
+    img.onerror = () => { URL.revokeObjectURL(url); no(new Error('bad_image')); };
+    img.src = url;
+  });
+}
+// 비공개 버킷 사진: 1시간짜리 주소를 받아 넣어요 (<img data-bucket-img="경로" data-bucket="버킷">)
+const IMG_URLS = {};
+async function hydrateImgs(root = document) {
+  if (!SB || !USER) return;
+  const els = [...root.querySelectorAll('img[data-bucket-img]')], by = {};
+  els.forEach(i => { const k = `${i.dataset.bucket}:${i.dataset.bucketImg}`; if (!IMG_URLS[k]) (by[i.dataset.bucket] ||= new Set()).add(i.dataset.bucketImg); });
+  for (const [b, set] of Object.entries(by)) { const { data } = await SB.storage.from(b).createSignedUrls([...set], 3600); (data || []).forEach(x => { if (x.signedUrl) IMG_URLS[`${b}:${x.path}`] = x.signedUrl; }); }
+  els.forEach(i => { const u = IMG_URLS[`${i.dataset.bucket}:${i.dataset.bucketImg}`]; if (u && i.src !== u) i.src = u; });
+}
+const noticeImgs = n => (n.images || []).length ? `<div class="n-imgs n${Math.min(n.images.length, 3)}">${n.images.map(p => `<a class="n-img" href="#" data-open-img="${esc(p)}" data-bucket="notices"><img data-bucket-img="${esc(p)}" data-bucket="notices" alt="공지 사진"></a>`).join('')}</div>` : '';
 function shrinkPhoto(file) {
   return new Promise((ok, no) => {
     const img = new Image(), url = URL.createObjectURL(file);
@@ -1892,7 +1913,7 @@ function schedulePage() {
   const { tt, ev } = schData(), staff = isStaff(), c = schClass();
   const classes = [...new Set([...tt.map(t => t.class_name)])].sort();
   const opts = [...(myClasses().length ? [['mine', ROLE === 'student' ? '내 반' : '우리 아이 반']] : []), ['all', '전체'], ...(staff ? classes.map(x => [x, x]) : [])];
-  const acts = [staff ? `${ROLE === 'owner' ? `<button class="btn" data-photo="timetable">${ic('image')}사진으로 올리기</button>` : ''}<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
+  const acts = [staff ? `${ROLE === 'owner' ? `<button class="btn" data-photo="timetable">${ic('image')}사진으로 올리기</button>` : ''}<button class="btn" data-act="addTT">${ic('plus')}시간표 추가</button>${tt.length ? '<button class="btn" data-act="cleanTT">시간표 정리</button>' : ''}` : '', staff ? `<button class="btn primary" data-act="addEv">${ic('plus')}일정 추가</button>` : ''].join('');
   const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && ttOn(t, mondayOf(TODAY)) && classOk(t.class_name)).sort(ttSort);
   const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
   return head('일정·시간표', staff ? '원장님과 강사님이 똑같이 넣고 고쳐요. 누가 고쳤는지는 칸 아래와 "바뀐 기록"에 남아요. 학부모 · 학생에게도 같은 시간표와 일정이 보여요(강의실 · 담당 강사 · 메모는 빼고).' : '학원 시간표와 시험 · 행사 · 휴원 일정이에요.', acts) + `
@@ -1971,66 +1992,112 @@ function monthView(ev, staff) {
   </section>`;
 }
 
+// 같은 수업: 반 · 시작 · 끝 · 과목 · 주가 같은 칸들 (월 · 수 · 금처럼 요일만 다른 것) — 한 번에 고치고 지워요
+const ttKey = x => [x.class_name, hm(x.start_time), hm(x.end_time), x.subject || '', x.week_of || ''].join('|');
+const ttGroup = t => (REAL ? REAL.timetable : []).filter(x => ttKey(x) === ttKey(t)).sort(ttSort);
 function ttDialog(t) {
   const classes = allClasses(), mon = SCH_WEEK || mondayOf(TODAY), weekly = !t || !t.week_of;
-  const strip = d => { const { scope, ...rest } = d; return rest; };
+  const group = t ? ttGroup(t) : [], many = group.length > 1, gDays = group.map(x => +x.weekday);
+  const strip = d => { const { scope, together, ...rest } = d; return rest; };
   const days = d => [].concat(d.weekday).map(Number);
+  const skipAdd = x => [...new Set([...(x.skip_weeks || []), mon])];
   formDialog({
     title: t ? '시간표 고치기' : '시간표 추가', table: 'timetable', row: t, after: loadSchedule,
     label: r => `${r.class_name} 수업을`,
     check: d => d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
     doneText: '시간표에 넣었어요',
     fields: [
-      ...(weekly ? [['scope', t ? '어디까지 바꿀까요?' : '어느 주에 넣을까요?', { type: 'select', required: true, own: true, value: 'all', options: t
+      ...(many ? [['together', '같이 고칠 칸', { type: 'select', required: true, own: true, value: 'group', options: [['group', `같은 수업 모두 (${gDays.map(d => WD[d]).join(' · ')} ${group.length}칸)`], ['one', `이 칸만 (${WD[t.weekday]}요일)`]] }]] : []),
+      ...(weekly ? [['scope', t ? '어느 주까지 바꿀까요?' : '어느 주에 넣을까요?', { type: 'select', required: true, own: true, value: 'all', options: t
         ? [['all', '매주 바꾸기 (앞으로 모든 주)'], ['week', `이 주만 바꾸기 (${wkLabel(mon)} · 다른 주는 그대로)`]]
         : [['all', '매주 (계속 반복)'], ['week', `이 주만 (${wkLabel(mon)})`]] }]] : []),
       ['class_name', '반', { required: true, max: 50, chips: classes, placeholder: '예: 초등 B반' }],
-      ['weekday', t ? '요일 (더 고르면 그 요일에도 같은 수업이 들어가요)' : '요일 (여러 개 고르면 요일마다 같은 수업이 들어가요)', { type: 'multi', required: true, options: WEEK.map(d => [d, WD[d]]), value: [1] }],
+      ['weekday', many ? '요일 (같은 수업 모두: 빼면 그 요일 칸은 지워지고, 더하면 새로 들어가요)' : t ? '요일 (더 고르면 그 요일에도 같은 수업이 들어가요)' : '요일 (여러 개 고르면 요일마다 같은 수업이 들어가요)', { type: 'multi', required: true, own: many, options: WEEK.map(d => [d, WD[d]]), value: many ? gDays : [1] }],
       ['subject', '과목', { max: 50, placeholder: '예: 영어 리딩', chips: subjList() }],
       ['start_time', '시작', { type: 'time', required: true, value: '16:00', half: true }], ['end_time', '끝', { type: 'time', required: true, value: '17:30', half: true }],
       ['color', '색', { type: 'color' }],
       ['room', '강의실 (원장·강사만)', { max: 30, placeholder: '예: 2강의실', half: true, chips: ['1강의실', '2강의실', '3강의실', '자습실'] }], ['teacher_name', '담당 강사 (원장·강사만)', { max: 50, half: true, placeholder: '예: 김민지', chips: staffNames() }],
       ['note', '메모 (원장·강사만)', { max: 300, placeholder: '예: 격주 단어 시험' }]
     ],
-    // 저장: 매주 / 이 주만 · 요일 여러 개(고칠 때 첫 요일은 이 칸, 나머지는 새 칸)
+    // 저장: 같은 수업 모두 / 이 칸만 · 매주 / 이 주만 · 요일 여러 개
     save: async (d, base) => {
-      const one = strip(d), ws = days(d), onlyWeek = d.scope === 'week' || (t && t.week_of);
+      const one = strip(d), ws = days(d), onlyWeek = d.scope === 'week' || (t && t.week_of), all = many && d.together !== 'one';
+      const targets = !t ? [] : all ? group : [t];
       const rows = ws.map(w => ({ ...one, weekday: w, ...(onlyWeek ? { week_of: t && t.week_of ? t.week_of : mon } : {}) }));
-      let r;
-      if (!t) r = await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base })));
-      else if (d.scope === 'week') {
-        // 매주 수업을 이 주만 바꿔요: 이 주엔 원래 칸을 빼고(skip_weeks) 바꾼 칸을 이 주에만 넣어요
-        r = await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base })));
-        if (!r.error) r = await SB.from('timetable').update({ skip_weeks: [...new Set([...(t.skip_weeks || []), mon])] }).eq('id', t.id);
-      } else {
-        const [first, ...rest] = ws.includes(+t.weekday) ? [rows.find(x => x.weekday === +t.weekday), ...rows.filter(x => x.weekday !== +t.weekday)] : rows;
-        r = await SB.from('timetable').update(first).eq('id', t.id);
-        if (!r.error && rest.length) r = await SB.from('timetable').insert(rest.map(x => ({ ...x, ...base })));
-      }
-      return r.error ? '저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.' : null;
+      const ok = r => { if (r && r.error) throw r.error; return r; };
+      try {
+        if (!t) ok(await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base }))));
+        else if (d.scope === 'week') {
+          // 매주 수업을 이 주만 바꿔요: 이 주엔 원래 칸들을 빼고(skip_weeks) 바꾼 칸을 이 주에만 넣어요
+          ok(await SB.from('timetable').insert(rows.map(x => ({ ...x, ...base }))));
+          for (const x of targets) ok(await SB.from('timetable').update({ skip_weeks: skipAdd(x) }).eq('id', x.id));
+        } else {
+          // 고른 요일에 원래 칸이 있으면 고치고, 없으면 새로 넣고, 같은 수업 모두일 때 뺀 요일 칸은 지워요
+          const left = [...targets], has = w => targets.some(x => +x.weekday === w);
+          for (const r of [...rows].sort((a, b) => has(b.weekday) - has(a.weekday))) {
+            const i = left.findIndex(x => +x.weekday === r.weekday), hit = i >= 0 ? left.splice(i, 1)[0] : (!all && left.length ? left.shift() : null);
+            if (hit) ok(await SB.from('timetable').update(r).eq('id', hit.id));
+            else ok(await SB.from('timetable').insert({ ...r, ...base }));
+          }
+          if (all && left.length) ok(await SB.from('timetable').delete().in('id', left.map(x => x.id)));
+        }
+      } catch (e) { return dbErr(e); }
+      return null;
     },
-    // 지우기: 매주 수업은 "이 주만 빼기"도 고를 수 있어요
+    // 지우기: 같은 수업 모두 / 이 칸만 · 이 주만 빼기
     del: async () => {
-      // 매주 수업은 창 안에서 "이 주만 빼기 / 매주에서 지우기"를 골라요
-      let how = 'all';
-      if (weekly && t) {
-        how = await new Promise(res => {
-          const m = $('#dlgMsg'); m.hidden = false;
-          m.innerHTML = `<span class="del-pick"><b>어떻게 지울까요?</b><button type="button" class="btn sm" data-how="week">${wkLabel(mon)}만 빼기</button><button type="button" class="btn sm danger" data-how="all">매주에서 지우기</button><button type="button" class="btn sm" data-how="">그만두기</button></span>`;
-          m.querySelectorAll('[data-how]').forEach(b => b.onclick = () => { m.hidden = true; res(b.dataset.how); });
-        });
-        if (!how) return false;
-      } else if (!confirm(`${t.class_name} 수업${t.week_of ? `(${wkLabel(t.week_of)}만)` : ''}을 지울까요?`)) return false;
-      if (how === 'week') { const { error } = await SB.from('timetable').update({ skip_weeks: [...new Set([...(t.skip_weeks || []), mon])] }).eq('id', t.id); return error ? (toast('빼지 못했어요'), false) : `${wkLabel(mon)}만 뺐어요 · 다른 주는 그대로예요`; }
-      const { error } = await SB.from('timetable').delete().eq('id', t.id);
-      return error ? (toast('삭제하지 못했어요'), false) : '삭제했어요';
+      const opts = [...(weekly ? [['week', `${wkLabel(mon)}만 빼기${many ? ' (같은 수업 모두)' : ''}`]] : []), ...(many ? [['group', `같은 수업 ${group.length}칸 모두 지우기`, 1]] : []), ['one', many ? `이 칸만 지우기 (${WD[t.weekday]})` : weekly ? '매주에서 지우기' : '지우기', 1]];
+      const how = await new Promise(res => {
+        const m = $('#dlgMsg'); m.hidden = false;
+        m.innerHTML = `<span class="del-pick"><b>어떻게 지울까요?</b>${opts.map(([k, l, danger]) => `<button type="button" class="btn sm ${danger ? 'danger' : ''}" data-how="${k}">${l}</button>`).join('')}<button type="button" class="btn sm" data-how="">그만두기</button></span>`;
+        m.querySelectorAll('[data-how]').forEach(b => b.onclick = () => { m.hidden = true; res(b.dataset.how); });
+      });
+      if (!how) return false;
+      const list = how === 'one' ? [t] : group.length ? group : [t];
+      if (how === 'week') {
+        for (const x of (many ? group : [t])) { const { error } = await SB.from('timetable').update({ skip_weeks: skipAdd(x) }).eq('id', x.id); if (error) { toast(dbErr(error, '빼지')); return false; } }
+        return `${wkLabel(mon)}만 뺐어요 · 다른 주는 그대로예요`;
+      }
+      const { error } = await SB.from('timetable').delete().in('id', list.map(x => x.id));
+      return error ? (toast(dbErr(error, '삭제하지')), false) : `${list.length}칸 삭제했어요`;
     }
   });
   const dlg = $('#dlg');
   timePickers(dlg, 'start_time', 'end_time');
   bindSubjectEditor(dlg);
+  // "이 칸만"으로 바꾸면 요일도 이 칸 요일만 골라 둬요
+  const tg = dlg.querySelector('[name=together]');
+  if (tg) tg.onchange = () => { const pick = tg.value === 'one' ? [+t.weekday] : gDays; dlg.querySelectorAll('[name=weekday]').forEach(c => { c.checked = pick.includes(+c.value); }); };
   if (t && t.week_of) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0"><span class="chip info">${wkLabel(t.week_of)}만</span> 이 주에만 있는 수업이에요.</p>`);
   else if (t && (t.skip_weeks || []).length) dlg.querySelector('h2').insertAdjacentHTML('afterend', `<p class="muted small" style="margin:-6px 0 0">매주 수업 · 빠지는 주: ${t.skip_weeks.map(wkLabel).join(', ')}</p>`);
+}
+// 시간표 정리: 여러 칸을 골라 한 번에 지우거나 전체 삭제
+function ttCleanDialog() {
+  if (!REAL) { toast('예시 계정에서는 지울 수 없어요'); return; }
+  const list = [...REAL.timetable].sort(ttSort), d = dialogEl();
+  const byClass = [...new Set(list.map(x => x.class_name))];
+  d.innerHTML = `<form method="dialog" class="dlg" id="ttcForm" novalidate>
+    <h2>시간표 정리</h2>
+    <p class="muted small" style="margin:-6px 0 0">지울 칸을 고르세요. 반 이름을 누르면 그 반 칸이 모두 골라져요. 지운 칸은 되돌릴 수 없어요.</p>
+    <div class="pick-chips">${byClass.map(c => `<button type="button" data-ttc-class="${esc(c)}">${esc(c)}</button>`).join('')}<button type="button" data-ttc-all>모두 고르기</button><button type="button" data-ttc-none>모두 풀기</button></div>
+    <div class="ttc-list">${list.map(x => `<label class="chk-line"><input type="checkbox" name="tt" value="${x.id}" data-cls="${esc(x.class_name)}"><span><b>${esc(x.class_name)}</b> · ${WD[x.weekday]} ${hm(x.start_time)}–${hm(x.end_time)}${x.subject ? ` · ${esc(x.subject)}` : ''}${x.week_of ? ` · ${wkLabel(x.week_of)}만` : ''}</span></label>`).join('') || '<p class="muted small">시간표가 없어요.</p>'}</div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><button type="button" class="btn danger" id="ttcAll">전체 삭제 (${list.length}칸)</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary danger-fill" id="ttcDel">고른 칸 지우기</button></div></form>`;
+  d.showModal();
+  const boxes = () => [...d.querySelectorAll('[name=tt]')];
+  const count = () => { const n = boxes().filter(b => b.checked).length; $('#ttcDel').textContent = `고른 ${n}칸 지우기`; };
+  d.querySelectorAll('[name=tt]').forEach(b => b.onchange = count); count();
+  d.querySelectorAll('[data-ttc-class]').forEach(b => b.onclick = () => { boxes().filter(x => x.dataset.cls === b.dataset.ttcClass).forEach(x => { x.checked = true; }); count(); });
+  d.querySelector('[data-ttc-all]').onclick = () => { boxes().forEach(x => { x.checked = true; }); count(); };
+  d.querySelector('[data-ttc-none]').onclick = () => { boxes().forEach(x => { x.checked = false; }); count(); };
+  $('#dlgCancel').onclick = () => d.close();
+  const go = async ids => {
+    const { error } = await SB.from('timetable').delete().in('id', ids);
+    if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error, '지우지'); m.hidden = false; return; }
+    d.close(); await loadSchedule(); render(); toast(`시간표 ${ids.length}칸을 지웠어요`);
+  };
+  $('#ttcForm').onsubmit = e => { e.preventDefault(); const ids = boxes().filter(b => b.checked).map(b => b.value); if (!ids.length) { const m = $('#dlgMsg'); m.textContent = '지울 칸을 골라 주세요.'; m.hidden = false; return; } if (confirm(`고른 ${ids.length}칸을 지울까요?`)) go(ids); };
+  $('#ttcAll').onclick = () => { if (list.length && confirm(`시간표 ${list.length}칸을 모두 지울까요? 되돌릴 수 없어요.`) && confirm('정말 모두 지울까요?')) go(list.map(x => x.id)); };
 }
 // 시간 칸: 오전/오후 · 시 · 분을 각각 골라요 (지역 고르기처럼). 고른 값은 "16:00"처럼 hidden 칸에 들어가요
 const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return h * 60 + (m || 0); };
@@ -2391,7 +2458,7 @@ const LIB_VIS = {
   class: ['반 가족', 'warn', '원장 · 강사 + 고른 반 아이의 학부모 · 학생'],
   everyone: ['학원 모두', 'good', '원장 · 강사 · 학부모 · 학생 모두']
 };
-const LIB_MAX = 50 * 1024 * 1024;
+const LIB_MAX = 50 * 1024 * 1024, LIB_MANY = 30; // 한 번에 30개까지 (사진 여러 장 등)
 let libCat = '전체', libVis = 'all', libFolder = 'all'; // libFolder: all · none(폴더 밖) · 폴더 id
 const fileSize = n => n == null ? '' : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`;
 const fileIcon = it => it.link_url && !it.file_path ? 'ext' : /pdf/.test(it.mime || '') ? 'doc' : /image/.test(it.mime || '') ? 'page' : /video/.test(it.mime || '') ? 'video' : 'doc';
@@ -2434,7 +2501,7 @@ function libraryPage() {
       <div><div class="t">${canEditLib(it) ? `<span class="nm-link" data-edit-lib="${it.id}" role="button" tabindex="0">${esc(it.title)}</span>` : esc(it.title)} ${staff ? visChip(it) : ''}</div>
         <div class="d">${esc(it.category)} · ${esc(it.uploader_name || '학원')}${it.uploader_role === 'teacher' ? ' 선생님' : it.uploader_role === 'owner' ? ' 원장님' : ''} · ${md(it.created_at.slice(0, 10))}${it.file_name ? ` · ${esc(it.file_name)} ${fileSize(it.file_size)}` : ''}</div>
         ${it.description ? `<div class="d pre">${esc(it.description)}</div>` : ''}</div>
-      <div class="r"><span class="btns">${staff ? `<button class="btn sm" data-lib-move="${it.id}" title="다른 폴더로">${ic('folder')}${folderOf(it.folder_id) ? esc(folderOf(it.folder_id).name) : '폴더 옮기기'}</button>` : folderOf(it.folder_id) && libFolder === 'all' ? `<span class="chip mute">${esc(folderOf(it.folder_id).name)}</span>` : ''}${it.file_path ? `<button class="btn sm" data-lib-open="${it.id}">열기</button><button class="btn sm primary" data-lib-down="${it.id}">내려받기</button>` : ''}${it.link_url ? `<a class="btn sm ${it.file_path ? '' : 'primary'}" href="${esc(it.link_url)}" target="_blank" rel="noopener">링크 열기 ${ic('ext')}</a>` : ''}</span></div>
+      <div class="r"><span class="btns">${staff ? `<button class="btn sm" data-lib-move="${it.id}" title="다른 폴더로">${ic('folder')}${folderOf(it.folder_id) ? esc(folderOf(it.folder_id).name) : '폴더 옮기기'}</button>` : folderOf(it.folder_id) && libFolder === 'all' ? `<span class="chip mute">${esc(folderOf(it.folder_id).name)}</span>` : ''}${it.file_path ? `<button class="btn sm" data-lib-open="${it.id}">열기</button><button class="btn sm primary" data-lib-down="${it.id}">내려받기</button>` : ''}${it.link_url ? `<a class="btn sm ${it.file_path ? '' : 'primary'}" href="${esc(it.link_url)}" target="_blank" rel="noopener">링크 열기 ${ic('ext')}</a>` : ''}${canEditLib(it) ? `<button class="btn sm" data-edit-lib="${it.id}">${ic('pen')}수정</button><button class="btn sm danger" data-lib-del="${it.id}">삭제</button>` : ''}</span></div>
     </div>`).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('doc')}</span><h2>${all.length ? '고른 조건에 맞는 자료가 없어요' : '아직 자료가 없어요'}</h2>
     <p class="muted">${staff ? '수업 자료 · 학부모 안내문 · 행정 서식을 올려 두면 필요한 사람만 볼 수 있어요. 파일은 50MB까지, 큰 영상은 링크로 넣어 주세요.' : '학원에서 자료를 공유하면 여기에 보여요.'}</p>${all.length ? '' : add}</section>`}`;
@@ -2446,9 +2513,11 @@ function libDialog(it) {
   d.innerHTML = `
   <form method="dialog" class="dlg" id="libForm" novalidate>
     <h2>${it ? '자료 고치기' : '자료 올리기'}</h2>
-    <label class="f">제목 *<input name="title" maxlength="100" value="${esc(it ? it.title : '')}" placeholder="예: 11월 초등 B반 단어장"></label>
-    ${it ? (it.file_name ? `<p class="muted small" style="margin:0">파일: ${esc(it.file_name)} ${fileSize(it.file_size)} · 파일을 바꾸려면 지우고 다시 올려 주세요.</p>` : '') : `
-    <label class="f">파일 (50MB까지)<input type="file" name="file"></label>`}
+    <label class="f">제목 *<input name="title" maxlength="100" value="${esc(it ? it.title : '')}" placeholder="예: 11월 초등 B반 단어장 (비우면 파일 이름)"></label>
+    ${it ? `${it.file_name ? `<p class="muted small" style="margin:0">지금 파일: ${esc(it.file_name)} ${fileSize(it.file_size)}</p>` : ''}
+    <label class="f">${it.file_name ? '파일 바꾸기 (고르면 새 파일로 바뀌어요)' : '파일 넣기'}<input type="file" name="file"></label>` : `
+    <label class="f">파일 (하나에 50MB까지 · 사진 등 한 번에 ${LIB_MANY}개까지)<input type="file" name="file" multiple></label>
+    <p class="muted small" id="libPicked" style="margin:-4px 0 0" hidden></p>`}
     <label class="f">${it ? '링크' : '또는 링크'}<input name="link" type="url" maxlength="500" value="${esc(it && it.link_url || '')}" placeholder="https:// (유튜브 · 구글 드라이브 등)"></label>
     ${libFolders().length ? `<label class="f">폴더<select name="folder"><option value="">폴더 밖</option>${libFolders().map(f => `<option value="${f.id}" ${(it ? it.folder_id : libFolder) === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>` : ''}
     <label class="f">분류<select name="cat">${LIB_CATS.map(c => `<option ${(it ? it.category : '수업 자료') === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
@@ -2464,31 +2533,50 @@ function libDialog(it) {
   const f = $('#libForm'), fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
   $('#dlgCancel').onclick = () => d.close();
   f.querySelectorAll('[name="vis"]').forEach(r => r.onchange = () => { $('#libClass').hidden = f.elements.vis.value !== 'class'; });
+  if (!it) f.elements.file.onchange = () => { const n = f.elements.file.files.length, p = $('#libPicked'); p.hidden = n < 2; p.textContent = `${n}개 골랐어요 · 하나씩 자료로 올라가요 (제목 뒤에 번호가 붙어요)${n > LIB_MANY ? ` · ${LIB_MANY}개까지만 돼요` : ''}`; };
   f.onsubmit = async e => {
     e.preventDefault();
-    const el = f.elements, title = el.title.value.trim(), link = el.link.value.trim(), file = !it && el.file.files[0], vis = el.vis.value;
-    if (!title) return fail('제목을 적어 주세요.');
+    const el = f.elements, link = el.link.value.trim(), files = [...el.file.files], file = files[0], vis = el.vis.value;
+    const title = el.title.value.trim() || (files.length === 1 ? file.name.replace(/\.[^.]+$/, '').slice(0, 100) : '');
+    if (!title && files.length < 2) return fail('제목을 적어 주세요.');
     if (!it && !file && !link) return fail('파일을 고르거나 링크를 넣어 주세요.');
-    if (it && !it.file_path && !link) return fail('링크를 넣어 주세요.');
+    if (files.length > LIB_MANY) return fail(`한 번에 ${LIB_MANY}개까지 올릴 수 있어요. 나눠서 올려 주세요.`);
+    if (it && !it.file_path && !file && !link) return fail('링크를 넣어 주세요.');
     if (link && !/^https:\/\/\S+$/.test(link)) return fail('링크는 https:// 로 시작해야 해요.');
-    if (file && file.size > LIB_MAX) return fail('파일이 50MB보다 커요. 큰 파일은 구글 드라이브 같은 곳에 올리고 링크로 넣어 주세요.');
+    const big = files.find(x => x.size > LIB_MAX);
+    if (big) return fail(`${big.name} 파일이 50MB보다 커요. 큰 파일은 구글 드라이브 같은 곳에 올리고 링크로 넣어 주세요.`);
     if (vis === 'class' && !el.cls.value) return fail('반을 골라 주세요. 반이 없으면 원생 명단에서 반을 먼저 정해 주세요.');
     const row = { title, category: el.cat.value, visibility: vis, target_class: vis === 'class' ? el.cls.value : null, description: el.desc.value.trim() || null, link_url: link || null, ...(el.folder ? { folder_id: el.folder.value || null } : {}) };
     const btn = f.querySelector('button.primary'); btn.disabled = true; btn.textContent = file ? '올리는 중…' : '저장 중…';
+    const upload = async fl => {
+      const ext = (fl.name.match(/\.([a-z0-9]{1,8})$/i) || [])[1], path = `${REAL.academy.id}/${crypto.randomUUID()}/file${ext ? `.${ext.toLowerCase()}` : ''}`;
+      const up = await SB.storage.from('library').upload(path, fl, { contentType: fl.type || 'application/octet-stream' });
+      if (up.error) throw up.error;
+      return { file_path: path, file_name: fl.name.slice(0, 200), file_size: fl.size, mime: (fl.type || '').slice(0, 100) || null };
+    };
+    const done = (n, label) => { btn.disabled = false; btn.textContent = label; return n; };
     if (it) {
-      const { error } = await SB.from('library_items').update(row).eq('id', it.id);
-      btn.disabled = false; btn.textContent = '저장';
-      if (error) return fail('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
-    } else {
-      let path = null;
-      if (file) {
-        const ext = (file.name.match(/\.([a-z0-9]{1,8})$/i) || [])[1];
-        path = `${REAL.academy.id}/${crypto.randomUUID()}/file${ext ? `.${ext.toLowerCase()}` : ''}`;
-        const up = await SB.storage.from('library').upload(path, file, { contentType: file.type || 'application/octet-stream' });
-        if (up.error) { btn.disabled = false; btn.textContent = '올리기'; return fail('파일을 올리지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+      // 고치기: 새 파일을 고르면 올리고 예전 파일은 지워요
+      let fileRow = {};
+      try { if (file) fileRow = await upload(file); } catch (er) { done(0, '저장'); return fail(dbErr(er, '파일을 올리지')); }
+      const { error } = await SB.from('library_items').update({ ...row, ...fileRow }).eq('id', it.id);
+      if (error) { if (fileRow.file_path) await SB.storage.from('library').remove([fileRow.file_path]); done(0, '저장'); return fail(dbErr(error)); }
+      if (fileRow.file_path && it.file_path) await SB.storage.from('library').remove([it.file_path]);
+      done(0, '저장');
+    } else if (files.length > 1) {
+      // 여러 개: 하나씩 자료로 (제목 뒤 번호)
+      let ok = 0;
+      for (const [i, fl] of files.entries()) {
+        btn.textContent = `올리는 중… ${i + 1}/${files.length}`;
+        try { const fr = await upload(fl); const { error } = await SB.from('library_items').insert({ ...row, title: (title ? `${title} (${i + 1})` : fl.name.replace(/\.[^.]+$/, '')).slice(0, 100), academy_id: REAL.academy.id, ...fr }); if (error) { await SB.storage.from('library').remove([fr.file_path]); throw error; } ok++; }
+        catch (er) { done(0, '올리기'); await loadLibrary(); render(); return fail(`${ok}개는 올렸고 ${fl.name}에서 멈췄어요 — ${dbErr(er, '올리지').replace(/^올리지 못했어요 — /, '')}`); }
       }
-      const { error } = await SB.from('library_items').insert({ ...row, academy_id: REAL.academy.id, file_path: path, file_name: file ? file.name.slice(0, 200) : null, file_size: file ? file.size : null, mime: file ? (file.type || '').slice(0, 100) || null : null });
-      if (error) { if (path) await SB.storage.from('library').remove([path]); btn.disabled = false; btn.textContent = '올리기'; return fail('저장하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+      d.close(); await loadLibrary(); render(); toast(`자료 ${ok}개를 올렸어요 · ${LIB_VIS[vis][2]}`); return;
+    } else {
+      let fr = { file_path: null, file_name: null, file_size: null, mime: null };
+      try { if (file) fr = await upload(file); } catch (er) { done(0, '올리기'); return fail(dbErr(er, '파일을 올리지')); }
+      const { error } = await SB.from('library_items').insert({ ...row, academy_id: REAL.academy.id, ...fr });
+      if (error) { if (fr.file_path) await SB.storage.from('library').remove([fr.file_path]); done(0, '올리기'); return fail(dbErr(error)); }
     }
     d.close(); await loadLibrary(); render(); toast(it ? '고쳤어요' : `자료를 올렸어요 · ${LIB_VIS[vis][2]}`);
   };
@@ -2551,7 +2639,9 @@ async function openLib(id, download) {
    채팅: 1:1과 그룹. 누구와 이야기할 수 있는지는 DB(private.message_academy)가 정해요:
    원장↔센터 관리자 · 강사 · 학부모 · 학생, 강사↔강사 · 학부모 · 학생, 학부모↔학생(같은 아이로 연결된 가족만).
    새 메시지는 5초마다 확인해요(대화방을 열어 둔 동안), 목록 · 안 읽은 수는 20초마다. */
-const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false, readAt: {} };
+const MSG = { convs: [], friends: null, msgs: {}, people: {}, loaded: false, readAt: {}, reads: {}, urls: {} };
+const CHAT_MAX_FILES = 10, CHAT_MAX_SIZE = 20 * 1024 * 1024;
+const isImg = f => /^image\//.test(f.mime || '');
 let MSG_TAB = null; // 'friends' | 'chats'
 const WHO = { admin: '센터 관리자', owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
 // 예시 계정: 역할마다 대화할 수 있는 사람만 (원장↔센터·강사·학부모·학생, 강사↔강사·학부모·학생, 학부모↔학생)
@@ -2603,7 +2693,7 @@ function messagesPage() {
   const tabs = `<div class="msg-tabs">${[['friends', `친구 ${friends.length}`], ['chats', `채팅${msgUnread() ? ` <span class="count-dot">${msgUnread()}</span>` : ''}`]].map(([k, l]) => `<button class="${MSG_TAB === k ? 'on' : ''}" data-msg-tab="${k}">${l}</button>`).join('')}</div>`;
   const acts = MSG_TAB === 'friends' ? `<button class="btn primary" data-act="addFriend">${ic('plus')}친구 추가</button>`
     : `<button class="btn" data-act="newGroup">${ic('users')}그룹 채팅</button><button class="btn primary" data-act="newChat">${ic('plus')}새 채팅</button>`;
-  return head('채팅', '친구로 추가한 사람과 1:1이나 그룹으로 이야기해요. 이름 · 아이디로 찾아서 추가한 사람만 친구 목록에 보여요.', acts) + tabs +
+  return head('채팅', '우리 학원에서 이야기할 수 있는 사람은 처음부터 친구로 들어가 있어요. 1:1이나 그룹으로 이야기하고, 사진 · 파일도 한 번에 10개까지 보내요.', acts) + tabs +
     (MSG_TAB === 'friends' ? friendsView(friends) : chatsView(convs));
 }
 function friendsView(friends) {
@@ -2617,7 +2707,7 @@ function friendsView(friends) {
   <section class="card"><div class="list">${groups.map(([r, l]) => `<h3 class="ct-h">${WHO[r]} ${l.length}</h3>${l.map(f => `
     <a class="li link conv" href="#messages" data-friend="${f.user_id}">
       ${pfp(f.name, f.avatar_url, f.role)}
-      <div><div class="t">${esc(f.name)} <span class="muted small">${whoLine(f)}</span></div><div class="d">${esc(f.status_msg || '')}</div></div>
+      <div><div class="t">${esc(f.name)} <span class="muted small">${whoLine(f)}</span>${f.auto ? ' <span class="chip mute">우리 학원</span>' : ''}</div><div class="d">${esc(f.status_msg || '')}</div></div>
       <div class="r">${f.can_message === false ? '<span class="chip mute">대화 불가</span>' : ''}</div>
     </a>`).join('')}`).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('users')}</span><h2>아직 친구가 없어요</h2>
@@ -2651,8 +2741,14 @@ function chatPage(id) {
       ${c.kind === 'group' ? `<button class="btn sm" data-act="groupInfo" style="margin-left:auto">${ic('users')}대화 상대 ${c.members}</button>` : ''}</div>
     <div class="chat-log" id="chatLog">${chatLog(msgs, c)}</div>
     ${c.can_send === false ? '<p class="muted small chat-off">학원을 나갔거나 연결이 끊겨서 더 이상 메시지를 보낼 수 없어요.</p>' : `
-    <form class="chat-send" id="chatSend" novalidate><textarea name="body" rows="1" maxlength="2000" placeholder="메시지 입력 (Enter 보내기 · Shift+Enter 줄 바꿈)"></textarea><button class="btn primary">보내기</button></form>`}
+    <div class="chat-pick" id="chatPick" hidden></div>
+    <form class="chat-send" id="chatSend" novalidate><label class="btn chat-att" title="사진 · 파일 보내기 (한 번에 ${CHAT_MAX_FILES}개까지)">${ic('plus')}<input type="file" id="chatFiles" multiple hidden></label><textarea name="body" rows="1" maxlength="2000" placeholder="메시지 입력 (Enter 보내기 · Shift+Enter 줄 바꿈)"></textarea><button class="btn primary">보내기</button></form>`}
   </section>`;
+}
+// 이 메시지를 아직 안 읽은 사람 수 (보낸 사람 빼고, 보낸 뒤에 들어온 사람도 빼고)
+function unreadOf(c, m) {
+  const rs = c && MSG.reads[c.id]; if (!rs || !USER) return 0;
+  return rs.filter(r => r.user_id !== m.sender_id && new Date(r.joined_at) <= new Date(m.created_at) && (!r.read_at || new Date(r.read_at) < new Date(m.created_at))).length;
 }
 function chatLog(msgs, c) {
   if (msgs == null) return '<p class="muted small" style="text-align:center">불러오는 중…</p>';
@@ -2669,7 +2765,12 @@ function chatLog(msgs, c) {
       who = `<div class="bub-who">${p.user_id ? `<button type="button" class="who-btn" data-person="${p.user_id}" title="프로필 보기">` : '<span class="who-btn">'}${pfp(p.name, p.avatar_url, p.role, 'sm')}<b>${esc(p.name)}</b>${p.user_id ? '</button>' : '</span>'}</div>`;
     }
     day = d; prev = m.sender_id;
-    return `${sep}${who}<div class="bubble ${mine ? 'mine' : ''} ${people && !mine ? 'in-grp' : ''}"><p>${esc(m.body)}</p><time>${msgTime(m.created_at)}</time></div>`;
+    const files = m.files || [], onlyFiles = files.length && /^\[(사진|파일)/.test(m.body);
+    const imgs = files.filter(isImg), docs = files.filter(f => !isImg(f));
+    const att = files.length ? `<div class="bub-files">${imgs.length ? `<div class="bub-imgs n${Math.min(imgs.length, 4)}">${imgs.map(f => `<button type="button" class="bub-img" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}"><img data-chat-img="${esc(f.path)}" alt="${esc(f.name)}"></button>`).join('')}</div>` : ''}${docs.map(f => `<button type="button" class="bub-doc" data-chat-open="${esc(f.path)}" data-name="${esc(f.name)}" data-down="1">${ic('doc')}<span><b>${esc(f.name)}</b><small>${fileSize(f.size)} · 내려받기</small></span></button>`).join('')}</div>` : '';
+    // 읽음: 1:1은 내 말풍선에 "읽음 / 안읽음", 그룹은 안 읽은 사람 수 (카톡처럼)
+    const n = unreadOf(c, m), rc = !c ? '' : c.kind === 'group' ? (n ? `<em class="rc">${n}</em>` : '') : mine ? `<em class="rc ${n ? '' : 'read'}">${n ? '안읽음' : '읽음'}</em>` : '';
+    return `${sep}${who}<div class="bubble ${mine ? 'mine' : ''} ${people && !mine ? 'in-grp' : ''}"><div class="bub-in">${onlyFiles ? '' : `<p>${esc(m.body)}</p>`}${att}</div><span class="bub-meta">${rc}<time>${msgTime(m.created_at)}</time></span></div>`;
   }).join('');
 }
 
@@ -2680,11 +2781,11 @@ function friendDialog(f) {
     ${pfp(f.name, f.avatar_url, f.role, 'lg')}
     <h2>${esc(f.name)}</h2><p class="muted small" style="margin:0">${whoLine(f)}</p>
     ${f.status_msg ? `<p class="pf-msg">${esc(f.status_msg)}</p>` : ''}
-    <div class="acts"><button type="button" class="btn danger" id="pfDel">친구 삭제</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>${f.can_message === false ? '' : '<button type="button" class="btn primary" id="pfChat">1:1 채팅</button>'}</div></div>`;
+    <div class="acts">${f.auto ? '<span class="muted small">우리 학원 사람이라 늘 친구예요</span>' : '<button type="button" class="btn danger" id="pfDel">친구 삭제</button>'}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>${f.can_message === false ? '' : '<button type="button" class="btn primary" id="pfChat">1:1 채팅</button>'}</div></div>`;
   d.showModal();
   $('#dlgCancel').onclick = () => d.close();
   if ($('#pfChat')) $('#pfChat').onclick = () => { d.close(); openDirect(f.user_id); };
-  $('#pfDel').onclick = async () => {
+  if ($('#pfDel')) $('#pfDel').onclick = async () => {
     if (!USER) { toast('예시 계정에서는 지울 수 없어요'); return; }
     if (!confirm(`${f.name} 님을 친구에서 뺄까요? 지난 채팅은 그대로 남아요.`)) return;
     await SB.rpc('remove_friend', { p_user: f.user_id }); d.close(); await loadFriends(); render(); toast('친구에서 뺐어요');
@@ -2909,12 +3010,14 @@ function settingsPage() {
       ${row('학원', DATA.academy.name)}
       ${row('지역', DATA.academy.area || '-')}
       ${row('내 역할', ROLE_NAMES[ROLE])}
-      <div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}</div>
+      <div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}<button class="btn sm" data-act="peopleList">누가 있는지 보기</button></div>
       ${ROLE === 'owner' ? row('함께하는 사람', REAL ? `원생 ${REAL.students.length}명 · 강사 ${REAL.members.filter(m => m.role === 'teacher').length}명` : `원생 ${DATA.academy.students}명 · 강사 ${DATA.staff.length}명`) : ''}
       ${ROLE === 'teacher' ? row('담당 반', REAL ? (REAL.myClasses && REAL.myClasses.length ? REAL.myClasses.map(esc).join(' · ') : '<span class="muted">원장님이 정하면 보여요</span>') : DEMO_MY_CLASSES.join(' · ')) : ''}
       ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
       ${ROLE === 'owner' ? `${famSwitch()}
-        <div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>` : ''}`);
+        <div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>` : ''}
+      <div class="set-line"><div><b>다른 학원으로 옮기기</b><small>새 학원에서 받은 초대 코드를 넣으면 그 학원으로 옮겨요${ROLE === 'owner' ? ' · 원장님은 지금 학원도 그대로 남아요' : ' · 지금 학원에서는 나가요'}</small></div><button class="btn sm" data-act="moveAcad">코드 넣기</button></div>
+      <div class="set-line"><div><b>학원에서 나가기</b><small>${ROLE === 'owner' ? '다른 원장님이 있을 때만 나갈 수 있어요' : '나가면 이 학원 자료 · 채팅을 더 볼 수 없어요 · 다시 들어오려면 초대 코드가 필요해요'}</small></div><button class="btn sm danger" data-act="leaveAcad">나가기</button></div>`);
   }
   const svc = ROLE === 'owner' || ROLE === 'teacher' ? card('이용 중인 센터 지원', `
     <div class="needs">${Object.keys(SVC_AREAS).map(a => `<span class="chip ${SVC_STATE[svcOf(a)][0]}">${SVC_AREAS[a]} · ${SVC_STATE[svcOf(a)][1]}</span>`).join('')}</div>
@@ -2983,8 +3086,60 @@ function peopleCard(compact) {
   const body = `<div class="ppl">${cells.map(([k, l]) => `<div class="r-${k}"><span class="dot"></span><b class="num">${+p[k] || 0}</b><small>${l}</small></div>`).join('')}
     <div class="ppl-en"><b class="num">${+p.enrolled || 0}</b><small>다니는 ${fam ? '원생' : '수강생'}</small></div></div>`;
   if (compact) return body;
-  return `<section class="card ppl-card"><div class="card-head"><h2>우리 학원 사람들</h2><span class="sub">${esc(DATA.academy.name)} · 앱에 가입한 ${total}명</span></div>${body}
+  return `<section class="card ppl-card"><div class="card-head"><h2>우리 학원 사람들</h2><span class="sub">${esc(DATA.academy.name)} · 앱에 가입한 ${total}명</span><button class="btn sm" data-act="peopleList">누가 있는지 보기 ›</button></div>${body}
     <p class="muted small" style="margin:6px 0 0">학원 코드로 가입한 계정 수예요. ${fam ? '원생' : '수강생'}은 명단에 있는 다니는 사람 수(앱 가입과 상관없이)예요.</p></section>`;
+}
+// 우리 학원 사람들 자세히: 역할별 이름 · 직책 · 연결된 아이 (원장 · 강사는 모두, 학부모 · 학생은 원장 · 강사만) + 원장은 내보내기
+const DEMO_PEOPLE_LIST = () => [
+  { user_id: 'd-o', name: DATA.users.owner.name, role: 'owner' },
+  ...DATA.staff.map((x, i) => ({ user_id: `d-t${i}`, name: x.name, role: 'teacher', title: i === 0 ? '매니저' : null })),
+  ...(isStaff() ? DATA.students.slice(0, 6).map((x, i) => ({ user_id: `d-p${i}`, name: `${x.name} 학부모`, role: 'parent', kids: x.name })) : []),
+  ...(isStaff() ? DATA.students.slice(0, 3).map((x, i) => ({ user_id: `d-s${i}`, name: x.name, role: 'student', kids: x.name })) : [])];
+async function peopleListDialog() {
+  const d = dialogEl();
+  d.innerHTML = '<div class="dlg"><h2>우리 학원 사람들</h2><p class="muted">불러오는 중…</p></div>'; d.showModal();
+  let list = DEMO_PEOPLE_LIST();
+  if (REAL) { const { data, error } = await SB.rpc('academy_people_list', { p_academy: REAL.academy.id }); if (error) { d.querySelector('.muted').textContent = dbErr(error, '불러오지'); return; } list = data || []; }
+  const p = peopleCounts() || {}, fam = famOn(), canKick = ROLE === 'owner' || (ROLE === 'teacher' && can('staff'));
+  const roles = [['owner', '원장'], ['teacher', '강사'], ...(fam ? [['parent', '학부모']] : []), ['student', fam ? '학생' : '수강생']];
+  const draw = () => roles.map(([r, l]) => { const xs = list.filter(x => x.role === r), n = +p[r] || xs.length;
+    return `<h3 class="ct-h">${l} ${n}명</h3>${xs.length ? `<div class="list">${xs.map(x => `<div class="li"><span class="av" style="background:${ROLE_COLOR[r]}">${esc((x.name || '?')[0])}</span>
+      <div><div class="t">${esc(x.name)}${x.title ? ` <span class="chip info">${esc(x.title)}</span>` : ''}${USER && x.user_id === USER.id ? ' <span class="chip mute">나</span>' : ''}</div><div class="d">${x.kids ? `${r === 'parent' ? '아이' : '원생'} ${esc(x.kids)} · ` : ''}${x.joined_at ? `${md(x.joined_at.slice(0, 10))} 합류` : ''}</div></div>
+      <div class="r">${canKick && r !== 'owner' && (ROLE === 'owner' || r === 'teacher') && !(USER && x.user_id === USER.id) ? `<button class="btn sm danger" data-kick="${x.user_id}">내보내기</button>` : ''}</div></div>`).join('')}</div>`
+      : `<p class="muted small" style="margin:0 0 6px">${n && !isStaff() ? '다른 가족 이름은 원장님 · 선생님만 볼 수 있어요' : '아직 없어요'}</p>`}`; }).join('');
+  d.innerHTML = `<div class="dlg"><h2>우리 학원 사람들</h2><p class="muted small" style="margin:-6px 0 0">${esc(DATA.academy.name)} · 학원 코드로 가입한 사람이에요${isStaff() ? '' : ' · 원장님 · 선생님 이름만 보여요'}</p>
+    <div id="pplBody">${draw()}</div><p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  $('#dlgCancel').onclick = () => d.close();
+  const bindKick = () => d.querySelectorAll('[data-kick]').forEach(b => b.onclick = async () => {
+    const x = list.find(y => y.user_id === b.dataset.kick);
+    if (!REAL) { toast('예시 계정에서는 내보낼 수 없어요'); return; }
+    if (!confirm(`${x.name} 님을 학원에서 내보낼까요? 이 학원 자료 · 채팅을 더 볼 수 없어요. 남긴 기록은 학원에 그대로 남아요.`)) return;
+    const { error } = await SB.rpc('remove_member', { p_academy: REAL.academy.id, p_user: x.user_id });
+    if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error, '내보내지'); m.hidden = false; return; }
+    list = list.filter(y => y.user_id !== x.user_id); if (REAL.people && REAL.people[x.role]) REAL.people[x.role]--;
+    $('#pplBody').innerHTML = draw(); bindKick(); toast(`${x.name} 님을 내보냈어요`);
+  });
+  bindKick();
+}
+// 학원에서 나가기 · 다른 학원으로 옮기기
+async function leaveAcademy() {
+  if (!REAL) { toast('예시 계정에서는 나갈 수 없어요'); return; }
+  if (!confirm(`${REAL.academy.name}에서 나갈까요? 이 학원 자료 · 채팅을 더 볼 수 없어요. 다시 들어오려면 초대 코드가 필요해요.`)) return;
+  const { error } = await SB.rpc('leave_academy', { p_academy: REAL.academy.id });
+  if (error) { toast(/last_owner/.test(error.message || '') ? '원장님이 한 분뿐이라 나갈 수 없어요. 다른 원장님을 먼저 초대해 주세요' : dbErr(error, '나가지')); return; }
+  toast('학원에서 나왔어요'); setTimeout(() => { location.href = '/app'; }, 600);
+}
+function moveAcademyDialog() {
+  if (!REAL) { toast('예시 계정에서는 옮길 수 없어요'); return; }
+  formDialog({ title: '다른 학원으로 옮기기', table: 'academy_members', academy: false, okText: '옮기기', label: () => '', doneText: '새 학원으로 옮겼어요 · 다시 여는 중…', after: async () => {},
+    fields: [['code', '새 학원 초대 코드', { required: true, max: 12, placeholder: '예: K7P2QX9M' }]],
+    save: async d => {
+      if (!confirm(ROLE === 'owner' ? '새 학원에 들어갈까요? 원장님은 지금 학원도 그대로 남아요.' : `새 학원으로 옮길까요? ${REAL.academy.name}에서는 나가요.`)) return '그만뒀어요.';
+      const { error } = await SB.rpc('move_academy', { p_code: d.code.trim().toUpperCase() });
+      if (error) { const m = error.message || ''; return /invalid_code/.test(m) ? '맞는 초대 코드가 없어요. 코드를 다시 확인해 주세요.' : /role_mismatch/.test(m) ? '내 역할과 다른 코드예요. 강사님은 강사용 코드, 학부모 · 학생은 학부모·학생용 코드를 넣어 주세요.' : dbErr(error, '옮기지'); }
+      setTimeout(() => { location.href = '/app'; }, 400); return null;
+    } });
 }
 // 아이디 회원이 이메일이 없으면 이메일도 (아이디 · 비밀번호 찾기에 써요)
 const phoneHint = () => {
@@ -3060,6 +3215,8 @@ document.addEventListener('click', e => {
   const id = location.hash.split('/')[1], c = convsData().find(x => x.id === id);
   personDialog((MSG.people[id] || []).find(p => p.user_id === b.dataset.person), c);
 });
+// 채팅 사진 · 파일 열기 (대화창은 새 메시지마다 다시 그려서 위임으로 받아요)
+document.addEventListener('click', e => { const b = e.target.closest('[data-chat-open]'); if (b && SB && USER) openChatFile(b.dataset.chatOpen, b.dataset.name, !!b.dataset.down); });
 document.addEventListener('visibilitychange', () => { const m = (location.hash || '').match(/^#messages\/([0-9a-f-]{36})$/); if (m && USER && SB && chatOpen(m[1])) markRead(m[1]); });
 async function loadFriends() {
   const { data } = await SB.rpc('my_friends');
@@ -3070,7 +3227,9 @@ async function loadPeople(id) {
   MSG.people[id] = data || [];
 }
 async function loadMessages(id, since) {
-  let q = SB.from('messages').select('id, sender_id, body, created_at').eq('conversation_id', id).order('created_at').limit(500);
+  let q = SB.from('messages').select('id, sender_id, body, created_at, files').eq('conversation_id', id).order('created_at').limit(500);
+  const readsBefore = JSON.stringify(MSG.reads[id] || null);
+  SB.rpc('conversation_read_state', { p_conv: id }).then(({ data }) => { if (data) { MSG.reads[id] = data; if (JSON.stringify(data) !== readsBefore) drawChatLog(id); } });
   if (since) q = q.gt('created_at', since);
   const { data } = await q;
   const before = MSG.msgs[id];
@@ -3093,10 +3252,31 @@ function drawChatLog(id) {
   log.innerHTML = chatLog(MSG.msgs[id], MSG.convs.find(x => x.id === id));
   if (atEnd || log.dataset.first !== '1') { log.scrollTop = log.scrollHeight; log.dataset.first = '1'; }
   updateMsgBadge();
+  hydrateChatFiles(log);
 }
-async function sendMessage(id, body) {
-  const { data, error } = await SB.from('messages').insert({ conversation_id: id, body }).select('id, sender_id, body, created_at').single();
-  if (error) { toast('보내지 못했어요. 잠시 후 다시 시도해 주세요.'); return false; }
+// 채팅 사진: 비공개 버킷이라 1시간짜리 주소를 받아 넣어요 (받은 주소는 기억)
+async function hydrateChatFiles(root) {
+  const imgs = [...root.querySelectorAll('img[data-chat-img]')], need = [...new Set(imgs.map(i => i.dataset.chatImg).filter(p => !MSG.urls[p]))];
+  if (need.length && SB) { const { data } = await SB.storage.from('chat').createSignedUrls(need, 3600); (data || []).forEach(x => { if (x.signedUrl) MSG.urls[x.path] = x.signedUrl; }); }
+  imgs.forEach(i => { const u = MSG.urls[i.dataset.chatImg]; if (u && i.src !== u) { i.src = u; i.onload = () => { const log = $('#chatLog'); if (log && log.dataset.first === '1' && log.scrollHeight - log.scrollTop - log.clientHeight < 400) log.scrollTop = log.scrollHeight; }; } });
+}
+async function openChatFile(path, name, down) {
+  const { data, error } = await SB.storage.from('chat').createSignedUrl(path, 600, down ? { download: name || true } : undefined);
+  if (error || !data) { toast('파일을 열지 못했어요'); return; }
+  if (down) location.href = data.signedUrl; else window.open(data.signedUrl, '_blank', 'noopener');
+}
+async function sendMessage(id, body, picked = []) {
+  // 파일 · 사진 묶음: chat/대화방/무작위/파일이름 으로 올리고 메시지에 목록을 붙여요 (한 번에 10개까지)
+  const files = [];
+  for (const [i, f] of picked.entries()) {
+    const safe = f.name.replace(/[^\w.\-가-힣]+/g, '_').slice(-80) || `file${i}`, path = `${id}/${crypto.randomUUID()}/${safe}`;
+    const up = await SB.storage.from('chat').upload(path, f, { contentType: f.type || 'application/octet-stream' });
+    if (up.error) { toast(dbErr(up.error, `${f.name} 파일을 올리지`)); if (files.length) await SB.storage.from('chat').remove(files.map(x => x.path)); return false; }
+    files.push({ path, name: f.name.slice(0, 200), size: f.size, mime: (f.type || '').slice(0, 100) });
+  }
+  if (!body) { const im = files.filter(isImg).length; body = im === files.length ? `[사진 ${im}장]` : `[파일 ${files.length}개] ${files[0].name}`.slice(0, 200); }
+  const { data, error } = await SB.from('messages').insert({ conversation_id: id, body, files }).select('id, sender_id, body, created_at, files').single();
+  if (error) { toast(dbErr(error, '보내지')); if (files.length) await SB.storage.from('chat').remove(files.map(x => x.path)); return false; }
   MSG.msgs[id] = [...(MSG.msgs[id] || []), data];
   const c = MSG.convs.find(x => x.id === id);
   if (c) { c.last_text = body.slice(0, 100); c.last_at = data.created_at; }
@@ -3966,6 +4146,19 @@ function invitePage() {
    options: 글자 목록, 또는 [저장값, 보이는 글자] 목록. blank: 고르지 않았을 때 보이는 글자. value: 새로 만들 때 기본값. createOnly: 새로 만들 때만 보이는 칸. url: https:// 주소만
    academy: 새로 만들 때 학원 id를 붙일지 (센터 자료는 false). noDelete: 삭제 버튼 숨김. check(data): 저장 전 확인, 문제가 있으면 안내 글 */
 const dialogEl = () => $('#dlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'dlg' }));
+// 저장이 안 될 때 이유를 함께 (Supabase 오류 코드 → 쉬운 말 + 코드)
+function dbErr(e, what = '저장하지') {
+  const c = e && (e.code || e.status) || '', m = String(e && (e.message || e.details) || '');
+  const why = c === '42501' || /permission denied|row-level security|not_allowed|owner_only/i.test(m) ? '이 일을 할 권한이 없어요. 원장님께 권한을 요청해 주세요'
+    : c === '23514' || /violates check/i.test(m) ? '입력한 값이 규칙에 맞지 않아요 (끝나는 시간 · 날짜 · 글자 수를 확인해 주세요)'
+    : c === '23505' ? '이미 같은 내용이 있어요' : c === '23502' ? '꼭 채울 칸이 비어 있어요'
+    : c === '23503' ? '연결된 정보가 지워졌어요. 새로고침한 뒤 다시 해 주세요'
+    : /^22/.test(String(c)) ? '날짜 · 시간 · 숫자 형식이 맞지 않아요'
+    : c === 'PGRST204' || /column/i.test(m) ? '프로그램이 새 칸을 아직 몰라요. 새로고침(F5)한 뒤 다시 해 주세요'
+    : /fetch|network|Failed/i.test(m) ? '인터넷 연결이 끊겼어요. 연결을 확인하고 다시 해 주세요'
+    : m ? m.slice(0, 120) : '잠시 후 다시 해 주세요';
+  return `${what} 못했어요 — ${why}.${c ? ` (오류 코드 ${c})` : ''}`;
+}
 function formDialog({ title, table, fields: all, row, extra = {}, okText, label, after, academy = true, noDelete = false, doneText, check, expand, save, del }) {
   const d = dialogEl();
   const fields = all.filter(f => !(row && f[2] && f[2].createOnly));
@@ -3975,6 +4168,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     if (o.type === 'check') return `<label class="chk-line"><input type="checkbox" name="${k}" ${v ? 'checked' : ''}><span>${lab}</span></label>`;
     // multi: 여러 개 고르기 (값 목록으로 저장 · expand와 함께 쓰면 고른 것마다 한 줄씩)
     if (o.type === 'time') return `<div class="f">${lab}${o.required ? ' *' : ''}${clockPicker(k, v, o.required)}</div>`;
+    // images: 사진 여러 장 (비공개 버킷 o.bucket, 최대 o.max장 · 올릴 때 긴 쪽 1600px JPEG로 줄여요)
+    if (o.type === 'images') return `<div class="f">${lab} <span class="muted small">최대 ${o.max}장</span><div class="img-pick" data-imgs="${k}"></div><label class="btn sm img-add">${ic('image')}사진 고르기<input type="file" accept="image/*" multiple data-img-in="${k}" hidden></label></div>`;
     // color: 10가지 색 동그라미 중 하나 (안 고르면 기본 색)
     if (o.type === 'color') return `<div class="f">${lab}<div class="swatches">${[['', '기본'], ...COLORS].map(([c, n]) => `<label class="sw ${c ? `col-${c}` : 'sw-none'}" title="${n}"><input type="radio" name="${k}" value="${c}" ${(v || '') === c ? 'checked' : ''}><span aria-hidden="true"></span><small>${n}</small></label>`).join('')}</div></div>`;
     if (o.type === 'multi') return `<div class="f">${lab}${o.required ? ' *' : ''}<div class="pick-chips multi">${o.options.map(x => Array.isArray(x) ? x : [x, x]).map(([ov, ol]) => `<label><input type="checkbox" name="${k}" value="${esc(ov)}" ${[].concat(v ?? []).map(String).includes(String(ov)) ? 'checked' : ''}><span>${esc(ol)}</span></label>`).join('')}</div></div>`;
@@ -4005,6 +4200,20 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
   d.showModal();
   bindClockPickers(d);
   const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  // 사진 칸: 있던 사진(keep) + 새로 고른 사진(add)
+  const imgs = {};
+  fields.filter(f => f[2] && f[2].type === 'images').forEach(([k, , o]) => {
+    const st = imgs[k] = { keep: [...((row && row[k]) || [])], add: [], o }, box = d.querySelector(`[data-imgs="${k}"]`), inp = d.querySelector(`[data-img-in="${k}"]`);
+    const draw = () => {
+      box.innerHTML = [...st.keep.map((p, i) => `<span class="ip"><img data-bucket-img="${esc(p)}" data-bucket="${o.bucket}" alt=""><button type="button" data-ip-keep="${i}" aria-label="빼기">×</button></span>`),
+        ...st.add.map((f, i) => `<span class="ip"><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-ip-add="${i}" aria-label="빼기">×</button></span>`)].join('') || '<span class="muted small">아직 사진이 없어요</span>';
+      box.querySelectorAll('[data-ip-keep]').forEach(b => b.onclick = () => { st.keep.splice(+b.dataset.ipKeep, 1); draw(); });
+      box.querySelectorAll('[data-ip-add]').forEach(b => b.onclick = () => { st.add.splice(+b.dataset.ipAdd, 1); draw(); });
+      hydrateImgs(box);
+    };
+    inp.onchange = () => { const room = o.max - st.keep.length - st.add.length, list = [...inp.files].filter(f => /^image\//.test(f.type)); if (list.length > room) toast(`사진은 ${o.max}장까지예요 · ${Math.max(0, room)}장만 더 넣었어요`); st.add.push(...list.slice(0, Math.max(0, room))); inp.value = ''; draw(); };
+    draw();
+  });
   $('#dlgCancel').onclick = () => d.close();
   d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
     const inp = d.querySelector(`[name="${b.dataset.pick}"]`);
@@ -4017,6 +4226,20 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
     for (const [k, lab, o = {}] of fields) {
       if (o.type === 'check') { data[k] = el.namedItem(k).checked; continue; }
       if (o.type === 'color') { const c = d.querySelector(`[name="${k}"]:checked`); data[k] = c && c.value ? c.value : null; continue; }
+      if (o.type === 'images') {
+        const st = imgs[k], up = [];
+        for (const [i, f] of st.add.entries()) {
+          $('#dlgMsg').hidden = false; $('#dlgMsg').textContent = `사진 올리는 중… ${i + 1}/${st.add.length}`;
+          let blob = f; try { blob = await shrinkBlob(f); } catch (er) { /* 줄이지 못하면 그대로 */ }
+          const path = `${o.prefix()}/${crypto.randomUUID()}.${blob.type === 'image/jpeg' ? 'jpg' : (f.name.split('.').pop() || 'jpg').toLowerCase()}`;
+          const r = await SB.storage.from(o.bucket).upload(path, blob, { contentType: blob.type || f.type });
+          if (r.error) { if (up.length) await SB.storage.from(o.bucket).remove(up); return fail(dbErr(r.error, '사진을 올리지')); }
+          up.push(path);
+        }
+        $('#dlgMsg').hidden = true;
+        data[k] = [...st.keep, ...up]; st.uploaded = up; st.removed = ((row && row[k]) || []).filter(p => !st.keep.includes(p));
+        continue;
+      }
       if (o.type === 'multi') {
         data[k] = [...d.querySelectorAll(`[name="${k}"]:checked`)].map(x => x.value);
         if (o.required && !data[k].length) return fail(`${lab}을(를) 하나 이상 골라 주세요.`);
@@ -4041,14 +4264,15 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
       ({ error } = await SB.from(table).update(list[0]).eq('id', row.id));
       if (!error && list.length > 1) ({ error } = await SB.from(table).insert(list.slice(1).map(x => ({ ...x, ...base }))));
     } else ({ error } = await (row ? SB.from(table).update(data).eq('id', row.id) : SB.from(table).insert(expand ? expand(data).map(x => ({ ...x, ...base })) : { ...data, ...base })));
-    if (error) return fail('저장하지 못했어요. 입력한 내용을 확인하고 다시 시도해 주세요.');
+    if (error) { for (const st of Object.values(imgs)) if (st.uploaded && st.uploaded.length) await SB.storage.from(st.o.bucket).remove(st.uploaded); return fail(dbErr(error)); }
+    for (const st of Object.values(imgs)) if (st.removed && st.removed.length) SB.storage.from(st.o.bucket).remove(st.removed).then(() => {}, () => {});
     d.close(); await after(); render(); toast(row ? '고쳤어요' : doneText || `${label(data)} 추가했어요`);
   };
   if (row && !noDelete) $('#dlgDel').onclick = async () => {
     if (del) { const r = await del(); if (r === false) return; d.close(); await after(); render(); toast(r || '삭제했어요'); return; }
     if (!confirm(`${label(row)} 삭제할까요?`)) return;
     const { error } = await SB.from(table).delete().eq('id', row.id);
-    if (error) { toast('삭제하지 못했어요'); return; }
+    if (error) { fail(dbErr(error, '삭제하지')); return; }
     d.close(); await after(); render(); toast('삭제했어요');
   };
 }
@@ -4174,7 +4398,7 @@ function noticeDetail(id) {
   const person = r => `<div class="li"><span class="av" style="background:${r.read_at ? 'var(--good)' : 'var(--blue-100)'}">${esc(r.name[0])}</span><div class="t">${esc(r.name)} <span class="muted small">${ROLE_NAMES[r.role]}</span></div><div class="r">${r.read_at ? `<span class="time">${md(r.read_at.slice(0, 10))} ${r.read_at.slice(11, 16)}</span>` : '<span class="chip mute">안 읽음</span>'}</div></div>`;
   return head(esc(n.title), `${noticeTo(n)} · ${md(n.created_at.slice(0, 10))} 보냄`, `<button class="btn" data-edit-notice="${n.id}">고치기</button>`) + `
   <div class="grid2">
-    <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
+    <section class="card"><div class="card-head"><h2>내용</h2></div><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}</section>
     <section class="card">
       <div class="card-head"><h2>읽음 확인</h2><span class="sub">${rs ? `${read.length}/${rs.length}명` : '불러오는 중'}</span></div>
       ${!rs ? '<p class="muted">불러오는 중…</p>' : !rs.length ? `<p class="muted" style="margin:0">${n.target_class ? `${esc(n.target_class)} 아이와 앱으로 연결된 가족이 아직 없어요. 원생 명단에서 "앱 연결"을 해 주세요.` : '아직 앱에 가입한 가족이 없어요.'}</p>` : `
@@ -4198,7 +4422,8 @@ function noticeDialog(n) {
     fields: [
       ['title', '제목', { required: true, max: 100, placeholder: '예: 11월 학부모 설명회 안내' }],
       ['target_class', '받는 사람', { type: 'select', blank: '전체 학부모·학생', options: classes.map(c => [c, `${c} 가족만`]) }],
-      ['body', '내용', { type: 'area', max: 3000, rows: 7, placeholder: '날짜 · 시간 · 준비물처럼 꼭 알아야 할 내용을 적어 주세요.' }]
+      ['body', '내용', { type: 'area', max: 3000, rows: 7, placeholder: '날짜 · 시간 · 준비물처럼 꼭 알아야 할 내용을 적어 주세요.' }],
+      ['images', '사진', { type: 'images', max: 10, bucket: 'notices', prefix: () => REAL.academy.id }]
     ]
   });
 }
@@ -4766,7 +4991,7 @@ function newsDetail(id) {
     SB.rpc('mark_notice_read', { p_notice: id }).then(({ error }) => { if (error) REAL.reads.delete(id); });
   }
   return head(esc(n.title), `${esc(REAL.academy.name)} · ${n.target_class ? `${esc(n.target_class)} · ` : ''}${md(n.created_at.slice(0, 10))}`) + `
-  <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p></section>
+  <section class="card"><p style="margin:0;white-space:pre-wrap">${esc(n.body || '(내용 없음)')}</p>${noticeImgs(n)}</section>
   <a class="hint" href="#news">${ic('notice')}<span>다른 공지도 확인해 보세요</span><b>공지 →</b></a>`;
 }
 
@@ -5169,6 +5394,63 @@ async function stepPromoReq(id, status) {
   toast(`${r.academy_name} · ${r.service} → ${MK_STATE[status][1]}`);
 }
 
+/* ---------- 센터 일정 (#center/schedule): 학원이 요청 · 신청한 처리할 일은 저절로, 회의 · 연락 같은 일정은 직접 (center_events) ---------- */
+const C_EV_KINDS = ['할 일', '회의', '연락', '마감', '행사', '기타'];
+// 저절로 들어오는 처리할 일: 접수한 날에 놓아요 (처리하면 목록에서 빠져요)
+function centerAutoItems() {
+  const C = CENTER, d = x => (x.created_at || TODAY).slice(0, 10), out = [];
+  C.requests.filter(r => r.status === 'new').forEach(r => out.push({ day: d(r), title: `지원 신청 · ${r.academy_name}`, sub: `${r.owner_name || ''} 원장님 연락하기`, href: '#center/requests' }));
+  C.inquiries.filter(q => q.status === 'new').forEach(q => out.push({ day: d(q), title: `문의 답하기 · ${q.name || '이름 없음'}`, sub: q.category || '', href: '#center/inquiries' }));
+  C.tasks.filter(t => t.status === 'new' || t.status === 'doing').forEach(t => out.push({ day: d(t), title: `맡긴 일 · ${t.academy_name || '학원'}`, sub: `${t.kind}${t.status === 'doing' ? ' · 진행 중' : ''}`, href: '#center/tasks' }));
+  C.partnerApps.filter(a => a.status === 'new').forEach(a => out.push({ day: d(a), title: `제휴 연결 · ${a.academy_name || '학원'}`, sub: a.partner_name || '', href: '#center/partners' }));
+  C.abroad.filter(r => r.status === 'forwarded').forEach(r => out.push({ day: (r.updated_at || r.created_at || TODAY).slice(0, 10), title: `유학 상담 연결 · ${r.parent_name || ''}`, sub: r.program || '', href: '#center/abroad' }));
+  C.promoReqs.filter(r => r.status === 'new').forEach(r => out.push({ day: d(r), title: `홍보 의뢰 · ${r.academy_name || '학원'}`, sub: r.service || r.title || '', href: '#center/promo' }));
+  C.adminApps.filter(a => a.status === 'pending').forEach(a => out.push({ day: d(a), title: `관리자 신청 · ${a.name || (a.email || '').split('@')[0]}`, sub: '수락 · 거절', href: '#center/admins' }));
+  C.academies.filter(a => Object.values(a.services || {}).some(x => x.status === 'consulting')).forEach(a => out.push({ day: TODAY, title: `분야 열기 · ${a.name}`, sub: '상담 중 → 이용 중으로', href: '#center/academies' }));
+  return out.sort((a, b) => a.day.localeCompare(b.day));
+}
+function centerSchedulePage() {
+  const auto = centerAutoItems(), evs = CENTER.events || [], m0 = `${MONTH}-01`, m1 = monthEnd(MONTH);
+  const first = day0(m0), last = +m1.slice(8), pad = first.getDay();
+  const monthEv = evs.filter(e => e.day <= m1 && (e.end_day || e.day) >= m0);
+  const cells = [...Array(pad)].map(() => '<div class="cal-c off"></div>').concat([...Array(last)].map((_, i) => {
+    const dd = `${MONTH}-${String(i + 1).padStart(2, '0')}`, w = day0(dd).getDay();
+    const es = [...auto.filter(a => a.day === dd).map(a => `<span class="ev tint col-red" title="${esc(a.title)}">${esc(a.title)}</span>`),
+      ...monthEv.filter(e => evOn(e, dd)).map(e => `<span class="ev ${e.color ? `tint col-${e.color}` : 'info'} ${e.done ? 'done' : ''}" title="${esc(e.title)}">${esc(e.title)}</span>`)];
+    return `<div class="cal-c ${dd === TODAY ? 'today' : ''} ${w === 0 ? 'sun' : w === 6 ? 'sat' : ''}"><span class="dn">${i + 1}</span>${es.slice(0, 3).join('')}${es.length > 3 ? `<span class="more">+${es.length - 3}</span>` : ''}</div>`;
+  }));
+  const upcoming = evs.filter(e => !e.done && (e.end_day || e.day) >= TODAY).slice(0, 30), doneRecent = evs.filter(e => e.done).slice(-5).reverse();
+  const evLi = e => `<a class="li link" href="#center/schedule" data-cev="${e.id}"><span class="av time-av num">${md(e.day)}${e.end_day && e.end_day !== e.day ? `<small>~${md(e.end_day)}</small>` : ''}</span>
+    <div><div class="t">${e.done ? `<s>${esc(e.title)}</s>` : esc(e.title)} <span class="chip ${e.color ? `tint col-${e.color}` : 'info'}">${esc(e.kind)}</span>${e.done ? ' <span class="chip good">끝냄</span>' : ''}</div>
+    <div class="d">${e.start_time ? `${hm(e.start_time)}${e.end_time ? `–${hm(e.end_time)}` : ''} · ` : ''}${e.detail ? esc(e.detail.slice(0, 60)) : ''}</div>${stampLine(e)}</div><div class="r">${!e.done ? ddChip(e.day) : ''}</div></a>`;
+  return head('센터 일정', '학원이 신청 · 요청한 처리할 일은 접수한 날에 저절로 들어오고(처리하면 빠져요), 회의 · 연락 · 마감 같은 일정은 직접 넣고 고쳐요.', `<button class="btn primary" data-act="addCev">${ic('plus')}일정 추가</button>`) + `
+  <div class="grid2">
+    <section class="card"><div class="card-head"><h2>처리할 일 ${auto.length}건</h2><span class="sub">학원 요청 · 신청에서 저절로</span></div>
+      ${auto.length ? `<div class="list">${auto.slice(0, 20).map(a => `<a class="li link" href="${a.href}"><span class="av time-av num">${md(a.day)}</span><div><div class="t">${esc(a.title)}</div><div class="d">${esc(a.sub)}</div></div><div class="r"><button class="btn sm" data-cev-from="${esc(JSON.stringify({ title: a.title.slice(0, 100), day: a.day }))}">일정에 넣기</button></div></a>`).join('')}</div>` : '<p class="muted small" style="margin:0">지금 처리할 요청이 없어요.</p>'}</section>
+    <section class="card"><div class="card-head"><h2>다가오는 일정 ${upcoming.length}개</h2><span class="sub">누르면 고치기 · 끝냄 표시</span></div>
+      ${upcoming.length ? `<div class="list">${upcoming.map(evLi).join('')}</div>` : '<p class="muted small" style="margin:0">직접 넣은 일정이 없어요. "일정 추가"로 넣어 보세요.</p>'}
+      ${doneRecent.length ? `<details style="margin-top:8px"><summary class="muted small">끝낸 일정 ${doneRecent.length}개</summary><div class="list">${doneRecent.map(evLi).join('')}</div></details>` : ''}</section>
+  </div>` + monthBar() + `
+  <section class="card"><div class="cal">${[...WD].map((x, i) => `<div class="cal-h ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${x}</div>`).join('')}${cells.join('')}</div>
+    <p class="muted small" style="margin:8px 0 0"><span class="chip tint col-red">빨강</span> 학원 요청에서 저절로 · 나머지는 직접 넣은 일정</p></section>`;
+}
+function centerEventDialog(e, pre = {}) {
+  formDialog({
+    title: e ? '센터 일정 고치기' : '센터 일정 추가', table: 'center_events', row: e, academy: false, after: async () => { const { data } = await SB.from('center_events').select('*').order('day'); CENTER.events = data || []; },
+    label: r => `${r.title} 일정을`, doneText: '센터 일정에 넣었어요',
+    check: d => d.end_day && d.end_day < d.day ? '끝나는 날이 시작하는 날보다 앞이에요.' : d.end_time && d.start_time && d.end_time <= d.start_time ? '끝나는 시간이 시작보다 늦어야 해요.' : null,
+    fields: [
+      ['title', '일정', { required: true, max: 100, value: pre.title || '', placeholder: '예: 하늘영어학원 원장님 통화' }],
+      ['kind', '종류', { type: 'select', required: true, options: C_EV_KINDS, value: '할 일', half: true }],
+      ['day', '날짜', { type: 'date', required: true, value: pre.day || TODAY, half: true }], ['end_day', '끝나는 날 (여러 날이면)', { type: 'date', half: true }],
+      ['start_time', '시작 시간', { type: 'time', half: true }], ['end_time', '끝 시간', { type: 'time', half: true }],
+      ['color', '색', { type: 'color' }],
+      ['done', '끝냈어요', { type: 'check' }],
+      ['detail', '메모', { type: 'area', rows: 3, max: 1000, placeholder: '예: 견적 보내기 · 담당자 연락처' }]
+    ]
+  });
+  timePickers($('#dlg'), 'start_time', 'end_time');
+}
 const centerTodo = () => {
   const fresh = CENTER.requests.filter(r => r.status === 'new');
   const items = fresh.slice(0, 3).map(r => [`${esc(r.academy_name)} 지원 신청 연락하기`, `${esc(r.owner_name)} 원장님 · ${(r.needs || []).map(esc).join(' · ')}`, '#center/requests', '<span class="chip crit">새 신청</span>']);
@@ -5201,7 +5483,7 @@ const demoAccountsCard = () => `
     <p class="muted small" style="margin:8px 0 0">학원에 기능을 안내하거나 화면을 확인할 때 써요. 원장 예시 계정의 출결 → "입구 출석 화면 열기"에서 QR 출석도 해 볼 수 있어요.</p></section>`;
 // 센터 관리자 홈: 숫자 한 줄 → 지금 처리할 일 → 가입 현황 → 메뉴(묶음별 짧은 목록)
 const CENTER_GROUPS = [
-  ['학원 · 회원', '신청 받고 분야 열기 · 문의 답하기', ['requests', 'academies', 'members', 'inquiries', 'tasks']],
+  ['학원 · 회원', '신청 받고 분야 열기 · 문의 답하기 · 센터 일정', ['schedule', 'requests', 'academies', 'members', 'inquiries', 'tasks']],
   ['연결 · 파트너', '제휴 · 유학 · 홍보를 파트너와 이어 주기', ['partners', 'abroad', 'promo']],
   ['센터 운영', '강사 교육 영상 · 관리자 · 파트너 담당자', ['videos', 'admins']]
 ];
@@ -5599,6 +5881,7 @@ async function stepTask(id, status) {
 const CENTER_AREA = { name: '센터 관리', icon: 'star', desc: '교육 영상 · 지원 · 제휴 · 유학 상담 · 홍보 의뢰 · 회원 · 관리자',
   stat: () => `새 신청 ${CENTER.inquiries.filter(r => r.status === 'new').length + CENTER.requests.filter(r => r.status === 'new').length + CENTER.partnerApps.filter(a => a.status === 'new').length + CENTER.promoReqs.filter(r => r.status === 'new').length + CENTER.tasks.filter(t => t.status === 'new').length}건 · 유학 연결 ${CENTER.abroad.filter(r => r.status === 'forwarded').length}건`,
   subs: {
+    schedule: { name: '센터 일정', icon: 'cal', desc: '학원 요청 · 처리할 일은 저절로, 회의 · 연락은 직접', stat: () => { const n = centerAutoItems().length; return `처리할 일 ${n}건 · 일정 ${(CENTER.events || []).filter(e => !e.done && (e.end_day || e.day) >= TODAY).length}개`; }, render: centerSchedulePage },
     videos: { name: '강사 교육 영상', icon: 'video', desc: '영상 올리기 · 배부 · 이수 현황', stat: () => `영상 ${CENTER.videos.length}개 · 이수 ${Object.values(CENTER.done).reduce((a, n) => a + n, 0)}건`,
       render: centerVideosPage, detail: centerVideoDetail, title: id => (CENTER.videos.find(v => v.id === id) || {}).title },
     requests: { name: '지원 신청', icon: 'doc', desc: '첫 화면 · 프로그램에서 들어온 학원 지원 신청', stat: () => `새 신청 ${CENTER.requests.filter(r => r.status === 'new').length}건`, render: centerRequestsPage },
@@ -6739,6 +7022,11 @@ function bind() {
   on('[data-act="addFriend"]', addFriendDialog);
   on('[data-act="editProfile"]', profileDialog);
   on('[data-temp-pw]', tempPwDialog);
+  on('[data-act="peopleList"]', peopleListDialog);
+  hydrateImgs($('#main') || document);
+  on('[data-open-img]', async (b, e) => { e.preventDefault(); const w = window.open('about:blank', '_blank'); const { data } = await SB.storage.from(b.dataset.bucket).createSignedUrl(b.dataset.openImg, 600); if (data) w.location = data.signedUrl; else { w.close(); toast('사진을 열지 못했어요'); } });
+  on('[data-act="leaveAcad"]', leaveAcademy);
+  on('[data-act="moveAcad"]', moveAcademyDialog);
   on('[data-act="adminExport"]', (b, e) => { e.preventDefault(); adminExportDialog(); });
   // 설정
   on('[data-act="changePw"]', pwDialog);
@@ -6754,11 +7042,23 @@ function bind() {
   const chatForm = $('#chatSend');
   if (chatForm) {
     const id = location.hash.split('/')[1], ta = chatForm.elements.body;
-    const go = async () => { const t = ta.value.trim(); if (!t) return; ta.disabled = true; const ok = await sendMessage(id, t); ta.disabled = false; if (ok) ta.value = ''; ta.focus(); };
+    let picked = [];
+    const fin = $('#chatFiles'), pick = $('#chatPick');
+    const drawPick = () => { pick.hidden = !picked.length; pick.innerHTML = picked.length ? `<b>보낼 파일 ${picked.length}/${CHAT_MAX_FILES}</b>${picked.map((f, i) => `<span class="cp">${esc(f.name.length > 18 ? `${f.name.slice(0, 16)}…` : f.name)} <button type="button" data-cp-del="${i}" aria-label="빼기">×</button></span>`).join('')}` : '';
+      pick.querySelectorAll('[data-cp-del]').forEach(b => b.onclick = () => { picked.splice(+b.dataset.cpDel, 1); drawPick(); }); };
+    if (fin) fin.onchange = () => {
+      const add = [...fin.files], big = add.filter(f => f.size > CHAT_MAX_SIZE);
+      if (big.length) toast(`20MB보다 큰 파일은 빼고 넣었어요 (${big.map(f => f.name).join(', ')})`);
+      picked = [...picked, ...add.filter(f => f.size <= CHAT_MAX_SIZE)];
+      if (picked.length > CHAT_MAX_FILES) { toast(`한 번에 ${CHAT_MAX_FILES}개까지 보낼 수 있어요`); picked = picked.slice(0, CHAT_MAX_FILES); }
+      fin.value = ''; drawPick();
+    };
+    const go = async () => { const t = ta.value.trim(); if (!t && !picked.length) return; ta.disabled = true; const btn = chatForm.querySelector('button.primary'); btn.disabled = true; if (picked.length) btn.textContent = '올리는 중…';
+      const ok = await sendMessage(id, t, picked); ta.disabled = false; btn.disabled = false; btn.textContent = '보내기'; if (ok) { ta.value = ''; picked = []; drawPick(); } ta.focus(); };
     chatForm.onsubmit = e => { e.preventDefault(); if (USER) go(); else toast('예시 계정에서는 보낼 수 없어요'); };
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatForm.requestSubmit(); } };
     ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(140, ta.scrollHeight)}px`; };
-    const log = $('#chatLog'); if (log) log.scrollTop = log.scrollHeight;
+    const log = $('#chatLog'); if (log) { log.scrollTop = log.scrollHeight; hydrateChatFiles(log); }
   }
   // 자료실
   on('[data-act="addLib"]', () => libDialog(null));
@@ -6767,6 +7067,14 @@ function bind() {
   on('[data-folder-edit]', b => folderDialog(folderOf(b.dataset.folderEdit)));
   on('[data-folder-del]', b => delFolder(b.dataset.folderDel));
   on('[data-lib-move]', b => moveLibDialog(b.dataset.libMove));
+  on('[data-lib-del]', async b => {
+    const it = REAL && REAL.library.find(x => x.id === b.dataset.libDel); if (!it) return;
+    if (!confirm(`${it.title} 자료를 삭제할까요?`)) return;
+    const { error } = await SB.from('library_items').delete().eq('id', it.id);
+    if (error) { toast(dbErr(error, '삭제하지')); return; }
+    if (it.file_path) await SB.storage.from('library').remove([it.file_path]);
+    await loadLibrary(); render(); toast('삭제했어요');
+  });
   on('[data-edit-lib]', b => libDialog(REAL.library.find(x => x.id === b.dataset.editLib)));
   on('[data-lib-cat]', b => { libCat = b.dataset.libCat; render(); });
   on('[data-lib-vis]', b => { libVis = b.dataset.libVis; render(); });
@@ -6847,6 +7155,10 @@ function bind() {
   on('[data-act="addTitle"]', () => titleDialog(null));
   on('[data-title-preset]', b => titleDialog(null, b.dataset.titlePreset));
   on('[data-edit-title]', b => titleDialog(rolesData().titles.find(t => String(t.id) === b.dataset.editTitle)));
+  on('[data-act="cleanTT"]', ttCleanDialog);
+  on('[data-act="addCev"]', () => centerEventDialog(null));
+  on('[data-cev]', (b, e) => { e.preventDefault(); centerEventDialog((CENTER.events || []).find(x => x.id === b.dataset.cev)); });
+  on('[data-cev-from]', (b, e) => { e.preventDefault(); e.stopPropagation(); centerEventDialog(null, JSON.parse(b.dataset.cevFrom)); });
   on('[data-act="addTT"]', () => REAL ? ttDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
   on('[data-act="addEv"]', () => REAL ? evDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
   on('[data-edit-tt]', b => REAL && ttDialog(REAL.timetable.find(t => t.id === b.dataset.editTt)));
@@ -7163,12 +7475,12 @@ async function loadCenter() {
     SB.rpc('list_center_admins'), newest('partner_applications'), newest('abroad_requests').in('status', ['forwarded', 'done']),
     newest('promo_requests'), SB.rpc('list_admin_applications'), newest('inquiries'), SB.rpc('admin_academies'), newest('center_tasks'), SB.rpc('admin_members')
   ]);
-  const { data: pm } = await SB.rpc('list_partner_members');
+  const [{ data: pm }, { data: ce }] = await Promise.all([SB.rpc('list_partner_members'), SB.from('center_events').select('*').order('day')]);
   const done = {};
   (r.data || []).forEach(x => { done[x.video_id] = Number(x.done) || 0; });
   CENTER = { videos: v.data || [], done, requests: q.data || [], admins: a.data || [], refl: CENTER ? CENTER.refl : {},
     partnerApps: (pa.data || []).filter(x => x.status !== 'owner_review'), abroad: ab.data || [], promoReqs: mk.data || [], adminApps: aa.data || [], inquiries: iq.data || [],
-    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [], partnerMembers: pm || [] };
+    academies: ac.data || [], tasks: tk.data || [], members: mb.data || [], partnerMembers: pm || [], events: ce || [] };
 }
 // 파트너 담당자: 우리 회사로 바로 온 신청만 (RLS가 걸러 줘요) — 센터 화면을 그대로 써서 CENTER 모양으로 채워요
 const PARTNER_INFO = { intomarketing: { name: '인투마케팅', subs: ['promo'] }, intoabroad: { name: '인투유학', subs: ['abroad', 'partners'] } };
