@@ -6,6 +6,7 @@
     "build": "node scripts/build.mjs"
   },
   "dependencies": {
+    "@e965/xlsx": "0.20.3",
     "@supabase/supabase-js": "2.117.0",
     "qrcode-generator": "2.0.4"
   }

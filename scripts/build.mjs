@@ -16,6 +16,9 @@ mkdirSync(`${out}/assets/vendor`, { recursive: true });
 cpSync('node_modules/@supabase/supabase-js/dist/umd/supabase.js', `${out}/assets/vendor/supabase.js`);
 // 입구 출석 화면 QR 그리기 (qrcode-generator, MIT)
 cpSync('node_modules/qrcode-generator/dist/qrcode.js', `${out}/assets/vendor/qrcode.js`);
+// 넘버스(.numbers) 읽기 · 쓰기 — SheetJS 0.20.3 (Apache-2.0, npm @e965/xlsx). 넘버스 파일을 고를 때만 불러와요
+cpSync('node_modules/@e965/xlsx/dist/xlsx.full.min.js', `${out}/assets/vendor/xlsx.full.min.js`);
+cpSync('node_modules/@e965/xlsx/dist/xlsx.zahl.js', `${out}/assets/vendor/xlsx.zahl.js`);
 
 // 4) 검색 노출: 분야마다 제목 · 설명이 들어간 페이지(/area/admin → area/admin.html, /jobs → jobs.html, vercel.json이 이어 줘요) + robots.txt · sitemap.xml
 const SITE = 'https://academysupportcenter.vercel.app';

@@ -1,14 +1,38 @@
-// 엑셀(.xlsx) · CSV 읽기와 양식(.xlsx) 만들기 — 바깥 라이브러리 없이 브라우저 기능만 써요.
+// 엑셀(.xlsx) · 넘버스(.numbers) · CSV 읽기와 양식 만들기.
 // readSheet(file) → 첫 번째 시트의 행 목록 [[칸, 칸, …], …] (칸은 모두 글자, 날짜는 YYYY-MM-DD)
-// downloadXlsx(파일 이름, 행 목록, 칸 너비, 옵션) → 보기 좋게 꾸민 .xlsx 다운로드
+// readBook(file) → 모든 시트 [{ name, rows }] (넘버스처럼 달마다 시트가 있는 파일에서 고르기)
+// downloadXlsx(파일 이름, 행 목록, 칸 너비, 옵션) → 보기 좋게 꾸민 표 다운로드
+// downloadBook(파일 이름, 시트들) → 칸 위치 · 합치기 · 수식까지 정한 양식(재정 보고서 · 수강생 관리표) 다운로드
+// 받을 때 형식(.xlsx / .numbers)은 window.pickSheetFormat(파일 이름)이 정해요(app.js가 물어봐요).
+// 엑셀 · CSV는 브라우저 기능만으로, 넘버스는 그때만 SheetJS(assets/vendor/xlsx.full.min.js)를 불러서 읽고 써요.
 
 /* ---------- 읽기 ---------- */
-async function readSheet(file) {
+async function readSheet(file) { return (await readBook(file))[0].rows; }
+async function readBook(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
-  const isZip = buf[0] === 0x50 && buf[1] === 0x4b; // "PK" → xlsx
-  if (isZip) return readXlsx(buf);
+  const isZip = buf[0] === 0x50 && buf[1] === 0x4b; // "PK" → xlsx 또는 numbers (둘 다 zip)
+  if (/\.numbers$/i.test(file.name)) return readNumbers(buf);
+  if (isZip) {
+    const z = await unzip(buf);
+    if (!z.files['xl/workbook.xml'] && Object.keys(z.files).some(n => /^Index\/.*\.iwa$/.test(n))) return readNumbers(buf);
+    return readXlsx(buf, z);
+  }
   if (/\.xls$/i.test(file.name)) throw new Error('old_xls');
-  return parseCsv(decodeText(buf));
+  return [{ name: 'CSV', rows: parseCsv(decodeText(buf)) }];
+}
+// SheetJS는 넘버스를 쓸 때만 한 번 불러요 (900KB)
+let SHEETJS = null;
+function loadSheetJs() {
+  if (SHEETJS) return SHEETJS;
+  const add = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('sheetjs_load')); document.head.appendChild(s); });
+  SHEETJS = add('/assets/vendor/xlsx.full.min.js').then(() => add('/assets/vendor/xlsx.zahl.js')).then(() => window.XLSX).catch(e => { SHEETJS = null; throw e; });
+  return SHEETJS;
+}
+async function readNumbers(buf) {
+  const X = await loadSheetJs();
+  const wb = X.read(buf, { type: 'array', cellDates: true });
+  const cellText = v => v instanceof Date ? `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}-${String(v.getUTCDate()).padStart(2, '0')}` : String(v ?? '').trim();
+  return wb.SheetNames.map(name => ({ name, rows: X.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '', blankrows: true }).map(r => r.map(cellText)) }));
 }
 
 // CSV: UTF-8이 기본, 깨지면 한글 윈도우 엑셀이 쓰는 EUC-KR로 다시 읽어요
@@ -67,8 +91,8 @@ async function unzip(buf) {
   return { files, read };
 }
 
-async function readXlsx(buf) {
-  const z = await unzip(buf);
+async function readXlsx(buf, z) {
+  z = z || await unzip(buf);
   const xml = s => new DOMParser().parseFromString(s, 'application/xml');
   const all = (doc, tag) => [...doc.getElementsByTagNameNS('*', tag)];
   // 공유 글자
@@ -87,33 +111,38 @@ async function readXlsx(buf) {
       if ((id >= 14 && id <= 22) || (id >= 45 && id <= 47) || (custom[id] && /[yd]/i.test(custom[id].replace(/"[^"]*"|\[[^\]]*\]/g, '')))) dateStyles.add(i);
     });
   }
-  // 첫 번째 시트 위치
+  // 시트마다 (순서대로)
   const wb = xml(await z.read('xl/workbook.xml'));
   const rels = xml(await z.read('xl/_rels/workbook.xml.rels'));
-  const first = all(wb, 'sheet')[0];
-  const rid = first && (first.getAttribute('r:id') || first.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
-  const rel = all(rels, 'Relationship').find(r => r.getAttribute('Id') === rid);
-  let target = rel ? rel.getAttribute('Target') : 'worksheets/sheet1.xml';
-  target = target.startsWith('/') ? target.slice(1) : `xl/${target.replace(/^\.\//, '')}`;
-  const sheet = xml(await z.read(target) || await z.read('xl/worksheets/sheet1.xml'));
   const col = ref => { let n = 0; for (const ch of ref.replace(/\d+/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
-  const rows = [];
-  all(sheet, 'row').forEach(r => {
-    const out = [];
-    all(r, 'c').forEach(c => {
-      const t = c.getAttribute('t'), v = all(c, 'v')[0], s = +c.getAttribute('s');
-      let val = '';
-      if (t === 's') val = shared[+(v && v.textContent)] ?? '';
-      else if (t === 'inlineStr') val = all(c, 't').map(x => x.textContent).join('');
-      else if (v) {
-        val = v.textContent;
-        if (t !== 'str' && t !== 'b' && dateStyles.has(s) && !isNaN(+val)) val = serialToYmd(+val);
-      }
-      out[c.getAttribute('r') ? col(c.getAttribute('r')) : out.length] = String(val).trim();
+  const book = [];
+  for (const [i, sh] of all(wb, 'sheet').entries()) {
+    const rid = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const rel = all(rels, 'Relationship').find(r => r.getAttribute('Id') === rid);
+    let target = rel ? rel.getAttribute('Target') : `worksheets/sheet${i + 1}.xml`;
+    target = target.startsWith('/') ? target.slice(1) : `xl/${target.replace(/^\.\//, '')}`;
+    const src = await z.read(target);
+    if (!src) continue;
+    const sheet = xml(src), rows = [];
+    all(sheet, 'row').forEach(r => {
+      const out = [];
+      all(r, 'c').forEach(c => {
+        const t = c.getAttribute('t'), v = all(c, 'v')[0], s = +c.getAttribute('s');
+        let val = '';
+        if (t === 's') val = shared[+(v && v.textContent)] ?? '';
+        else if (t === 'inlineStr') val = all(c, 't').map(x => x.textContent).join('');
+        else if (v) {
+          val = v.textContent;
+          if (t !== 'str' && t !== 'b' && dateStyles.has(s) && !isNaN(+val)) val = serialToYmd(+val);
+        }
+        out[c.getAttribute('r') ? col(c.getAttribute('r')) : out.length] = String(val).trim();
+      });
+      rows[(+r.getAttribute('r') || rows.length + 1) - 1] = Array.from(out, x => x ?? '');
     });
-    rows[(+r.getAttribute('r') || rows.length + 1) - 1] = Array.from(out, x => x ?? '');
-  });
-  return Array.from(rows, x => x || []);
+    book.push({ name: sh.getAttribute('name') || `시트 ${i + 1}`, rows: Array.from(rows, x => x || []) });
+  }
+  if (!book.length) throw new Error('bad_xlsx');
+  return book;
 }
 // 엑셀 날짜 숫자(1900년 기준) → YYYY-MM-DD
 function serialToYmd(n) {
@@ -229,7 +258,92 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
     ['xl/styles.xml', styles],
     ...sheets.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, s[1].xml])
   ]);
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
+  // 넘버스로 받을 때 쓸 값만 있는 표 (금액처럼 보이는 글자는 숫자로)
+  const plainOf = rws => rws.map(r => (r || []).map(v => /^-?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d{0,11})$/.test(String(v ?? '').trim()) ? +String(v).replace(/,/g, '') : v ?? ''));
+  const plain = [[opts.sheet || '양식', plainOf(body)], ...(opts.more || []).map(([n, r]) => [n, plainOf(r)])];
+  if (opts.guide) plain.push(['작성 안내', [['작성 안내'], ['첫 번째 시트에 채워서 그대로 올려 주세요. 칸 이름(첫 줄)은 바꾸지 마세요.'], [], ['칸', '꼭 채우기', '이렇게 적어요'], ...opts.guide]]);
+  return saveBook(filename, blob, plain);
+}
+
+/* ---------- 받기: .xlsx 그대로 또는 넘버스(.numbers)로 바꿔서 ----------
+   넘버스 파일은 값 · 시트 이름이 들어가요(색 · 테두리 · 수식은 엑셀 파일에만 — 맥 넘버스에서 .xlsx를 열어도 모양 그대로 보여요). */
+async function saveBook(filename, xlsxBlob, plain) {
+  let fmt = 'xlsx';
+  if (typeof window.pickSheetFormat === 'function') { fmt = await window.pickSheetFormat(filename); if (!fmt) return false; }
+  let blob = xlsxBlob, name = filename;
+  if (fmt === 'numbers') {
+    try {
+      const X = await loadSheetJs(), wb = X.utils.book_new(), used = new Set();
+      plain.forEach(([n, rows]) => {
+        let nm = String(n).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || '시트', k = 2;
+        while (used.has(nm)) nm = `${nm.slice(0, 28)} ${k++}`;
+        used.add(nm);
+        X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows.map(r => (r || []).map(v => v ?? ''))), nm);
+      });
+      blob = new Blob([X.write(wb, { bookType: 'numbers', type: 'array', numbers: window.XLSX_ZAHL_PAYLOAD })], { type: 'application/x-iwork-numbers-sffnumbers' });
+      name = filename.replace(/\.xlsx$/i, '') + '.numbers';
+    } catch (e) { console.warn(e); if (typeof toast === 'function') toast('넘버스 파일을 만들지 못했어요 · 엑셀(.xlsx)로 받아 주세요'); return false; }
+  }
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return true;
+}
+
+/* ---------- 칸 위치까지 정한 양식 (재정 보고서 · 수강생 관리표처럼) ----------
+   sheets: [{ name, rows: [[칸, …], …], merges: ['B3:M4', …], cols: [너비, …], heights: { 줄번호: 높이 }, freeze: 줄 수, landscape }]
+   칸: 값(글자 · 숫자) 또는 { v: 값, f: '수식(= 없이)', s: 서식 } — 수식 칸의 v는 계산한 값(넘버스 · 미리보기용).
+   서식: { b 굵게, sz 글자 크기, color 'FF0000', fill 'F2F2F2', bd 테두리(1 얇게 · 2 굵게 · 0 없음), h 'center'|'left'|'right', num '#,##0' 같은 숫자 서식, wrap } */
+function downloadBook(filename, sheets) {
+  const x = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const colName = i => { let s = ''; i++; while (i) { s = String.fromCharCode(65 + (i - 1) % 26) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const NS = 'http://schemas.openxmlformats.org';
+  // 서식 모음: 같은 모양은 한 번만
+  const fonts = [], fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'], borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>'], numFmts = [], xfs = [];
+  const idx = (arr, s) => { let i = arr.indexOf(s); if (i < 0) { arr.push(s); i = arr.length - 1; } return i; };
+  const font = ({ b, sz = 11, color }) => `<font>${b ? '<b/>' : ''}<sz val="${sz}"/>${color ? `<color rgb="FF${color}"/>` : ''}<name val="맑은 고딕"/><family val="3"/><charset val="129"/></font>`;
+  idx(fonts, font({}));
+  const line = w => w === 2 ? 'medium' : 'thin';
+  const border = bd => bd ? `<border>${['left', 'right', 'top', 'bottom'].map(k => `<${k} style="${line(bd)}"><color rgb="FF808080"/></${k}>`).join('')}<diagonal/></border>` : borders[0];
+  xfs.push('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
+  const styleId = s => {
+    if (!s) return 0;
+    const f = idx(fonts, font(s)), fi = s.fill ? idx(fills, `<fill><patternFill patternType="solid"><fgColor rgb="FF${s.fill}"/><bgColor indexed="64"/></patternFill></fill>`) : 0, b = idx(borders, border(s.bd));
+    let n = 0;
+    if (s.num) { const k = numFmts.indexOf(s.num); n = 164 + (k < 0 ? numFmts.push(s.num) - 1 : k); }
+    const al = `<alignment vertical="center"${s.h ? ` horizontal="${s.h}"` : ''}${s.wrap ? ' wrapText="1"' : ''}/>`;
+    return idx(xfs, `<xf numFmtId="${n}" fontId="${f}" fillId="${fi}" borderId="${b}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${al}</xf>`);
+  };
+  const sheetXml = sh => {
+    const rowsXml = sh.rows.map((r, ri) => {
+      const cells = (r || []).map((c, ci) => {
+        if (c == null || c === '') return '';
+        const o = typeof c === 'object' ? c : { v: c }, ref = `${colName(ci)}${ri + 1}`, st = styleId(o.s), sa = st ? ` s="${st}"` : '';
+        if (o.f) return `<c r="${ref}"${sa}${typeof o.v === 'number' || o.v == null ? '' : ' t="str"'}><f>${x(o.f)}</f>${o.v == null ? '' : `<v>${x(o.v)}</v>`}</c>`;
+        if (o.v == null || o.v === '') return st ? `<c r="${ref}"${sa}/>` : '';
+        if (typeof o.v === 'number') return `<c r="${ref}"${sa}><v>${o.v}</v></c>`;
+        return `<c r="${ref}" t="inlineStr"${sa}><is><t xml:space="preserve">${x(o.v)}</t></is></c>`;
+      }).join('');
+      const ht = sh.heights && sh.heights[ri + 1] ? ` ht="${sh.heights[ri + 1]}" customHeight="1"` : '';
+      return `<row r="${ri + 1}"${ht}>${cells}</row>`;
+    }).join('');
+    const cols = sh.cols && sh.cols.length ? `<cols>${sh.cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w || 9}" customWidth="1"/>`).join('')}</cols>` : '';
+    const pane = sh.freeze ? `<pane ySplit="${sh.freeze}" topLeftCell="A${sh.freeze + 1}" activePane="bottomLeft" state="frozen"/>` : '';
+    const merges = sh.merges && sh.merges.length ? `<mergeCells count="${sh.merges.length}">${sh.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>${cols}<sheetData>${rowsXml}</sheetData>${merges}<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${sh.landscape === false ? 'portrait' : 'landscape'}" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  };
+  const used = new Set(), names = sheets.map(sh => { let n = String(sh.name).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || '시트', k = 2; while (used.has(n)) n = `${n.slice(0, 28)} ${k++}`; used.add(n); return n; });
+  const sheetFiles = sheets.map(sheetXml); // 서식 모음을 채운 다음 styles.xml을 만들어요
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}/spreadsheetml/2006/main">${numFmts.length ? `<numFmts count="${numFmts.length}">${numFmts.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${x(f)}"/>`).join('')}</numFmts>` : ''}<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const blob = zipStore([
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
+    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    // 수식은 열 때 다시 계산해요(fullCalcOnLoad)
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${x(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+    ['xl/styles.xml', styles],
+    ...sheetFiles.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, s])
+  ]);
+  const plain = sheets.map((sh, i) => [names[i], sh.rows.map(r => (r || []).map(c => c == null ? '' : typeof c === 'object' ? (c.v ?? '') : c))]);
+  return saveBook(filename, blob, plain);
 }
