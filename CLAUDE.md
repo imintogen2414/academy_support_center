@@ -54,6 +54,15 @@
 - 비품 수정(15라운드): 줄마다 "수정", 고칠 때 지금 수도 바꾸면 `move_supply(fix)`로 "수량 맞춤" 기록(수는 표에서 바로 못 바꿔요).
 - 일정 여러 날짜(15라운드): 새 일정 창 "여러 날짜에 한 번에 넣기" → 달력에서 날짜 여러 개(매주 · 격주 같은 요일 한 번에) → 날마다 한 줄(`evDialog`).
 - CSS 이름 부딪힘 주의: 출결 카드는 `.card.att`, 첨부 파일 한 줄은 `.att-item`(14라운드에 `.att`로 지었다가 출결 카드가 옆으로 늘어선 모양이 됐어요). 새 클래스는 `grep`으로 먼저 겹치는지 보기.
+- 넘버스(16라운드): 표 파일을 올리는 칸은 모두 엑셀(.xlsx) · 넘버스(.numbers) · CSV(`SHEET_ACCEPT`, 읽기 `readBook` → 시트가 여러 개면 미리보기에서 시트 고르기, 칸 이름이 가장 잘 맞는 시트를 먼저). 받을 때는 `saveBook`이 `window.pickSheetFormat`으로 형식을 물어요(처음 한 번 · localStorage `asc-sheet-fmt`, 설정 → 화면 · 사용 "표 파일 받는 형식"). 넘버스 읽기 · 쓰기만 SheetJS 0.20.3(npm `@e965/xlsx`, 빌드가 `assets/vendor/xlsx.full.min.js` · `xlsx.zahl.js`로 복사, 넘버스 파일을 다룰 때만 불러요). 넘버스로 받으면 값 · 시트 이름만(색 · 수식은 엑셀 파일에만).
+- 칸 위치를 정한 양식은 `downloadBook(파일, 시트들)`(sheet.js): 칸마다 값 · 수식(`f`) · 서식(`s`: 굵게 · 크기 · 색 · 바탕 · 테두리 · 정렬 · 숫자 서식), 합치기 · 줄 높이 · 칸 너비 · 틀 고정. 수식 칸의 `v`는 미리 계산한 값(넘버스용).
+- 통장(16라운드, `fin_accounts`: 별칭 · 계좌 · 기준일 잔액 `opening` · 기준일 `opening_on` · 쓰는 곳 `note`, 재정 권한): `expenses` · `incomes` · `invoices` · `fixed_costs`에 `account_id`(고정 지출이 넣는 지출에도 그대로). 납부 확인 · 지출 · 수입 창에 통장 고르기(지난번 것 localStorage `asc-acct-pay|in|out`). 재정 "통장" 탭(`acctCard`, 잔액 `acctBal`), 통장 거래내역 파일 넣기(`IMPORTS.bank`: 입금 → incomes, 출금 → expenses, "수강료" 입금은 기본으로 건너뜀).
+- 재정 보고서(16라운드, `finReport`): 원장님이 쓰던 양식 그대로 — "재정 보고서" 시트(별칭 · 계좌 · 전월 잔액 | 입금 통장 · 내역 · 금액(SUMIF) | 출금 | 고정비용 현황 비용 · 처리여부 → 계좌 합계 · 입금 합계 · 출금 합계 · 전체 잔고 · 미처리 금액 · 잔액) + 통장마다 "거래내역조회" 시트 + "거래 내역"(이월금부터) + "자금예산 및 고정지출". 서식은 `RPT`. 예시 계정은 `demoFinSource`.
+- 환불(16라운드): `invoices.refund` · `refunded_on` · `refund_note`(청구 창 "더 넣기"), 재정 `ledger()`에서 돌려준 날 나간 돈("환불").
+- 수강생 관리표(16라운드, 원생 명단 위 탭 `STU_VIEW` = sheet, `mgView` · `mgRows(달)` · `mgSummary`): 쓰시던 넘버스 "M월 수강생 정보 및 관리 현황" 그대로 — 그 달 다닌 학생 + 그 달 청구서(수강료 · 할인 · 총 납부금액 · 결제방식 · 교재비 O/X · 환불), 위에 구분 × 남/여 × 수강 중/취소/예정 + 결제현황 합계. 원생에 `gender` · `course_from` · `course_to` · `track`(구분, 없으면 수강료 묶음) · `session`(오전/오후) 칸(원생 수정 → 더 넣기). 받기 `mgXlsx(1|12)`(COUNTIFS · SUMIFS 수식, 달마다 시트), 넣기는 `IMPORTS.students`(관리표 칸 + 수강료 칸이 있으면 그 달 청구서 · 납부 완료까지, 명단에 있는 학생은 청구서만 `keepDup`, 시트 이름에서 달 찾기 `sheetMonth`).
+- 끌어서 순서(16라운드): `bindSortable(상자, { item, handle, onDrop })` — 포인터 이벤트라 마우스 · 손가락 모두. 수납의 수강료 타일 · 할인 칩에 ⋮⋮(`bindPlanSort`, 다른 묶음 제목 · 수강료 위에 놓으면 그 묶음으로), 순서 정리 창(`orderDialog`)도 같은 방식.
+- 자료실 읽음(16라운드, `library_reads`, `mark_library_read` · `library_readers` · `library_read_counts`, 볼 수 있는 사람은 `private.library_audience`): 미리보기 · 다운로드 · 링크를 열면 남고, 올린 사람 · 원장 줄에 "봤어요 n/m명" → `libReadersDialog`. 공지 목록에도 "누가 읽었나요 ›"(예시 계정 `demoNoticeReaders`).
+- 결재 다시 보기 · 고치기(16라운드): `apvViewDialog`(강사도 끝난 결재를 눌러 봐요), 원장(결재 처리 권한)은 끝난 결재도 `edit_approval`로 고쳐요 — 넣은 지출 금액 · 내용도 함께, `approvals.edited_at` · `edited_by_name`.
 - 첫 화면 위쪽 "무료로 시작하기"는 버튼 안 글자를 `<span>` 하나로 감싸요(버튼 flex gap 때문에 띄어쓰기가 두 번처럼 보였어요).
 - 시간표 기간(14라운드): 매주 수업도 `timetable.from_week` ~ `to_week`(그 주 월요일, 비면 끝 없이) 안에서만 나와요(`ttInRange` · `ttOn`, DB `private.tt_on`). 넣을 때 "언제까지?"(`PERIODS`: 한 달 4주(기본) · 3개월 · 끝나는 날 직접 · 끝 없이 · 이 주만 → `periodRow`), 칸 아래 "~11/20까지"(`ttLastDay`). 곧 끝나거나 막 끝난 수업은 위에 "한 달 더 이어가기 · 3개월 더 · 끝 없이 계속"(`ttExtend`), 원장 홈에도 한 줄. 지우기에 "지난주까지만 하고 끝내기". 바뀐 기록 요약은 `private.tt_line`(~마지막 수업 날).
 - 시간표 화면 정리(14라운드): 위쪽은 "수업 넣기 · 일정 넣기 · 더 보기 ▾"(`more-menu`: 종이 시간표 사진 · 보강 넣기 · 다른 주 가져오기 · 시간표 정리). 요일 칸 아래 "+ 수업"(`data-tt-add`). 칸 오른쪽 위 ○(`data-tt-sel`)나 Shift · Ctrl+누르기로 여러 칸 → 아래 줄 "복사 · 옮기기 · 이 주 휴강 · 지우기 · 이 주 모두 고르기". 복사(`TT_CLIP`, `ttCopy`)하면 요일마다 "여기에 붙여넣기"(`ttPasteDialog`: 첫 칸 요일 · 시작 시간 · 기간, 간격 그대로) — 다른 주로 넘어가서 붙여도 돼요. 키보드 Ctrl+C · Ctrl+V · Delete · Esc. 입력 창은 색 · 강의실 · 담당 · 메모를 "더 넣기"로 접어요(`formDialog` 칸 옵션 `more` + `moreLabel`). 저장은 `TTX`(ins · upd · del) 하나로 — 예시 계정은 화면 안에서만 바뀌어요(새로 고치면 처음대로).
@@ -194,6 +203,7 @@
 31. ~~센터 관리 메뉴 묶음 · 학원/회원 가입순 · 가나다 · 역할별 · 고정 지출(월세 · 관리비) 자동 · 비품 · 교재 관리 · 앱 없이 명단 · 수강료 · 엑셀 버튼 말 · 아이콘 · 시간표 끌어서 옮기기 · 여러 칸 · 휴강 · 보강 · 다른 주 가져오기~~ (완료)
 32. ~~시간표 여러 칸 · 복사 · 붙여넣기 · 기간(한 달 · 3개월) · 이어가기 · 시간표 화면 정리 · 자료실 미리보기 · "다운로드" · 파일 2GB(이어 올리기) · 공지 파일 · 센터 → 원장님 공지~~ (완료 · 2GB는 Supabase 요금제 · 저장 공간 한도를 올려야 실제로 돼요)
 33. ~~수강료 · 할인 순서 · 묶음 · 할인 쉼표 · 여러 명 넣기 수강료 고르기 · 출결 추가 · 정렬 · 납부 한 번에 확인 · 받았어요 · 카드 단말기 매출 맞추기 · 재정 간단하게 · 고정 지출 3 · 6개월 · 1년 · 비품 수정 · 일정 여러 날짜 · 첫 화면 띄어쓰기~~ (완료 · 단말기를 실제로 바로 잇으려면 토스플레이스 · VAN 연동 계약이 필요)
+34. ~~재정 보고서 양식 그대로 · 통장 · 통장 거래내역 넣기 · 수강생 관리표(넘버스 양식) + 명단 · 수강료 연결 · 환불 · 넘버스 받기 · 올리기 · 수강료 · 할인 끌어서 정렬 · 자료실 · 공지 누가 봤는지 · 끝난 결재 다시 보기 · 고치기~~ (완료)
 
 # 작업 메모
 - 이 클라우드 환경에서는 Supabase·jsdelivr에 직접 접속이 막혀 있다. DB는 Supabase MCP(apply_migration, execute_sql로 `set local role authenticated` + `request.jwt.claims` 시나리오 시험 후 rollback)로, 화면은 가짜 env로 빌드한 `dist/`를 Playwright로 열고 Supabase 응답을 흉내 내서 시험한다. 실제 동작은 Vercel 미리보기에서 사용자가 확인.

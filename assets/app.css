@@ -1461,3 +1461,70 @@ div.tt-blk[data-edit-tt]:focus-visible { outline: 3px solid var(--blue-400); out
 .evc-d { aspect-ratio: 1 / 1; max-height: 40px; border: 0; border-radius: 10px; background: var(--surface); font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; }
 .evc-d.today { box-shadow: inset 0 0 0 1.5px var(--blue-400); }
 .evc-d.on { background: var(--blue-600); color: #fff; font-weight: 700; }
+
+/* ---------- 16라운드 ---------- */
+/* 표 파일 받는 형식 고르기 (엑셀 / 넘버스) */
+.fmt-dlg { max-width: 460px; }
+.fmt-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fmt-pick button { display: grid; gap: 4px; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 14px; padding: 14px; font: inherit; cursor: pointer; }
+.fmt-pick button:hover { border-color: var(--blue-500); background: var(--blue-50); }
+.fmt-pick b { font-size: 16px; }
+.fmt-pick small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+@media (max-width: 520px) { .fmt-pick { grid-template-columns: 1fr; } }
+/* 파일 넣기 미리보기 아래 선택 */
+.imp-opt { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--blue-50); }
+/* 통장 */
+.acct-list .li .r { display: grid; justify-items: end; gap: 2px; }
+.acct-list .li .r small { font-size: 11.5px; }
+/* 끌어서 순서 바꾸기 */
+.grip { cursor: grab; touch-action: none; user-select: none; color: var(--muted); font-weight: 700; letter-spacing: -2px; padding: 4px 6px; border-radius: 8px; line-height: 1; }
+.grip:hover { background: var(--blue-50); color: var(--blue-600); }
+body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
+.plan-item { position: relative; }
+.plan-item .plan { width: 100%; height: 100%; padding-right: 30px; }
+.plan-item .grip { position: absolute; top: 8px; right: 6px; }
+.plan-item.dragging, .disc-item.dragging, .od-row.dragging { opacity: .4; }
+.plan-item.drop-before::before, .plan-item.drop-after::after { content: ''; position: absolute; top: 4px; bottom: 4px; width: 3px; border-radius: 3px; background: var(--blue-500); }
+.plan-item.drop-before::before { left: -7px; } .plan-item.drop-after::after { right: -7px; }
+.plan-gh.drop-after { color: var(--blue-600); box-shadow: inset 0 -2px 0 var(--blue-500); }
+.disc-item { display: inline-flex; align-items: center; gap: 0; position: relative; }
+.disc-item .grip { padding: 4px 3px; }
+.disc-item.drop-before { box-shadow: -3px 0 0 var(--blue-500); } .disc-item.drop-after { box-shadow: 3px 0 0 var(--blue-500); }
+.od-grip { cursor: grab; touch-action: none; user-select: none; color: var(--muted); padding: 4px 6px; }
+.od-row { cursor: default; }
+.od-row.drop-before { box-shadow: 0 -3px 0 var(--blue-500), 0 0 0 1px var(--line); } .od-row.drop-after { box-shadow: 0 3px 0 var(--blue-500), 0 0 0 1px var(--line); }
+/* 원생 명단 · 수강생 관리표 */
+.stu-tabs { margin-bottom: 14px; }
+.mg-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.mg-bar .pager { margin: 0; }
+.mg-st > .tr { grid-template-columns: 1.3fr repeat(6, .6fr) repeat(4, 1fr); }
+.mg-st.nobill > .tr { grid-template-columns: 1.3fr repeat(6, .6fr); }
+.mg-st > .tr.sum { font-weight: 700; background: var(--blue-50); }
+.mg-st .num { text-align: right; }
+.mg-table { display: grid; font-size: 13.5px; }
+.mg-tr { display: grid; grid-template-columns: 34px 1.6fr 1.1fr 1fr .8fr 1fr .8fr 1.4fr .9fr .7fr 1.2fr; gap: 8px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--line); }
+.mg-table.nobill .mg-tr { grid-template-columns: 34px 1.6fr 1.2fr 1fr .8fr 1.4fr; }
+.mg-tr.th { font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--line); }
+.mg-tr.sum { background: var(--blue-50); border-radius: 10px; border-bottom: 0; margin-top: 6px; }
+.mg-tr.gone { opacity: .6; }
+.mg-tr .d { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.mg-tr .btns { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+/* 현황 요약은 좁은 화면에서도 표 모양 그대로 (카드 안에서만 옆으로 밀어 봐요) */
+.mg-sum { overflow: hidden; }
+.mg-sum .mg-st { overflow-x: auto; }
+.mg-sum .mg-st > .tr { min-width: 760px; }
+.mg-sum .mg-st.nobill > .tr { min-width: 420px; }
+@media (max-width: 760px) { .mg-sum .mg-st > .tr.th { display: grid; } .mg-sum .mg-st > .tr { grid-template-columns: 1.3fr repeat(6, .6fr) repeat(4, 1fr); row-gap: 0; } .mg-sum .mg-st.nobill > .tr { grid-template-columns: 1.3fr repeat(6, .6fr); } .mg-sum .mg-st > .tr > :first-child { grid-column: auto; } }
+@media (max-width: 980px) {
+  .mg-tr, .mg-table.nobill .mg-tr { grid-template-columns: 1fr 1fr; padding: 12px 4px; }
+  .mg-tr.th { display: none; }
+  .mg-tr > [data-l="번호"] { display: none; }
+  .mg-tr > [data-l="원생"], .mg-tr > [data-l="비고"] { grid-column: 1 / -1; }
+  .mg-tr > [data-l]:not([data-l="원생"])::before { content: attr(data-l); display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .mg-tr.sum { grid-template-columns: 1fr 1fr; }
+  .mg-tr.sum > span:empty { display: none; }
+}
+/* 결재 다시 보기 */
+.apv-view { display: grid; }
+.set-row.col { display: grid; gap: 0; }
+.set-row.col p { font-weight: 500; }
