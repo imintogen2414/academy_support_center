@@ -116,25 +116,21 @@ function toastAct(msg, label, fn) {
 }
 
 /* ---------- 표 파일 받는 형식: 엑셀(.xlsx) / 넘버스(.numbers) ----------
-   처음 받을 때 한 번 물어보고 기억해요(localStorage asc-sheet-fmt). 설정 → 화면 · 사용에서 바꿔요. sheet.js의 saveBook이 불러요. */
-const sheetFmt = () => { try { return localStorage.getItem('asc-sheet-fmt') || ''; } catch (e) { return ''; } };
-const setSheetFmt = v => { try { if (v) localStorage.setItem('asc-sheet-fmt', v); else localStorage.removeItem('asc-sheet-fmt'); } catch (e) { /* 이 기기에 못 남겨도 다음에 다시 물어봐요 */ } };
-window.pickSheetFormat = filename => {
-  const saved = sheetFmt();
-  if (saved) return Promise.resolve(saved);
-  return new Promise(done => {
-    const d = $('#fmtDlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'fmtDlg' }));
-    d.innerHTML = `<form method="dialog" class="dlg fmt-dlg"><h2>어떤 파일로 받을까요?</h2>
-      <p class="muted small" style="margin:-6px 0 0">${esc(filename.replace(/\.xlsx$/i, ''))}</p>
-      <div class="fmt-pick"><button type="button" data-fmt="xlsx"><b>엑셀</b><small>.xlsx · 윈도우 · 맥 · 한셀 · 구글 시트<br>색 · 테두리 · 합계 수식까지 그대로</small></button>
-        <button type="button" data-fmt="numbers"><b>넘버스</b><small>.numbers · 맥 · 아이폰 · 아이패드<br>값 · 시트가 들어가요</small></button></div>
-      <label class="chk-line"><input type="checkbox" id="fmtKeep" checked><span>다음에도 이 형식으로 받기 (설정에서 바꿔요)</span></label>
-      <div class="acts"><span style="flex:1"></span><button type="button" class="btn" data-fmt="">취소</button></div></form>`;
-    d.querySelectorAll('[data-fmt]').forEach(b => b.onclick = () => { const v = b.dataset.fmt; if (v && $('#fmtKeep').checked) setSheetFmt(v); d.close(); done(v || null); });
-    d.oncancel = () => done(null);
-    d.showModal();
-  });
-};
+   받을 때마다 골라요. 지난번 고른 것을 기억해 먼저 눌러 둬요(localStorage asc-sheet-last, 엔터만 쳐도 그걸로). sheet.js의 saveBook이 불러요. */
+const sheetLast = () => { try { return localStorage.getItem('asc-sheet-last') || 'xlsx'; } catch (e) { return 'xlsx'; } };
+window.pickSheetFormat = filename => new Promise(done => {
+  const d = $('#fmtDlg') || document.body.appendChild(Object.assign(document.createElement('dialog'), { id: 'fmtDlg' })), last = sheetLast();
+  d.innerHTML = `<form method="dialog" class="dlg fmt-dlg"><h2>어떤 파일로 받을까요?</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc(filename.replace(/\.xlsx$/i, ''))}</p>
+    <div class="fmt-pick"><button type="button" data-fmt="xlsx" class="${last === 'xlsx' ? 'on' : ''}"><b>엑셀</b><small>.xlsx · 윈도우 · 맥 · 한셀 · 구글 시트<br>색 · 굵게 · 합계 수식까지</small>${last === 'xlsx' ? '<i>지난번</i>' : ''}</button>
+      <button type="button" data-fmt="numbers" class="${last === 'numbers' ? 'on' : ''}"><b>넘버스</b><small>.numbers · 맥 · 아이폰 · 아이패드<br>색 · 굵게 · 정렬 그대로 (합계는 계산한 값)</small>${last === 'numbers' ? '<i>지난번</i>' : ''}</button></div>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" data-fmt="">취소</button></div></form>`;
+  let picked = false;
+  d.querySelectorAll('[data-fmt]').forEach(b => b.onclick = () => { const v = b.dataset.fmt; picked = true; if (v) { try { localStorage.setItem('asc-sheet-last', v); } catch (e) { /* 다음엔 엑셀이 먼저 */ } } d.close(); done(v || null); });
+  d.onclose = () => { if (!picked) done(null); };
+  d.showModal();
+  const on = d.querySelector('.fmt-pick .on'); if (on) on.focus();
+});
 // 표 파일 고르기 칸: 엑셀 · CSV · 넘버스 모두
 const SHEET_ACCEPT = '.xlsx,.csv,.txt,.numbers,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/x-iwork-numbers-sffnumbers,application/vnd.apple.numbers';
 const sheetReadErr = err => err.message === 'old_xls' ? '예전 엑셀(.xls) 파일이에요. 엑셀에서 "다른 이름으로 저장 → Excel 통합 문서(.xlsx)"로 저장해서 올려 주세요.'
@@ -1294,14 +1290,30 @@ function acctDialog(a, preset) {
    통장마다 시트 "거래내역조회"(No · 거래일시 · 적요 · 의뢰인/수취인 · 입금 · 출금 · 거래후잔액 · 구분 · 거래점) — 보고서 금액은 이 시트를 SUMIF로 더해서, 시트를 고치면 보고서도 바뀌어요.
    "거래 내역"(이월금부터 날짜순) · "자금예산 및 고정지출" 시트도 함께. */
 const RPT = {
-  title: { b: 1, sz: 22, h: 'center' }, date: { b: 1, sz: 13, h: 'left' },
-  head: { b: 1, sz: 13, fill: 'E7E6E6', bd: 1, h: 'center', wrap: 1 }, sub: { b: 1, fill: 'F2F2F2', bd: 1, h: 'center' },
-  cell: { bd: 1, h: 'center' }, left: { bd: 1, h: 'left' }, money: { bd: 1, h: 'right', num: '#,##0' }, note: { bd: 1, h: 'left', wrap: 1 },
-  tot: { b: 1, sz: 12, fill: 'E7E6E6', bd: 1, h: 'center' }, totMoney: { b: 1, sz: 12, fill: 'E7E6E6', bd: 1, h: 'right', num: '#,##0' },
-  label: { b: 1, sz: 13, fill: 'F2F2F2', bd: 1, h: 'center' }, blue: { b: 1, sz: 13, color: '0432FF', bd: 1, h: 'center', num: '#,##0' }, red: { b: 1, sz: 13, color: 'FF0000', bd: 1, h: 'center', num: '#,##0' },
-  final: { b: 1, sz: 15, color: 'FF0000', fill: 'FFFF00', bd: 1, h: 'center', num: '#,##0' }, finalLabel: { b: 1, sz: 13, color: 'FF0000', fill: 'F2F2F2', bd: 1, h: 'center' },
-  bankTitle: { b: 1, sz: 13 }, bankHead: { b: 1, fill: 'EFF0F1', bd: 1, h: 'center' }, bankCell: { bd: 1 }, bankMoney: { bd: 1, num: '#,##0' }
+  title: { b: 1, sz: 22, h: 'center', color: '1F3864' }, date: { b: 1, sz: 13, h: 'left', color: '595959' },
+  head: { b: 1, sz: 13, fill: '1F3864', color: 'FFFFFF', bd: 1, h: 'center', wrap: 1 }, sub: { b: 1, fill: '1F3864', color: 'FFFFFF', bd: 1, h: 'center', wrap: 1 },
+  cell: { bd: 1, h: 'center' }, left: { bd: 1, h: 'left' }, money: { bd: 1, h: 'right', num: '#,##0' }, note: { bd: 1, h: 'left', wrap: 1, color: '404040' },
+  tot: { b: 1, sz: 12, fill: 'D9E1F2', color: '1F3864', bd: 2, h: 'center' }, totMoney: { b: 1, sz: 12, fill: 'D9E1F2', color: '1F3864', bd: 2, h: 'right', num: '#,##0' },
+  label: { b: 1, sz: 13, fill: 'D9E1F2', color: '1F3864', bd: 2, h: 'center' }, blue: { b: 1, sz: 14, color: '0432FF', fill: 'FFFFFF', bd: 2, h: 'center', num: '#,##0' }, red: { b: 1, sz: 14, color: 'FF0000', fill: 'FFFFFF', bd: 2, h: 'center', num: '#,##0' },
+  final: { b: 1, sz: 16, color: 'FF0000', fill: 'FFFF00', bd: 2, h: 'center', num: '#,##0' }, finalLabel: { b: 1, sz: 13, color: 'FF0000', fill: 'FFF2CC', bd: 2, h: 'center' },
+  bankTitle: { b: 1, sz: 14, color: '1F3864' }, bankHead: { b: 1, fill: '1F3864', color: 'FFFFFF', bd: 1, h: 'center' }, bankCell: { bd: 1 }, bankMid: { bd: 1, h: 'center' }, bankMoney: { bd: 1, h: 'right', num: '#,##0' },
+  inMoney: { bd: 1, h: 'right', num: '#,##0', color: '1F4E79' }, outMoney: { bd: 1, h: 'right', num: '#,##0', color: 'C00000' }, bal: { b: 1, bd: 1, h: 'right', num: '#,##0' },
+  carry: { bd: 1, h: 'center', fill: 'FFF2CC' }, carryLeft: { b: 1, bd: 1, h: 'left', fill: 'FFF2CC' }, carryMoney: { b: 1, bd: 1, h: 'right', num: '#,##0', fill: 'FFF2CC' },
+  greenHead: { b: 1, fill: '548235', color: 'FFFFFF', bd: 1, h: 'center' }
 };
+// 재정 보고서 칸 묶음 색: 계좌(남색) · 입금(파랑) · 출금(주황) · 고정비용(초록) — [머리줄 바탕, 둘째 줄 바탕, 금액 글자색]
+const RPT_SEC = { acct: ['1F3864', 'D9E1F2', '1F3864'], in: ['2F5597', 'DDEBF7', '1F4E79'], out: ['C55A11', 'FBE5D6', 'C00000'], fix: ['548235', 'E2EFDA', '375623'] };
+const rptSec = ci => ci <= 3 ? 'acct' : ci <= 6 ? 'in' : ci <= 9 ? 'out' : 'fix';
+function paintReport(rows, first, last, T) {
+  rows[5].forEach((c, ci) => { if (c && ci) c.s = { b: 1, sz: 13, color: 'FFFFFF', fill: RPT_SEC[rptSec(ci)][0], bd: 2, h: 'center', wrap: 1 }; });
+  rows[6].forEach((c, ci) => { if (c && ci) { const k = rptSec(ci); c.s = k === 'acct' ? rows[5][ci].s : { b: 1, fill: RPT_SEC[k][1], color: RPT_SEC[k][2], bd: 1, h: 'center' }; } });
+  for (let ri = first - 1; ri <= last - 1; ri++) (rows[ri] || []).forEach((c, ci) => {
+    if (!c || !ci || !c.s || c.s === RPT.note) return;
+    const k = rptSec(ci), zebra = (ri - first + 1) % 2 ? { fill: 'F7F9FC' } : {};
+    c.s = { ...c.s, ...zebra, ...(c.s.num ? { color: RPT_SEC[k][2] } : {}) };
+  });
+  (rows[T - 1] || []).forEach((c, ci) => { if (c && ci) { const k = rptSec(ci); c.s = { ...c.s, fill: RPT_SEC[k][1], color: RPT_SEC[k][2], bd: 2 }; } });
+}
 const WEEK_KO = ['일', '월', '화', '수', '목', '금', '토'];
 function finReport() {
   const src = REAL ? { academy: REAL.academy, accounts: accts(), all: ledger(), fixed: fixedData() } : demoFinSource();
@@ -1356,34 +1368,37 @@ function finReport() {
   rows.push([null, null, null, null, null, null, { v: '전체 잔고', s: S.label }, { v: whole, f: `D${T}+G${T}-J${T}`, s: S.blue }, { v: '', s: S.blue }, { v: '', s: S.blue }, { v: '미처리 금액', s: S.label }, { v: undone, f: `L${T}-M${T}`, s: S.red }, { v: '', s: S.red }]);
   rows.push([null, null, null, null, null, null, { v: '잔액 (전체 잔고 − 미처리 금액)', s: S.finalLabel }, { v: '', s: S.finalLabel }, { v: '', s: S.finalLabel }, { v: '', s: S.finalLabel }, { v: whole - undone, f: `H${T + 1}-L${T + 1}`, s: S.final }, { v: '', s: S.final }, { v: '', s: S.final }]);
   merges.push(`B${T}:C${T}`, `E${T}:F${T}`, `H${T}:I${T}`, `H${T + 1}:J${T + 1}`, `L${T + 1}:M${T + 1}`, `G${T + 2}:J${T + 2}`, `K${T + 2}:M${T + 2}`);
+  paintReport(rows, first, last, T);
   const heights = { 3: 22, 4: 22, 5: 30, 6: 24, 7: 22 }; for (let i = first; i <= last; i++) heights[i] = 22; heights[T] = 22; heights[T + 1] = 24; heights[T + 2] = 26;
   const report = { name: '재정 보고서', rows, merges, heights, cols: [2, 13, 12, 15, 9, 20, 15, 9, 20, 15, 18, 14, 15] };
   // 통장마다 거래내역조회 (은행 앱처럼 최근 것이 위)
   const bankSheets = books.map(b => {
     const list = b.rows.slice().reverse(), rws = [[{ v: `거래내역조회 · ${b.name}${b.bank ? ` (${b.bank})` : ''} · ${r.from} ~ ${r.to}`, s: S.bankTitle }],
       ['No', '거래일시', '적요', '의뢰인/수취인', '입금', '출금', '거래후잔액', '구분', '거래점'].map(v => ({ v, s: S.bankHead }))];
-    list.forEach((e, i) => rws.push([{ v: list.length - i, s: S.bankCell }, { v: e.day, s: S.bankCell }, { v: e.memo || e.cat, s: S.bankCell }, { v: e.party || '', s: S.bankCell },
-      e.kind === 'in' ? { v: e.amount, s: S.bankMoney } : { v: '', s: S.bankMoney }, e.kind === 'out' ? { v: e.amount, s: S.bankMoney } : { v: '', s: S.bankMoney },
-      { v: e.after, s: S.bankMoney }, { v: e.cat, s: S.bankCell }, { v: e.method || (e.src === 'inv' ? '수납' : e.src === 'inc' ? '수입' : '지출'), s: S.bankCell }]));
+    list.forEach((e, i) => { const z = i % 2 ? { fill: 'F7F9FC' } : {}, st = x => ({ ...x, ...z });
+      rws.push([{ v: list.length - i, s: st(S.bankMid) }, { v: e.day, s: st(S.bankMid) }, { v: e.memo || e.cat, s: st(S.bankCell) }, { v: e.party || '', s: st(S.bankCell) },
+        e.kind === 'in' ? { v: e.amount, s: st(S.inMoney) } : { v: '', s: st(S.inMoney) }, e.kind === 'out' ? { v: e.amount, s: st(S.outMoney) } : { v: '', s: st(S.outMoney) },
+        { v: e.after, s: st(S.bal) }, { v: e.cat, s: st(S.bankMid) }, { v: e.method || (e.src === 'inv' ? '수납' : e.src === 'inc' ? '수입' : '지출'), s: st(S.bankMid) }]); });
     if (!list.length) rws.push([{ v: '', s: S.bankCell }, { v: '이 기간 거래 없음', s: S.bankCell }, ...Array(7).fill({ v: '', s: S.bankCell })]);
     const L = rws.length;
     rws.push([], [{ v: '', s: S.tot }, { v: '합계', s: S.tot }, { v: '', s: S.tot }, { v: '', s: S.tot }, { v: sum(b.rows.filter(e => e.kind === 'in'), e => e.amount), f: `SUM(E3:E${L})`, s: S.totMoney }, { v: sum(b.rows.filter(e => e.kind === 'out'), e => e.amount), f: `SUM(F3:F${L})`, s: S.totMoney }, { v: b.end, s: S.totMoney }, { v: '', s: S.tot }, { v: '', s: S.tot }],
       [null, { v: `${r.from} 아침 잔액 ${signWon(b.start)} → ${r.to} 저녁 잔액 ${signWon(b.end)}` }]);
-    return { name: b.sheet, rows: rws, merges: ['A1:I1'], cols: [7, 14, 26, 18, 13, 13, 14, 12, 16], freeze: 2 };
+    return { name: b.sheet, rows: rws, merges: ['A1:I1'], cols: [7, 14, 26, 18, 13, 13, 14, 12, 16], freeze: 2, heights: { 1: 26, 2: 22 } };
   });
   // 거래 내역: 통장마다 이월금 → 날짜순
   const flat = books.flatMap(b => b.rows.map(e => ({ ...e, b }))).sort((x, y) => x.day.localeCompare(y.day) || (x.kind === y.kind ? 0 : x.kind === 'in' ? -1 : 1));
   let run = tStart;
   const tr = [[{ v: `${+r.from.slice(5, 7)}월 재정 거래내역${r.from.slice(0, 7) !== r.to.slice(0, 7) ? ` (${r.from} ~ ${r.to})` : ''}`, s: S.title }],
     ['구분', '거래일자', '통장', '입금금액(원)', '출금금액(원)', '거래 후 잔액(원)', '분류', '거래내용', '거래기록사항'].map(v => ({ v, s: S.sub })),
-    ...books.map(b => [{ v: '', s: S.cell }, { v: r.from, s: S.cell }, { v: b.name, s: S.cell }, { v: b.start, s: S.money }, { v: '', s: S.money }, { v: b.start, s: S.money }, { v: '', s: S.cell }, { v: '전월 이월금', s: S.left }, { v: '', s: S.left }]),
-    ...flat.map((e, i) => { run += flowOf(e); return [{ v: i + 1, s: S.cell }, { v: e.day, s: S.cell }, { v: e.b.name, s: S.cell }, e.kind === 'in' ? { v: e.amount, s: S.money } : { v: '', s: S.money }, e.kind === 'out' ? { v: e.amount, s: S.money } : { v: '', s: S.money }, { v: run, s: S.money }, { v: e.cat, s: S.cell }, { v: e.memo || '', s: S.left }, { v: e.party || e.method || '', s: S.left }]; })];
+    ...books.map(b => [{ v: '', s: S.carry }, { v: r.from, s: S.carry }, { v: b.name, s: S.carry }, { v: b.start, s: S.carryMoney }, { v: '', s: S.carryMoney }, { v: b.start, s: S.carryMoney }, { v: '', s: S.carry }, { v: '전월 이월금', s: S.carryLeft }, { v: '', s: S.carryLeft }]),
+    ...flat.map((e, i) => { run += flowOf(e); const z = i % 2 ? { fill: 'F7F9FC' } : {}, st = x => ({ ...x, ...z });
+      return [{ v: i + 1, s: st(S.cell) }, { v: e.day, s: st(S.cell) }, { v: e.b.name, s: st(S.cell) }, e.kind === 'in' ? { v: e.amount, s: st(S.inMoney) } : { v: '', s: st(S.inMoney) }, e.kind === 'out' ? { v: e.amount, s: st(S.outMoney) } : { v: '', s: st(S.outMoney) }, { v: run, s: st(S.bal) }, { v: e.cat, s: st(S.cell) }, { v: e.memo || '', s: st(S.left) }, { v: e.party || e.method || '', s: st(S.left) }]; })];
   const TL = tr.length;
   tr.push([{ v: '합계', s: S.tot }, { v: '', s: S.tot }, { v: '', s: S.tot }, { v: tStart + tIn, f: `SUM(D3:D${TL})`, s: S.totMoney }, { v: tOut, f: `SUM(E3:E${TL})`, s: S.totMoney }, { v: whole, f: `D${TL + 1}-E${TL + 1}`, s: S.totMoney }, { v: '', s: S.tot }, { v: '', s: S.tot }, { v: '', s: S.tot }]);
-  const trSheet = { name: '거래 내역', rows: tr, merges: ['A1:I1'], cols: [7, 12, 14, 15, 15, 16, 12, 30, 22], freeze: 2, heights: { 1: 30 } };
+  const trSheet = { name: '거래 내역', rows: tr, merges: ['A1:I1'], cols: [7, 12, 14, 15, 15, 16, 12, 30, 22], freeze: 2, heights: { 1: 32, 2: 24 } };
   // 자금예산 및 고정지출
   const fx = src.fixed.filter(f => f.active), budget = [[{ v: `${acad} 예산 계획`, s: S.title }], [{ v: `기준일 : ${r.from.replace(/-/g, '.')} · 금액은 한 번 나가는 금액, 실 지출은 ${r.from} ~ ${r.to}`, s: { sz: 10, color: '6B7280' } }],
-    ['구분', '금액', '세부내용', '실 지출', '비고'].map(v => ({ v, s: S.sub })),
+    ['구분', '금액', '세부내용', '실 지출', '비고'].map(v => ({ v, s: S.greenHead })),
     ...fx.map(f => [{ v: f.name, s: S.cell }, { v: f.amount, s: S.money }, { v: [`${everyText(f.every_months)} ${payDayText(f.pay_day)}`, f.method, f.memo].filter(Boolean).join(' · '), s: S.left },
       { v: sum(all.filter(e => e.fixedId === f.id && inRange(e, r.from, r.to)), e => e.amount), s: S.money }, { v: [(+f.every_months || 1) > 1 ? `한 달 ${comma(perMonth(f))}원꼴` : '', acctOf(f.account_id) ? acctOf(f.account_id).name : ''].filter(Boolean).join(' · '), s: S.left }])];
   const BL = budget.length;
@@ -4354,8 +4369,6 @@ function settingsPage() {
       <div class="seg">${[['system', '기기 설정'], ['light', '밝게'], ['dark', '어둡게']].map(([k, l]) => `<button class="${tm === k ? 'on' : ''}" data-theme-set="${k}">${l}</button>`).join('')}</div></div>
     <div class="set-line"><div><b>로그인 유지하기</b><small>끄면 다음 로그인부터 창을 닫을 때 로그아웃돼요 · 공용 PC라면 꺼 주세요</small></div>
       <label class="switch"><input type="checkbox" data-act="keepLogin" ${keepOn() ? 'checked' : ''}><span></span></label></div>
-    <div class="set-line"><div><b>표 파일 받는 형식</b><small>"엑셀로 받기" · 양식 받기를 누를 때 받을 파일이에요 (이 기기에 저장) · 올릴 때는 엑셀 · 넘버스 · CSV 모두 돼요</small></div>
-      <div class="seg">${[['', '받을 때 묻기'], ['xlsx', '엑셀'], ['numbers', '넘버스']].map(([k, l]) => `<button class="${sheetFmt() === k ? 'on' : ''}" data-sheet-fmt="${k}">${l}</button>`).join('')}</div></div>
     <div class="set-line"><div><b>홈 "자주 쓰는 메뉴"</b><small>홈에 둘 메뉴를 최대 8개 골라요 (이 기기에 저장)</small></div><button class="btn sm" data-act="editFav">바꾸기</button></div>
     <div class="set-line"><div><b>메뉴 사용법 안내</b><small>${howtoHiddenAll().length ? `숨긴 안내 ${howtoHiddenAll().length}개 · 다시 띄우면 화면마다 위쪽에 다시 보여요` : '화면마다 위쪽에 "이렇게 써요"가 보여요'}</small></div><span class="btns">${howtoHiddenAll().length ? '<button class="btn sm" data-act="howtoReset">다시 띄우기</button>' : ''}<a class="btn sm" href="#guide">모아 보기</a></span></div>
     ${startSteps().length ? `<div class="set-line"><div><b>처음 시작 안내</b><small>숨긴 안내를 홈에 다시 띄워요</small></div><a class="btn sm" href="#home" data-act="showGuide">다시 보기</a></div>` : ''}
@@ -5404,35 +5417,40 @@ function mgView() {
 function mgXlsx(n) {
   const m0 = STU_MONTH || TODAY.slice(0, 7), months = [...Array(n)].map((_, i) => shiftMonth(m0, i - n + 1)).filter(m => n === 1 || mgRows(m).length);
   if (!months.length) return toast('받을 달이 없어요');
-  const H = { b: 1, fill: 'E7E6E6', bd: 1, h: 'center', wrap: 1 }, C = { bd: 1, h: 'center' }, L = { bd: 1, h: 'left' }, W = { bd: 1, h: 'right', num: '#,##0' };
-  const T = { b: 1, fill: 'F2F2F2', bd: 1, h: 'center' }, TW = { b: 1, fill: 'F2F2F2', bd: 1, h: 'right', num: '#,##0' };
+  const H = { b: 1, fill: '1F3864', color: 'FFFFFF', bd: 1, h: 'center', wrap: 1 }, C = { bd: 1, h: 'center' }, L = { bd: 1, h: 'left' }, W = { bd: 1, h: 'right', num: '#,##0' };
+  const T = { b: 1, fill: 'D9E1F2', color: '1F3864', bd: 2, h: 'center' }, TW = { b: 1, fill: 'D9E1F2', color: '1F3864', bd: 2, h: 'right', num: '#,##0' };
+  // 현황 요약 묶음 색: 남(파랑) · 여(분홍) · 결제현황(초록)
+  const GH = c => ({ b: 1, fill: c, color: 'FFFFFF', bd: 2, h: 'center' }), GS = (c, t) => ({ b: 1, fill: c, color: t, bd: 1, h: 'center', wrap: 1 });
+  const MAN = GH('2F5597'), WOM = GH('C2185B'), PAY = GH('548235'), MANs = GS('DDEBF7', '1F4E79'), WOMs = GS('FCE4EC', '880E4F'), PAYs = GS('E2EFDA', '375623');
+  const zeb = (s, i) => i % 2 ? { ...s, fill: 'F7F9FC' } : s;
   const sheets = months.map(m => {
     const rows = mgRows(m), sm = mgSummary(rows), tracks = sm.tracks.map(t => t[0]);
     const titleAt = 4 + tracks.length + 2, headAt = titleAt + 2, first = headAt + 1, last = first + Math.max(rows.length, 1) - 1; // 엑셀 줄 번호
     const rg = c => `$${c}$${first}:$${c}$${last}`;
-    const out = [[], [null, { v: '수강생현황', s: H }, { v: '남', s: H }, { v: '', s: H }, { v: '', s: H }, { v: '여', s: H }, { v: '', s: H }, { v: '', s: H }, { v: '결제현황', s: H }, { v: '', s: H }, { v: '', s: H }, { v: '', s: H }],
-      [null, { v: '', s: H }, ...['수강', '수강 취소', '수강예정', '수강', '수강 취소', '수강예정', '수강료', '교재비', '할인금액', '총 납부금액'].map(v => ({ v, s: H }))]];
+    const out = [[], [null, { v: '수강생현황', s: H }, { v: '남', s: MAN }, { v: '', s: MAN }, { v: '', s: MAN }, { v: '여', s: WOM }, { v: '', s: WOM }, { v: '', s: WOM }, { v: '결제현황', s: PAY }, { v: '', s: PAY }, { v: '', s: PAY }, { v: '', s: PAY }],
+      [null, { v: '', s: H }, ...['수강', '수강 취소', '수강예정'].map(v => ({ v, s: MANs })), ...['수강', '수강 취소', '수강예정'].map(v => ({ v, s: WOMs })), ...['수강료', '교재비', '할인금액', '총 납부금액'].map(v => ({ v, s: PAYs }))]];
     tracks.forEach((t, ti) => {
       const x = sm.tracks[ti][1], r = 4 + ti, k = t === '구분 없음' ? '' : t;
       const cf = (g, st) => `COUNTIFS(${rg('I')},"${g}",${rg('H')},"${st}",${rg('K')},"${k}")`;
       const cnt = (g, gi) => [{ v: x.cnt[gi * 3], f: `COUNTIFS(${rg('I')},"${g}",${rg('K')},"${k}")-${cf(g, '수강 취소')}-${cf(g, '수강 예정')}`, s: C }, { v: x.cnt[gi * 3 + 1], f: cf(g, '수강 취소'), s: C }, { v: x.cnt[gi * 3 + 2], f: cf(g, '수강 예정'), s: C }];
-      out.push([null, { v: t, s: T }, ...cnt('남', 0), ...cnt('여', 1), { v: x.fee, f: `SUMIFS(${rg('P')},${rg('K')},"${k}")`, s: W }, { v: x.book, f: `SUMIFS(${rg('V')},${rg('K')},"${k}")`, s: W }, { v: x.disc, f: `SUMIFS(${rg('Q')},${rg('K')},"${k}")`, s: W }, { v: x.fee - x.disc, f: `I${r}-K${r}`, s: W }]);
+      out.push([null, { v: t, s: { ...T, bd: 1, fill: 'EEF2F9' } }, ...cnt('남', 0), ...cnt('여', 1), { v: x.fee, f: `SUMIFS(${rg('P')},${rg('K')},"${k}")`, s: W }, { v: x.book, f: `SUMIFS(${rg('V')},${rg('K')},"${k}")`, s: W }, { v: x.disc, f: `SUMIFS(${rg('Q')},${rg('K')},"${k}")`, s: W }, { v: x.fee - x.disc, f: `I${r}-K${r}`, s: W }]);
     });
     const tr = 4 + tracks.length;
     out.push([null, { v: '합계', s: T }, ...[...'CDEFGHIJKL'].map((c, i) => ({ v: i < 6 ? sm.total.cnt[i] : [sm.total.fee, sm.total.book, sm.total.disc, sm.total.net][i - 6], f: `SUM(${c}4:${c}${tr - 1})`, s: i < 6 ? T : TW }))]);
     out.push([]);
-    out.push([null, { v: `${+m.slice(5)}월 수강생 정보 및 관리 현황`, s: { b: 1, sz: 16 } }]);
+    out.push([null, { v: `${+m.slice(5)}월 수강생 정보 및 관리 현황`, s: { b: 1, sz: 16, color: '1F3864' } }]);
     out.push([]);
     const head = ['번호', '등록일자', '수강시작일', '수강마무리일', '등록자', '원생성명', '수강 상태', '성별', '생년월일', '구분(스파르타/일반)', '오전/오후', '구분(수강반)', '기간', '연락처', '수강료', '할인금액', '총 납부금액', '결제방식', '할인or환불내역', '비고', '교재비', '환불 금액'];
     out.push([null, ...head.map(v => ({ v, s: H })), null, { v: '원생성명', s: H }, { v: '구분(수강반)', s: H }, { v: '교재비 입금(O/X)', s: H }]);
     const books = rows.filter(r => r.bookAmt != null);
     rows.forEach((r, i) => {
-      const ri = first + i, x = r.s, dt = d => ({ v: d || '', s: C }), bk = books[i];
-      out.push([null, { v: i + 1, s: C }, dt(x.joined_on), dt(x.course_from), dt(x.course_to), { v: x.added_by_name || '', s: C }, { v: x.name, s: C }, { v: r.label, s: C }, { v: x.gender || '', s: C }, dt(x.birth),
+      const ri = first + i, x = r.s, bk = books[i], C0 = C, L0 = L, W0 = W;
+      { const C = zeb(C0, i), L = zeb(L0, i), W = zeb(W0, i), dt = d => ({ v: d || '', s: C }), stS = r.st === '수강 취소' ? { ...C, color: 'C00000', b: 1 } : r.st === '수강 예정' ? { ...C, color: '2F5597', b: 1 } : r.kind === '신규' ? { ...C, color: '375623', b: 1 } : C;
+      out.push([null, { v: i + 1, s: C }, dt(x.joined_on), dt(x.course_from), dt(x.course_to), { v: x.added_by_name || '', s: C }, { v: x.name, s: { ...C, b: 1 } }, { v: r.label, s: stS }, { v: x.gender || '', s: C }, dt(x.birth),
         { v: r.track, s: C }, { v: x.session || '', s: C }, { v: x.class_name || '', s: C }, { v: r.weeks, s: C }, { v: x.phone || x.parent_phone || '', s: C },
         r.list != null ? { v: r.list, s: W } : { v: '', s: W }, r.disc != null ? { v: r.disc, s: W } : { v: '', s: W }, r.list != null ? { v: r.list - (r.disc || 0), f: `P${ri}-Q${ri}`, s: W } : { v: '', s: W },
         { v: r.fee.length ? (r.paid ? r.method || '납부' : '미납') : '청구 전', s: C }, { v: r.note, s: L }, { v: x.memo || '', s: L }, r.bookAmt != null ? { v: r.bookAmt, s: W } : { v: '', s: W }, r.refund ? { v: r.refund, s: W } : { v: '', s: W },
-        null, ...(bk ? [{ v: bk.s.name, s: C }, { v: bk.s.class_name || '', s: C }, { v: bk.bookPaid ? 'O' : 'X', s: C }] : [])]);
+        null, ...(bk ? [{ v: bk.s.name, s: C }, { v: bk.s.class_name || '', s: C }, { v: bk.bookPaid ? 'O' : 'X', s: { ...C, b: 1, color: bk.bookPaid ? '375623' : 'C00000' } }] : [])]); }
     });
     if (!rows.length) out.push([null, { v: '', s: C }, { v: '이 달에 다닌 학생이 없어요', s: L }]);
     out.push([null, { v: '합계', s: T }, ...Array(13).fill({ v: '', s: T }), ...['P', 'Q', 'R'].map(c => ({ v: c === 'P' ? sm.total.fee : c === 'Q' ? sm.total.disc : sm.total.net, f: `SUM(${c}${first}:${c}${last})`, s: TW })), { v: '', s: T }, { v: '', s: T }, { v: '', s: T },
@@ -8873,7 +8891,6 @@ function bind() {
   // 설정
   on('[data-act="changePw"]', pwDialog);
   on('[data-theme-set]', b => { window.setThemeMode && setThemeMode(b.dataset.themeSet); render(); });
-  on('[data-sheet-fmt]', b => { setSheetFmt(b.dataset.sheetFmt); render(); toast(b.dataset.sheetFmt ? `이제 ${b.dataset.sheetFmt === 'numbers' ? '넘버스(.numbers)' : '엑셀(.xlsx)'}로 받아요` : '받을 때마다 물어볼게요'); });
   document.querySelectorAll('[data-act="keepLogin"]').forEach(c => c.onchange = () => { setKeepLogin(c.checked); toast(c.checked ? '로그인을 유지해요' : '다음 로그인부터 창을 닫으면 로그아웃돼요'); });
   on('[data-act="navOpenAll"]', () => { NAV_OPEN = null; try { localStorage.removeItem('asc-nav'); } catch (e) { /* 이번 화면에서만 */ } render(); toast('왼쪽 메뉴 묶음을 모두 펼쳤어요'); });
   on('[data-act="logoutNow"]', logout);
