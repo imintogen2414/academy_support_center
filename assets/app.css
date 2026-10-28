@@ -1528,3 +1528,7 @@ body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
 .apv-view { display: grid; }
 .set-row.col { display: grid; gap: 0; }
 .set-row.col p { font-weight: 500; }
+/* 17라운드: 받을 때마다 형식 고르기 — 지난번 고른 것을 먼저 */
+.fmt-pick button { position: relative; }
+.fmt-pick button.on { border-color: var(--blue-500); box-shadow: 0 0 0 2px var(--blue-100); }
+.fmt-pick button i { position: absolute; top: 10px; right: 10px; font-style: normal; font-size: 11px; font-weight: 700; color: var(--blue-600); background: var(--blue-50); padding: 2px 8px; border-radius: 999px; }

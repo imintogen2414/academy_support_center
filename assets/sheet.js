@@ -186,6 +186,11 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
   const NS = 'http://schemas.openxmlformats.org';
   // 서식 번호: 0 기본 · 1 제목 · 2 부제목 · 3 머리줄 · 4 칸 · 5 칸(옅은 줄) · 6 금액 · 7 금액(옅은 줄) · 8 합계 글 · 9 합계 금액 · 10 안내 · 11 예시 · 12 꼭 채울 머리줄 · 13 숫자 · 14 숫자(옅은 줄) · 15 가운데 칸 · 16 가운데 칸(옅은 줄)
   const S = { title: 1, sub: 2, head: 3, cell: 4, cellAlt: 5, money: 6, moneyAlt: 7, sumText: 8, sumMoney: 9, note: 10, example: 11, headReq: 12, num: 13, numAlt: 14, mid: 15, midAlt: 16 };
+  // 같은 서식을 넘버스 파일에도 (서식 번호 → 굵게 · 색 · 바탕 · 테두리 · 정렬)
+  const ALT = 'F3F5FC', SUMF = 'E3E8FB';
+  const SOBJ = [null, { b: 1, sz: 16, color: '1B2470' }, { sz: 10, color: '6B7280' }, { b: 1, color: 'FFFFFF', fill: '2A3496', bd: 1, h: 'center', wrap: 1 }, { bd: 1 }, { bd: 1, fill: ALT },
+    { bd: 1, h: 'right', num: '#,##0' }, { bd: 1, fill: ALT, h: 'right', num: '#,##0' }, { b: 1, fill: SUMF, bd: 1 }, { b: 1, fill: SUMF, bd: 1, h: 'right', num: '#,##0' }, { sz: 10, color: '6B7280' },
+    { bd: 1, color: '8A93A6' }, { b: 1, color: 'FFFFFF', fill: '101876', bd: 1, h: 'center', wrap: 1 }, { bd: 1, h: 'right' }, { bd: 1, fill: ALT, h: 'right' }, { bd: 1, h: 'center' }, { bd: 1, fill: ALT, h: 'center' }];
   const sheetXml = (rws, wds, o = {}) => {
     const filled = r => (r || []).filter(v => String(v ?? '').trim() !== '').length;
     let hi = rws.findIndex(r => filled(r) >= 2); if (hi < 0) hi = 0;
@@ -195,10 +200,10 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
     const midCol = head.map(h => /^\d+$/.test(String(h).trim())); // 출석부 날짜 칸처럼 짧은 칸은 가운데
     const isNum = v => /^-?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d*)$/.test(String(v).trim());
     let end = rws.findIndex((r, i) => i > hi && !(r || []).length); if (end < 0) end = rws.length;
-    const out = [];
+    const out = [], grid = [], heights = {};
     rws.forEach((r, ri) => {
       r = r || [];
-      const first = String(r[0] ?? '');
+      const first = String(r[0] ?? ''), gr = grid[ri] = [];
       let kind = 'body';
       if (ri < hi) kind = ri === 0 ? 'title' : 'sub';
       else if (ri === hi) kind = 'head';
@@ -217,11 +222,12 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
         const asNum = (kind === 'body' || kind === 'sum') && ri > hi && numCol[ci] && isNum(v);
         if (kind === 'body') st = asNum ? (moneyCol[ci] ? (alt ? S.moneyAlt : S.money) : (alt ? S.numAlt : S.num)) : midCol[ci] ? (alt ? S.midAlt : S.mid) : (alt ? S.cellAlt : S.cell);
         if (kind === 'sum') st = asNum ? S.sumMoney : S.sumText;
-        if (asNum) cells.push(`<c r="${ref}" s="${st}"><v>${String(v).replace(/,/g, '')}</v></c>`);
+        if (asNum) { cells.push(`<c r="${ref}" s="${st}"><v>${String(v).replace(/,/g, '')}</v></c>`); gr[ci] = { v: +String(v).replace(/,/g, ''), s: SOBJ[st] }; }
         else if (String(v) === '' && !st) continue;
-        else cells.push(`<c r="${ref}" t="inlineStr"${st ? ` s="${st}"` : ''}><is><t xml:space="preserve">${x(v)}</t></is></c>`);
+        else { cells.push(`<c r="${ref}" t="inlineStr"${st ? ` s="${st}"` : ''}><is><t xml:space="preserve">${x(v)}</t></is></c>`); gr[ci] = { v: String(v), s: SOBJ[st] }; }
       }
       const ht = kind === 'title' ? ' ht="30" customHeight="1"' : kind === 'head' ? ' ht="24" customHeight="1"' : '';
+      if (kind === 'title') heights[ri + 1] = 30; else if (kind === 'head') heights[ri + 1] = 24;
       out.push(`<row r="${ri + 1}"${ht}>${cells.join('')}</row>`);
     });
     // 칸 너비: 정해 준 값이 없으면 글자 길이로 (한글은 두 칸)
@@ -229,11 +235,13 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
     const auto = [...Array(ncol)].map((_, ci) => Math.min(40, Math.max(8, ...rws.slice(hi).map(r => wlen((r || [])[ci]) + 2))));
     const cw = auto.map((w, i) => wds[i] ? Math.max(wds[i], Math.min(w, wds[i] * 1.6)) : w);
     const cols = `<cols>${cw.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.round(w * 1.15 * 10) / 10}" customWidth="1"/>`).join('')}</cols>`;
-    const merges = rws.slice(0, hi).map((r, i) => filled(r) === 1 && ncol > 1 ? `<mergeCell ref="A${i + 1}:${colName(ncol - 1)}${i + 1}"/>` : '').filter(Boolean);
-    rws.forEach((r, i) => { if (i > hi && filled(r) === 1 && String((r || [])[0] ?? '').startsWith('*') && ncol > 1) merges.push(`<mergeCell ref="A${i + 1}:${colName(ncol - 1)}${i + 1}"/>`); });
+    const mrefs = rws.slice(0, hi).map((r, i) => filled(r) === 1 && ncol > 1 ? `A${i + 1}:${colName(ncol - 1)}${i + 1}` : '').filter(Boolean);
+    rws.forEach((r, i) => { if (i > hi && filled(r) === 1 && String((r || [])[0] ?? '').startsWith('*') && ncol > 1) mrefs.push(`A${i + 1}:${colName(ncol - 1)}${i + 1}`); });
+    const merges = mrefs.map(m => `<mergeCell ref="${m}"/>`);
     const pane = `<sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="${hi + 1}" topLeftCell="A${hi + 2}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
     const filter = end - hi > 2 && head.length > 1 ? `<autoFilter ref="A${hi + 1}:${colName(head.length - 1)}${end}"/>` : '';
-    return { filter: filter ? `$A$${hi + 1}:$${colName(head.length - 1)}$${end}` : '', xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>${pane}<sheetFormatPr defaultRowHeight="18"/>${cols}<sheetData>${out.join('')}</sheetData>${filter}${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${ncol > 7 ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/></worksheet>` };
+    const styled = { rows: grid.map(r => Array.from(r || [], c => c || null)), merges: mrefs, cols: cw.map(w => Math.round(w * 1.15 * 10) / 10), heights };
+    return { styled, filter: filter ? `$A$${hi + 1}:$${colName(head.length - 1)}$${end}` : '', xml: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>${pane}<sheetFormatPr defaultRowHeight="18"/>${cols}<sheetData>${out.join('')}</sheetData>${filter}${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${ncol > 7 ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/></worksheet>` };
   };
   // opts.blank: 양식 아래 바로 적을 수 있게 테두리만 있는 빈 줄
   const body = opts.blank ? [...rows, ...[...Array(opts.blank)].map(() => (rows[0] || []).map(() => ''))] : rows;
@@ -262,26 +270,41 @@ function downloadXlsx(filename, rows, widths = [], opts = {}) {
   const plainOf = rws => rws.map(r => (r || []).map(v => /^-?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d{0,11})$/.test(String(v ?? '').trim()) ? +String(v).replace(/,/g, '') : v ?? ''));
   const plain = [[opts.sheet || '양식', plainOf(body)], ...(opts.more || []).map(([n, r]) => [n, plainOf(r)])];
   if (opts.guide) plain.push(['작성 안내', [['작성 안내'], ['첫 번째 시트에 채워서 그대로 올려 주세요. 칸 이름(첫 줄)은 바꾸지 마세요.'], [], ['칸', '꼭 채우기', '이렇게 적어요'], ...opts.guide]]);
-  return saveBook(filename, blob, plain);
+  return saveBook(filename, blob, plain, sheets.map(([n, sh]) => ({ name: n, ...sh.styled })));
 }
 
 /* ---------- 받기: .xlsx 그대로 또는 넘버스(.numbers)로 바꿔서 ----------
-   넘버스 파일은 값 · 시트 이름이 들어가요(색 · 테두리 · 수식은 엑셀 파일에만 — 맥 넘버스에서 .xlsx를 열어도 모양 그대로 보여요). */
-async function saveBook(filename, xlsxBlob, plain) {
+   넘버스는 서버(/api/to_numbers, Vercel 파이썬 함수)가 색 · 굵게 · 테두리 · 정렬 · 쉼표 · 합치기 · 칸 너비까지 넣어 만들어요(styled).
+   서버가 없거나(예시 · 로컬) 실패하면 SheetJS로 값 · 시트 · 합치기만 넣은 넘버스를 만들어요. 넘버스에는 수식 대신 계산한 값이 들어가요. */
+async function numbersFromServer(name, styled) {
+  if (!styled || !/^https?:/.test(location.protocol)) return null;
+  try {
+    const r = await fetch('/api/to_numbers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, sheets: styled }) });
+    if (!r.ok || !/numbers/.test(r.headers.get('content-type') || '')) return null;
+    return await r.blob();
+  } catch (e) { return null; }
+}
+async function saveBook(filename, xlsxBlob, plain, styled) {
   let fmt = 'xlsx';
   if (typeof window.pickSheetFormat === 'function') { fmt = await window.pickSheetFormat(filename); if (!fmt) return false; }
   let blob = xlsxBlob, name = filename;
   if (fmt === 'numbers') {
-    try {
+    name = filename.replace(/\.xlsx$/i, '') + '.numbers';
+    if (typeof toast === 'function') toast('넘버스 파일을 만드는 중이에요…');
+    const fromServer = await numbersFromServer(name.replace(/\.numbers$/, ''), styled);
+    if (fromServer) blob = new Blob([fromServer], { type: 'application/x-iwork-numbers-sffnumbers' });
+    else try {
       const X = await loadSheetJs(), wb = X.utils.book_new(), used = new Set();
       plain.forEach(([n, rows]) => {
         let nm = String(n).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || '시트', k = 2;
         while (used.has(nm)) nm = `${nm.slice(0, 28)} ${k++}`;
         used.add(nm);
-        X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(rows.map(r => (r || []).map(v => v ?? ''))), nm);
+        const ws = X.utils.aoa_to_sheet(rows.map(r => (r || []).map(v => v ?? '')));
+        const st = styled && styled.find(x => x.name === n);
+        if (st && st.merges && st.merges.length) ws['!merges'] = st.merges.map(m => X.utils.decode_range(m));
+        X.utils.book_append_sheet(wb, ws, nm);
       });
       blob = new Blob([X.write(wb, { bookType: 'numbers', type: 'array', numbers: window.XLSX_ZAHL_PAYLOAD })], { type: 'application/x-iwork-numbers-sffnumbers' });
-      name = filename.replace(/\.xlsx$/i, '') + '.numbers';
     } catch (e) { console.warn(e); if (typeof toast === 'function') toast('넘버스 파일을 만들지 못했어요 · 엑셀(.xlsx)로 받아 주세요'); return false; }
   }
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
@@ -345,5 +368,6 @@ function downloadBook(filename, sheets) {
     ...sheetFiles.map((s, i) => [`xl/worksheets/sheet${i + 1}.xml`, s])
   ]);
   const plain = sheets.map((sh, i) => [names[i], sh.rows.map(r => (r || []).map(c => c == null ? '' : typeof c === 'object' ? (c.v ?? '') : c))]);
-  return saveBook(filename, blob, plain);
+  const styled = sheets.map((sh, i) => ({ name: names[i], rows: sh.rows.map(r => Array.from(r || [], c => c == null ? null : typeof c === 'object' ? { v: c.v ?? '', s: c.s || null } : { v: c, s: null })), merges: sh.merges || [], cols: sh.cols || [], heights: sh.heights || {} }));
+  return saveBook(filename, blob, plain, styled);
 }
