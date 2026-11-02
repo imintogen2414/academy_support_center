@@ -4334,6 +4334,7 @@ function settingsPage() {
     acad = card('우리 학원', `
       ${row('학원', DATA.academy.name)}
       ${row('지역', DATA.academy.area || '-')}
+      ${ROLE === 'owner' ? `<div class="set-line"><div><b>학원 이름 · 지역 고치기</b><small>원장님만 바꿀 수 있어요 · 강사 · 학부모 · 학생 화면과 채용 공고 · 신청 기록에도 새 이름으로 보여요</small></div><button class="btn sm" data-act="renameAcad">고치기</button></div>` : ''}
       ${row('내 역할', ROLE_NAMES[ROLE])}
       ${memsSetLine()}
       ${isStaff() ? `<div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}<button class="btn sm" data-act="peopleList">누가 있는지 보기</button></div>` : ''}
@@ -10569,7 +10570,34 @@ async function acadStop(id) {
   render(); toast(on ? `${a.name} 이용을 멈췄어요` : `${a.name}을(를) 다시 열었어요`);
 }
 const sameOwnerAcads = a => CENTER.academies.filter(x => x.id !== a.id && (x.owner_ids || []).some(o => (a.owner_ids || []).includes(o)));
+// 학원 이름 · 지역 고치기 (그 학원 원장만 — DB rename_academy도 원장인지 확인해요)
+function renameAcademyDialog() {
+  if (ROLE !== 'owner') { toast('학원 이름은 원장님만 바꿀 수 있어요'); return; }
+  if (!REAL) { toast('예시 계정에서는 학원 이름을 바꿀 수 없어요'); return; }
+  const a = REAL.academy, d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="rnForm" novalidate>
+    <h2>학원 이름 · 지역 고치기</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc(a.name)}의 이름과 지역을 바꿔요. 이 학원 강사 · 학부모 · 학생 화면, 채용 공고, 제휴 · 홍보 · 유학 신청, 센터 관리 화면에도 새 이름으로 보여요. 초대 코드는 그대로예요.${MEMS.length > 1 ? ' 내 다른 학원은 바뀌지 않아요.' : ''}</p>
+    <label class="f">학원 이름<input name="aname" maxlength="100" value="${esc(a.name)}"></label>
+    <div class="f">지역 <span class="muted small">시·도를 고르면 시·군·구가 나와요</span>${regionPicker('region', a.region || '')}</div>
+    <p class="msg" id="rnMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="rnCancel">취소</button><button class="btn primary">저장</button></div></form>`;
+  d.showModal(); bindRegionPickers(d);
+  $('#rnCancel').onclick = () => d.close();
+  $('#rnForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, name = el.aname.value.trim(), region = el.region.value.trim(), m = $('#rnMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (!name) return fail('학원 이름을 적어 주세요.');
+    if (name === a.name && (region || a.region || '') === (a.region || '')) { d.close(); return; }
+    const { error } = await SB.rpc('rename_academy', { p_academy: a.id, p_name: name, p_region: region || null });
+    if (error) return fail(/owner_only/.test(error.message || '') ? '학원 이름은 이 학원 원장님만 바꿀 수 있어요.' : /name_required/.test(error.message || '') ? '학원 이름을 적어 주세요.' : dbErr(error, '저장하지'));
+    a.name = name; if (region) a.region = region;
+    const mm = MEMS.find(x => x.academy_id === a.id); if (mm) { mm.name = name; if (region) mm.region = region; }
+    useAcademy(); d.close(); render(); toast('학원 이름을 바꿨어요');
+  };
+}
 function bindR19() {
+  on('[data-act="renameAcad"]', renameAcademyDialog);
   on('[data-act="switchAcad"]', acadSwitchDialog);
   on('[data-act="newAcad"]', newAcademyDialog);
   on('[data-act="joinAcad"]', joinAcademyDialog);
