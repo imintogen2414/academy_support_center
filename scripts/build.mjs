@@ -45,7 +45,10 @@ ${['/', '/jobs', ...SITE_AREAS.map(a => `/area/${a.id}`)].map(p => `  <url><loc>
 
 const env = {
   SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  SUPABASE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || ''
+  SUPABASE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',
+  // 전문 앱: 앱이 나오면 Vercel 환경변수에 주소 · 이름을 넣어요 (비어 있으면 "준비 중")
+  PRO_APP_URL: process.env.NEXT_PUBLIC_PRO_APP_URL || '',
+  PRO_APP_NAME: process.env.NEXT_PUBLIC_PRO_APP_NAME || ''
 };
 if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
   console.warn('[build] Supabase 환경변수가 없어요. 로그인·신청 저장 없이 데모로만 동작해요.');
