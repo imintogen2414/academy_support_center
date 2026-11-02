@@ -9658,7 +9658,7 @@ async function boot() {
     autoFixedOnOpen();
     if (CENTER && CENTER.partner) MY = { ...MY, ...partnerAreas() }; // 학원에도 속한 파트너 담당자
     else if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
-  } else { await loadSeen(); if (!USER) tailorMenus(); }
+  } else { await loadSeen(); if (!USER) { tailorMenus(); applyDemoAcad(); } }
   render();
 }
 /* ================= 18라운드: 결제 · 통장 · 전문 앱 연결 준비 =================
@@ -10434,13 +10434,34 @@ function pickAcademy(list) {
   if (saved && !(CENTER && saved.suspended)) return saved;
   return list.find(m => !m.suspended) || (CENTER ? null : list[0]) || null;
 }
-// 예시 계정: 실제 계정에서 어떻게 보이는지 (누르면 안내만)
-const demoMems = () => [
-  { academy_id: 'demo', name: DATA.academy.name, region: DATA.academy.area, role: ROLE === 'student' ? 'student' : ROLE, now: true },
-  ...(ROLE === 'owner' ? [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: 'owner' }, { academy_id: 'demo3', name: '해솔피아노', region: '서울 강남구', role: 'parent' }]
-    : [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: ROLE === 'teacher' ? 'teacher' : 'parent' }])];
+// 예시 계정: 화면 안에서 실제처럼 바꿔 봐요 (이 창에서만, sessionStorage `asc-demo-acads`)
+//   같은 역할 학원은 이름만 바뀌고(예시라 원생 · 수납 자료는 같아요), 다른 역할 학원은 그 역할 예시 계정으로 넘어가요.
+const DEMO_ACAD0 = { name: DATA.academy.name, area: DATA.academy.area };
+const demoAcadState = () => { try { return JSON.parse(sessionStorage.getItem('asc-demo-acads') || 'null') || { cur: 'demo', names: {}, extra: [] }; } catch (e) { return { cur: 'demo', names: {}, extra: [] }; } };
+const putDemoAcads = st => { try { sessionStorage.setItem('asc-demo-acads', JSON.stringify(st)); } catch (e) { /* 이번 화면만 */ } };
+function demoMems() {
+  const st = demoAcadState(), me = ROLE === 'student' ? 'student' : ROLE;
+  const base = [{ academy_id: 'demo', name: DEMO_ACAD0.name, region: DEMO_ACAD0.area, role: me },
+    ...(ROLE === 'owner' ? [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: 'owner' }, { academy_id: 'demo3', name: '해솔피아노', region: '서울 강남구', role: 'parent', href: '/demo/parent' }]
+      : ROLE === 'teacher' ? [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: 'parent', href: '/demo/parent' }]
+      : ROLE === 'parent' ? [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: 'owner', href: '/demo/owner' }] : [])];
+  return [...base, ...(ROLE === 'owner' ? st.extra || [] : [])].map(m => ({ ...m, ...(st.names[m.academy_id] || {}) }));
+}
+// 예시 계정을 열 때 · 바꿀 때: 고른 학원 이름 · 지역을 화면에
+function applyDemoAcad() {
+  if (USER || ROLE === 'admin') return;
+  const st = demoAcadState(), m = demoMems().find(x => x.academy_id === st.cur && !x.href) || demoMems()[0];
+  DATA.academy.name = esc(m.name); DATA.academy.short = DATA.academy.name[0]; DATA.academy.area = esc(m.region || '');
+}
+function demoGoAcad(id) {
+  const m = demoMems().find(x => x.academy_id === id); if (!m) return;
+  if (m.href) { location.href = m.href; return; }
+  const st = demoAcadState(); st.cur = id; putDemoAcads(st); applyDemoAcad();
+  const d = $('#dlg'); if (d && d.open) d.close();
+  render(); toast(`${m.name} ${MEM_ROLE_NAME[m.role]} 화면으로 바꿨어요 · 예시라 원생 · 수납 자료는 같아요`);
+}
 const memsList = () => USER ? MEMS : demoMems();
-const curAcadId = () => REAL ? REAL.academy.id : 'demo';
+const curAcadId = () => REAL ? REAL.academy.id : demoAcadState().cur;
 function memRow(m, cur) {
   const r = m.role, color = ROLE_COLOR[r] || 'var(--navy-700)';
   return `<button type="button" class="acc-row ${cur ? 'on' : ''}" data-go-acad="${esc(m.academy_id)}" ${cur ? 'disabled' : ''}>
@@ -10452,7 +10473,7 @@ function acadSwitchDialog() {
   const d = dialogEl(), list = memsList();
   d.innerHTML = `<div class="dlg">
     <h2>학원 · 역할 바꾸기</h2>
-    <p class="muted small" style="margin:-6px 0 0">한 아이디로 여러 학원을 쓸 수 있어요. 학원마다 역할이 따로예요(예: A학원 원장 · B학원 원장 · C학원 학부모). 누르면 그 학원 화면으로 바로 바뀌어요.${USER ? '' : ' <b>예시 계정에서는 모양만 볼 수 있어요.</b>'}</p>
+    <p class="muted small" style="margin:-6px 0 0">한 아이디로 여러 학원을 쓸 수 있어요. 학원마다 역할이 따로예요(예: A학원 원장 · B학원 원장 · C학원 학부모). 누르면 그 학원 화면으로 바로 바뀌어요.${USER ? '' : ' <b>예시 계정: 눌러서 바꿔 보세요(이 창에서만).</b>'}</p>
     <div class="acc-list">${list.map(m => memRow(m, m.academy_id === curAcadId() && !m.suspended)).join('')}</div>
     <div class="ms-add">
       <button type="button" class="btn" data-act="newAcad">${ic('plus')}새 학원 열기</button>
@@ -10462,7 +10483,7 @@ function acadSwitchDialog() {
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
   d.showModal();
   $('#dlgCancel').onclick = () => d.close();
-  d.querySelectorAll('[data-go-acad]').forEach(b => b.onclick = () => { if (!USER) { toast('예시 계정에서는 학원을 바꿀 수 없어요 · 실제 계정에서는 누르면 바로 바뀌어요'); return; } goAcademy(b.dataset.goAcad); });
+  d.querySelectorAll('[data-go-acad]').forEach(b => b.onclick = () => USER ? goAcademy(b.dataset.goAcad) : demoGoAcad(b.dataset.goAcad));
   d.querySelector('[data-act="newAcad"]').onclick = newAcademyDialog;
   d.querySelector('[data-act="joinAcad"]').onclick = joinAcademyDialog;
 }
@@ -10470,7 +10491,7 @@ const FAMILY_ROLE_PICK = def => `<div class="f">학부모·학생용 코드라�
   <span class="role-pick">${[['parent', '학부모로'], ['student', '학생(본인)으로']].map(([v, l]) => `<label><input type="radio" name="fam_as" value="${v}" ${v === def ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`;
 const famDefault = () => ['parent', 'student'].includes(PROFILE && PROFILE.role) ? PROFILE.role : 'parent';
 function newAcademyDialog() {
-  if (!USER) { toast('예시 계정에서는 학원을 만들 수 없어요'); return; }
+  if (!USER && ROLE !== 'owner') { toast('예시 계정에서는 원장 예시에서 새 학원을 열어 볼 수 있어요'); return; }
   const d = dialogEl();
   d.innerHTML = `<form method="dialog" class="dlg" id="naForm" novalidate>
     <h2>새 학원 열기</h2>
@@ -10490,14 +10511,19 @@ function newAcademyDialog() {
     const el = e.target.elements, name = el.aname.value.trim(), m = $('#naMsg'), fail = t => { m.textContent = t; m.hidden = false; };
     if (!name) return fail('학원 이름을 적어 주세요.');
     if (!el.region.value) return fail('지역을 골라 주세요. 채용 공고 · 제휴 연결에 쓰여요.');
-    if (MEMS.some(x => x.name.replace(/\s/g, '') === name.replace(/\s/g, '') && x.role === 'owner') && !confirm(`이미 원장인 "${name}"이 있어요. 그래도 새로 만들까요?`)) return;
+    if (memsList().some(x => x.name.replace(/\s/g, '') === name.replace(/\s/g, '') && x.role === 'owner') && !confirm(`이미 원장인 "${name}"이 있어요. 그래도 새로 만들까요?`)) return;
+    if (!USER) { // 예시 계정: 이 창에서만 학원을 하나 더
+      const st = demoAcadState(), id = `demo${Date.now()}`;
+      st.extra = [...(st.extra || []), { academy_id: id, name, region: el.region.value.trim(), role: 'owner' }]; st.cur = id; putDemoAcads(st);
+      d.close(); applyDemoAcad(); render(); toast(`${name}을(를) 만들었어요 · 예시라 이 창에서만 보여요`); return;
+    }
     const { data, error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null, p_family: el.family.value === '1' });
     if (error) return fail(joinError(error));
     toast('새 학원을 만들었어요 · 그 학원으로 여는 중…'); goAcademy(data);
   };
 }
 function joinAcademyDialog() {
-  if (!USER) { toast('예시 계정에서는 코드를 넣을 수 없어요'); return; }
+  if (!USER) { toast('예시 계정에서는 코드를 넣을 수 없어요 · 실제 계정에서 받은 초대 코드를 넣으면 그 학원이 목록에 더해져요'); return; }
   const d = dialogEl();
   d.innerHTML = `<form method="dialog" class="dlg" id="jaForm" novalidate>
     <h2>초대 코드로 다른 학원 들어가기</h2>
@@ -10573,8 +10599,7 @@ const sameOwnerAcads = a => CENTER.academies.filter(x => x.id !== a.id && (x.own
 // 학원 이름 · 지역 고치기 (그 학원 원장만 — DB rename_academy도 원장인지 확인해요)
 function renameAcademyDialog() {
   if (ROLE !== 'owner') { toast('학원 이름은 원장님만 바꿀 수 있어요'); return; }
-  if (!REAL) { toast('예시 계정에서는 학원 이름을 바꿀 수 없어요'); return; }
-  const a = REAL.academy, d = dialogEl();
+  const a = REAL ? REAL.academy : { id: demoAcadState().cur, name: (demoMems().find(x => x.academy_id === demoAcadState().cur) || {}).name || DEMO_ACAD0.name, region: (demoMems().find(x => x.academy_id === demoAcadState().cur) || {}).region || '' }, d = dialogEl();
   d.innerHTML = `<form method="dialog" class="dlg" id="rnForm" novalidate>
     <h2>학원 이름 · 지역 고치기</h2>
     <p class="muted small" style="margin:-6px 0 0">${esc(a.name)}의 이름과 지역을 바꿔요. 이 학원 강사 · 학부모 · 학생 화면, 채용 공고, 제휴 · 홍보 · 유학 신청, 센터 관리 화면에도 새 이름으로 보여요. 초대 코드는 그대로예요.${MEMS.length > 1 ? ' 내 다른 학원은 바뀌지 않아요.' : ''}</p>
@@ -10589,6 +10614,10 @@ function renameAcademyDialog() {
     const el = e.target.elements, name = el.aname.value.trim(), region = el.region.value.trim(), m = $('#rnMsg'), fail = t => { m.textContent = t; m.hidden = false; };
     if (!name) return fail('학원 이름을 적어 주세요.');
     if (name === a.name && (region || a.region || '') === (a.region || '')) { d.close(); return; }
+    if (!REAL) { // 예시 계정: 이 창에서만
+      const st = demoAcadState(); st.names[a.id] = { name, ...(region ? { region } : {}) }; putDemoAcads(st);
+      d.close(); applyDemoAcad(); render(); toast('학원 이름을 바꿨어요 · 예시라 이 창에서만 바뀌어요'); return;
+    }
     const { error } = await SB.rpc('rename_academy', { p_academy: a.id, p_name: name, p_region: region || null });
     if (error) return fail(/owner_only/.test(error.message || '') ? '학원 이름은 이 학원 원장님만 바꿀 수 있어요.' : /name_required/.test(error.message || '') ? '학원 이름을 적어 주세요.' : dbErr(error, '저장하지'));
     a.name = name; if (region) a.region = region;
