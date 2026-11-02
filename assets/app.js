@@ -4335,13 +4335,14 @@ function settingsPage() {
       ${row('학원', DATA.academy.name)}
       ${row('지역', DATA.academy.area || '-')}
       ${row('내 역할', ROLE_NAMES[ROLE])}
+      ${memsSetLine()}
       ${isStaff() ? `<div class="set-row ppl-row"><span>우리 학원 사람들</span>${peopleCard(true)}<button class="btn sm" data-act="peopleList">누가 있는지 보기</button></div>` : ''}
       ${ROLE === 'owner' ? row('함께하는 사람', REAL ? `원생 ${REAL.students.length}명 · 강사 ${REAL.members.filter(m => m.role === 'teacher').length}명` : `원생 ${DATA.academy.students}명 · 강사 ${DATA.staff.length}명`) : ''}
       ${ROLE === 'teacher' ? row('담당 반', REAL ? (REAL.myClasses && REAL.myClasses.length ? REAL.myClasses.map(esc).join(' · ') : '<span class="muted">원장님이 정하면 보여요</span>') : DEMO_MY_CLASSES.join(' · ')) : ''}
       ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
       ${ROLE === 'owner' ? `${famSwitch()}${appSwitch()}
         <div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>` : ''}
-      <div class="set-line"><div><b>다른 학원으로 옮기기</b><small>새 학원에서 받은 초대 코드를 넣으면 그 학원으로 옮겨요${ROLE === 'owner' ? ' · 원장님은 지금 학원도 그대로 남아요' : ' · 지금 학원에서는 나가요'}</small></div><button class="btn sm" data-act="moveAcad">코드 넣기</button></div>
+      <div class="set-line"><div><b>다른 학원으로 옮기기</b><small>새 학원 코드를 넣으면 그 학원으로 옮기고, 같은 역할로 있던 예전 학원에서는 나가요${ROLE === 'owner' ? ' · 원장 자리는 그대로 남아요' : ''} · 그대로 두고 하나 더 하려면 위 "코드로 더하기"</small></div><button class="btn sm" data-act="moveAcad">코드 넣기</button></div>
       <div class="set-line"><div><b>학원에서 나가기</b><small>${ROLE === 'owner' ? '다른 원장님이 있을 때만 나갈 수 있어요' : '나가면 이 학원 자료 · 채팅을 더 볼 수 없어요 · 다시 들어오려면 초대 코드가 필요해요'}</small></div><button class="btn sm danger" data-act="leaveAcad">나가기</button></div>`);
   }
   const svc = ROLE === 'owner' || ROLE === 'teacher' ? card('이용 중인 센터 지원', `
@@ -4461,10 +4462,10 @@ function moveAcademyDialog() {
   formDialog({ title: '다른 학원으로 옮기기', table: 'academy_members', academy: false, okText: '옮기기', label: () => '', doneText: '새 학원으로 옮겼어요 · 다시 여는 중…', after: async () => {},
     fields: [['code', '새 학원 초대 코드', { required: true, max: 12, placeholder: '예: K7P2QX9M' }]],
     save: async d => {
-      if (!confirm(ROLE === 'owner' ? '새 학원에 들어갈까요? 원장님은 지금 학원도 그대로 남아요.' : `새 학원으로 옮길까요? ${REAL.academy.name}에서는 나가요.`)) return '그만뒀어요.';
-      const { error } = await SB.rpc('move_academy', { p_code: d.code.trim().toUpperCase() });
+      if (!confirm(ROLE === 'owner' ? '새 학원에 들어갈까요? 원장님은 지금 학원도 그대로 남아요.' : `새 학원으로 옮길까요? ${ROLE_NAMES[ROLE]}(으)로 있던 예전 학원(${REAL.academy.name} 등)에서는 나가요. 다른 역할로 있는 학원은 그대로예요.`)) return '그만뒀어요.';
+      const { data: nid, error } = await SB.rpc('move_academy', { p_code: d.code.trim().toUpperCase() });
       if (error) { const m = error.message || ''; return /invalid_code/.test(m) ? '맞는 초대 코드가 없어요. 코드를 다시 확인해 주세요.' : /role_mismatch/.test(m) ? '내 역할과 다른 코드예요. 강사님은 강사용 코드, 학부모 · 학생은 학부모·학생용 코드를 넣어 주세요.' : dbErr(error, '옮기지'); }
-      setTimeout(() => { location.href = '/app'; }, 400); return null;
+      setTimeout(() => goAcademy(nid), 400); return null;
     } });
 }
 // 아이디 회원이 이메일이 없으면 이메일도 (아이디 · 비밀번호 찾기에 써요)
@@ -6775,7 +6776,7 @@ async function sendInquiry(form) {
   const cat = (form.querySelector('[data-inq-cat].on') || {}).dataset?.inqCat || '기타';
   if (!REAL) { toast('예시 계정에서는 보낼 수 없어요'); return; }
   const btn = form.querySelector('button.primary'); btn.disabled = true;
-  const { data, error } = await SB.rpc('submit_inquiry', { p_name: null, p_contact: form.elements.contact.value.trim() || null, p_category: cat, p_message: msg, p_agreed: false });
+  const { data, error } = await SB.rpc('submit_inquiry', { p_name: null, p_contact: form.elements.contact.value.trim() || null, p_category: cat, p_message: msg, p_agreed: false, p_academy: REAL ? REAL.academy.id : null });
   btn.disabled = false;
   if (error || !data) return fail('보내지 못했어요. 잠시 후 다시 시도해 주세요.');
   await loadMyInquiries(); render(); toast(`문의를 보냈어요 · 접수 번호 ${data}`);
@@ -7596,14 +7597,16 @@ function acadOverview(home) {
     ${list.length ? `<div class="ov-table">
       <div class="ov-head"><span>학원</span><span>사람</span><span class="ov-svcs">${Object.keys(SVC_AREAS).map(k => `<i>${SVC_SHORT[k]}</i>`).join('')}</span></div>
       ${list.map(a => { const ms = memOf(a); return `
-      <details class="ov-row${cons(a) ? ' ask' : ''}" data-ov-row="${a.id}" ${OV_OPEN.has(a.id) ? 'open' : ''}>
+      <details class="ov-row${cons(a) ? ' ask' : ''}${a.suspended_at ? ' stop' : ''}" data-ov-row="${a.id}" ${OV_OPEN.has(a.id) ? 'open' : ''}>
         <summary>
-          <span class="ov-name"><b>${esc(a.name)}</b><small>${esc(a.region || '')} · 원장 ${esc(a.owners || '-')}${a.created_at ? ` · ${a.created_at.slice(0, 10).replace(/-/g, '.')} 가입` : ''}</small>${cons(a) ? '<span class="chip warn">열어 달라는 신청</span>' : ''}</span>
+          <span class="ov-name"><b>${esc(a.name)}</b><small>${esc(a.region || '')} · 원장 ${esc(a.owners || '-')}${a.created_at ? ` · ${a.created_at.slice(0, 10).replace(/-/g, '.')} 가입` : ''}</small>${cons(a) ? '<span class="chip warn">열어 달라는 신청</span>' : ''}${a.suspended_at ? '<span class="chip crit">이용 멈춤</span>' : ''}${sameOwnerAcads(a).length ? `<span class="chip mute" title="같은 원장: ${esc(sameOwnerAcads(a).map(x => x.name).join(', '))}">같은 원장 학원 ${sameOwnerAcads(a).length + 1}곳</span>` : ''}</span>
           <span class="ov-count"><span>강사 <b>${a.teachers}</b></span><span>원생 <b>${a.students}</b></span><span>학부모·수강생 <b>${a.families ?? '-'}</b></span></span>
           <span class="ov-svcs">${Object.keys(SVC_AREAS).map(k => pill(a, k)).join('')}</span>
         </summary>
         <div class="ov-mem">${ms.length ? ms.map(person).join('') : '<p class="muted small">가입한 회원이 없어요</p>'}
-          ${cons(a) ? `<button class="btn sm primary" data-svc-open="${a.id}">상담 중인 분야 모두 "이용 중"으로 열기</button>` : ''}</div>
+          ${cons(a) ? `<button class="btn sm primary" data-svc-open="${a.id}">상담 중인 분야 모두 "이용 중"으로 열기</button>` : ''}
+          <div class="ov-stop">${a.suspended_at ? `<span class="muted small">${a.suspended_at.slice(0, 10).replace(/-/g, '.')}부터 멈춤${a.suspend_note ? ` · 안내: ${esc(a.suspend_note)}` : ''}</span><button class="btn sm primary" data-acad-stop="${a.id}">이용 다시 열기</button>`
+            : `<span class="muted small">계약하지 않은 학원은 학원 통째로 멈출 수 있어요(자료는 그대로)${sameOwnerAcads(a).length ? ` · 같은 원장의 ${esc(sameOwnerAcads(a).map(x => x.name).join(', '))}은(는) 그대로` : ''}</span><button class="btn sm danger" data-acad-stop="${a.id}">이 학원 이용 멈추기</button>`}</div></div>
       </details>`; }).join('')}
       ${loose.length && !ACAD_Q ? `<details class="ov-row loose" data-ov-row="loose" ${OV_OPEN.has('loose') ? 'open' : ''}><summary><span class="ov-name"><b>학원 연결 전 회원</b><small>가입했지만 아직 학원을 만들거나 코드를 넣지 않았어요</small></span><span class="ov-count"><span><b>${loose.length}</b>명</span></span><span class="ov-svcs"></span></summary>
         <div class="ov-mem">${loose.map(person).join('')}</div></details>` : ''}
@@ -7612,7 +7615,7 @@ function acadOverview(home) {
   </section>`;
 }
 function centerAcademiesPage() {
-  return head('학원 · 이용 분야', '학원마다 원장 · 사람 수 · 다섯 분야를 한 줄로 봐요. 분야 칸을 누르면 바로 켜지고 꺼져요. "켜짐"인 분야만 그 학원 원장 · 강사 화면에서 열려요. 가입한 순서 · 가나다순 · 역할별로 바꿔 볼 수 있고, 열어 달라는 신청이 있는 학원은 노란 표시가 붙어요.') + acadOverview(false);
+  return head('학원 · 이용 분야', '학원마다 원장 · 사람 수 · 다섯 분야를 한 줄로 봐요. 분야 칸을 누르면 바로 켜지고 꺼져요. "켜짐"인 분야만 그 학원 원장 · 강사 화면에서 열려요. 한 원장이 학원을 여러 곳 운영하면 학원마다 따로 켜고 끄고, 계약하지 않은 학원은 학원 이름을 눌러 "이 학원 이용 멈추기"로 통째로 닫아요. 가입한 순서 · 가나다순 · 역할별로 바꿔 볼 수 있고, 열어 달라는 신청이 있는 학원은 노란 표시가 붙어요.') + acadOverview(false);
 }
 async function setSvc(aid, area, st) {
   const a = CENTER.academies.find(x => x.id === aid);
@@ -8004,7 +8007,7 @@ function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
   const set = `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
-    <div class="nav-acc"><button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
+    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `<button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
   if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   // 센터 관리자(학원 없이): 센터 관리 세부 메뉴를 종류별 묶음으로 바로
   if (ROLE === 'admin' && CENTER && !CENTER.partner) {
@@ -8549,6 +8552,12 @@ function renderChrome(area) {
     : ROLE === 'parent' || ROLE === 'student'
     ? `<span class="dot">${DATA.child.name[1]}</span><div><b>${DATA.child.name} (${DATA.child.grade})</b><span>학원 ${DATA.child.academies}곳</span></div>`
     : `<span class="dot">${DATA.academy.short}</span><div><b>${DATA.academy.name}</b><span>${DATA.academy.area} · 원생 ${DATA.academy.students}명</span></div>`;
+  // 왼쪽 위 학원 이름을 누르면 학원 · 역할 바꾸기 (여러 학원이면 "학원 n곳" 표시)
+  const ac = $('#acad');
+  if (ROLE !== 'admin' && !SEEKER) {
+    ac.classList.add('can'); ac.title = '학원 · 역할 바꾸기'; ac.onclick = acadSwitchDialog;
+    if (memsList().length > 1) ac.insertAdjacentHTML('beforeend', `<span class="acad-n">${memsList().length}곳 ▾</span>`);
+  } else { ac.classList.remove('can'); ac.onclick = null; }
   // 숫자 배지는 아직 예시 데이터라 실제 로그인에서는 숨겨요
   const badge = REAL || USER ? { messages: msgUnread() } : {
     members: DATA.leads.filter(l => l.urgent).length,
@@ -8561,7 +8570,7 @@ function renderChrome(area) {
   const hc = $('#helpCard'); if (hc) { hc.hidden = !(ROLE === 'owner' || ROLE === 'teacher') || SEEKER; hc.classList.toggle('on', area === 'help'); }
   bindNav();
   $('#me').innerHTML = `<a class="me-link" href="#settings" title="설정 · 내 정보">${PROFILE && PROFILE.avatar_url ? `<span class="av pfp"><img src="${esc(PROFILE.avatar_url)}" alt=""></span>` : `<span class="av" style="background:${ME.color}">${ME.av}</span>`}<div><b>${ME.name}</b><span>${ME.label}</span></div></a>
-    <button type="button" class="acc-btn" data-act="switchAcc" title="계정 전환">${ic('users')}<span>계정 전환</span></button><button type="button" class="acc-btn out" data-act="logoutNow" title="로그아웃">${ic('logout')}<span>로그아웃</span></button>`;
+    ${USER && MEMS.length > 1 && ROLE !== 'admin' ? `<button type="button" class="acc-btn" data-act="switchAcad" title="학원 · 역할 바꾸기">${ic('home')}<span>학원 바꾸기</span></button>` : ''}<button type="button" class="acc-btn" data-act="switchAcc" title="계정 전환">${ic('users')}<span>계정 전환</span></button><button type="button" class="acc-btn out" data-act="logoutNow" title="로그아웃">${ic('logout')}<span>로그아웃</span></button>`;
   if (USER && !renderChrome.saved) { renderChrome.saved = true; rememberAccount(acctInfo(), USER.id); }
   renderBell();
   const foot = $('#adminApply');
@@ -9495,7 +9504,14 @@ const JOIN_ERRORS = {
   'role_mismatch:owner': '원장용 코드예요. 원장으로 가입한 분만 쓸 수 있어요.',
   'role_mismatch:teacher': '강사용 코드예요. 강사로 가입한 분만 쓸 수 있어요.',
   'role_mismatch:family': '학부모·학생용 코드예요. 학부모나 학생으로 가입한 분만 쓸 수 있어요.',
-  owner_only: '학원은 원장님만 만들 수 있어요.'
+  owner_only: '학원은 원장님만 만들 수 있어요.',
+  pick_family_role: '학부모·학생용 코드예요. 학부모로 들어갈지 학생으로 들어갈지 골라 주세요.',
+  'already_member:owner': '이 학원에는 이미 원장으로 들어가 있어요. 한 학원에서는 역할 하나만 돼요.',
+  'already_member:teacher': '이 학원에는 이미 강사로 들어가 있어요. 한 학원에서는 역할 하나만 돼요.',
+  'already_member:parent': '이 학원에는 이미 학부모로 들어가 있어요. 한 학원에서는 역할 하나만 돼요.',
+  'already_member:student': '이 학원에는 이미 학생으로 들어가 있어요. 한 학원에서는 역할 하나만 돼요.',
+  too_many: '하루에 학원을 너무 많이 만들었어요. 내일 다시 시도하거나 센터에 문의해 주세요.',
+  required: '학원 이름을 적어 주세요.'
 };
 const joinError = e => JOIN_ERRORS[Object.keys(JOIN_ERRORS).find(k => (e.message || '').includes(k))] || '문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
 
@@ -9525,9 +9541,11 @@ function onboarding(user) {
     <p class="muted small">초대 코드는 영어·숫자 8자리예요. 원장님 화면 "학생·학부모 관리 → 초대 코드"에 있으니, 코드가 없으면 학원에 요청해 주세요.${PROFILE.role === 'teacher' ? '' : ' 합류한 뒤 원장님이 아이와 연결해 주면 출결 · 수납 · 공지가 보여요.'}</p>`}
     <form class="f-stack" id="joinForm" novalidate>
       <label class="f">초대 코드<input name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" style="text-transform:uppercase"></label>
+      ${FAMILY_ROLE_PICK(famDefault())}
       <p class="msg" id="joinMsg" hidden></p>
       <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
     </form>
+    ${owner ? '' : '<p class="muted small">학원을 직접 운영하시나요? <a href="#" id="obNew" style="color:var(--blue-600);font-weight:600">새 학원 열기</a> · 같은 아이디로 원장과 학부모를 함께 할 수 있어요</p>'}
     ${PROFILE.role === 'teacher' ? `<a class="btn" href="/app#jobs" id="seeJobs">아직 코드가 없어요 · 채용 공고 먼저 보기</a>` : ''}
     ${adminApplyLink()}
     <p class="muted small">역할을 잘못 고르셨나요? <a href="#" id="reRole" style="color:var(--blue-600);font-weight:600">역할 다시 고르기</a> · <a href="#" id="obOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
@@ -9547,10 +9565,12 @@ function onboarding(user) {
     e.preventDefault();
     const code = e.target.elements.code.value.trim();
     if (!code) return fail('#joinMsg', '초대 코드를 적어 주세요.');
-    const { error } = await SB.rpc('join_academy', { p_code: code });
+    const fa = e.target.elements.fam_as;
+    const { error } = await SB.rpc('join_academy', { p_code: code, p_as: fa ? fa.value : null });
     if (error) return fail('#joinMsg', joinError(error));
     location.reload();
   };
+  if ($('#obNew')) $('#obNew').onclick = e => { e.preventDefault(); newAcademyDialog(); };
   $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
   $('#obOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut(); location.href = '/'; };
   bindAdminApplyLink();
@@ -9581,9 +9601,13 @@ async function boot() {
     // 구글 이름이 다른 회원과 같아서 이름이 비어 있으면, 먼저 이름을 정해요
     if (!PROFILE.name && !PROFILE.username) { rolePicker(user, true); return; }
 
-    // 소속 학원 (여러 곳이면 먼저 들어간 곳)
-    const { data: mem } = await SB.from('academy_members').select('role, title, perms, academies(id, name, region, family, app_off, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed, subjects)')
-      .eq('user_id', user.id).order('created_at').limit(1);
+    // 소속 학원: 여러 곳이면 이 기기에서 마지막으로 연 곳(`asc-acad-회원`), 역할은 그 학원에서의 역할
+    const { data: ml } = await SB.rpc('my_academies');
+    MEMS = ml || [];
+    const cur = pickAcademy(MEMS);
+    if (cur && cur.suspended) { suspendedScreen(user, cur); return; }
+    const { data: mem } = cur ? await SB.from('academy_members').select('role, title, perms, academies(id, name, region, family, app_off, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed, subjects)')
+      .eq('user_id', user.id).eq('academy_id', cur.academy_id).limit(1) : { data: [] };
     if (!mem || !mem.length) {
       // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요
       if (!CENTER && PROFILE.role === 'teacher' && location.hash.startsWith('#jobs')) {
@@ -10387,6 +10411,169 @@ function bindR18() {
   on('[data-lead-log]', (b, e) => { e.preventDefault(); e.stopPropagation(); leadLogDialog(b.dataset.leadLog); });
   on('[data-act="sms"]', b => smsDialog(b.dataset.src || 'lead'));
   document.querySelectorAll('[data-must]').forEach(c => c.onchange = () => { try { if (c.checked) localStorage.setItem(c.dataset.must, '1'); else localStorage.removeItem(c.dataset.must); } catch (e) { /* 이 기기에 못 남겨도 화면은 바뀌어요 */ } render(); });
+  bindR19();
+}
+
+/* ================= 19라운드: 한 아이디로 여러 학원 · 여러 역할 =================
+   역할은 학원마다(academy_members.role): 하늘영어 원장 + 별빛수학 원장 + 해솔피아노 학부모를 한 아이디로.
+   지금 보고 있는 학원은 이 기기 localStorage `asc-acad-회원`에 기억하고, "학원 · 역할 바꾸기"로 바꿔요(다시 불러오기).
+   새 학원 열기(create_academy)는 누구나, 초대 코드(join_academy)는 코드 종류가 그 학원에서의 역할(학부모·학생용은 고르기).
+   센터가 학원을 정지하면(academies.suspended_at) 그 학원만 안내 화면 — 같은 원장의 다른 학원은 그대로. */
+let MEMS = [];
+const MEM_ROLE_NAME = { owner: '원장', teacher: '강사', parent: '학부모', student: '학생' };
+const acadKey = () => `asc-acad-${USER ? USER.id : 'demo'}`;
+const savedAcad = () => { try { return localStorage.getItem(acadKey()); } catch (e) { return null; } };
+function goAcademy(id) {
+  try { localStorage.setItem(acadKey(), id); } catch (e) { /* 이번만 */ }
+  location.href = '/app#home'; location.reload();
+}
+// 처음 열 학원: 기억해 둔 곳 → 정지 안 된 첫 학원 → 첫 학원 (센터 관리자는 정지된 학원을 건너뛰고 센터 화면으로)
+function pickAcademy(list) {
+  const saved = list.find(m => m.academy_id === savedAcad());
+  if (saved && !(CENTER && saved.suspended)) return saved;
+  return list.find(m => !m.suspended) || (CENTER ? null : list[0]) || null;
+}
+// 예시 계정: 실제 계정에서 어떻게 보이는지 (누르면 안내만)
+const demoMems = () => [
+  { academy_id: 'demo', name: DATA.academy.name, region: DATA.academy.area, role: ROLE === 'student' ? 'student' : ROLE, now: true },
+  ...(ROLE === 'owner' ? [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: 'owner' }, { academy_id: 'demo3', name: '해솔피아노', region: '서울 강남구', role: 'parent' }]
+    : [{ academy_id: 'demo2', name: '별빛수학학원', region: '서울 송파구', role: ROLE === 'teacher' ? 'teacher' : 'parent' }])];
+const memsList = () => USER ? MEMS : demoMems();
+const curAcadId = () => REAL ? REAL.academy.id : 'demo';
+function memRow(m, cur) {
+  const r = m.role, color = ROLE_COLOR[r] || 'var(--navy-700)';
+  return `<button type="button" class="acc-row ${cur ? 'on' : ''}" data-go-acad="${esc(m.academy_id)}" ${cur ? 'disabled' : ''}>
+    <span class="av" style="background:${color}">${esc((m.name || '?')[0])}</span>
+    <span><b>${esc(m.name)}</b><small>${MEM_ROLE_NAME[r] || r}${m.title ? ` · ${esc(m.title)}` : ''}${m.region ? ` · ${esc(m.region)}` : ''}</small></span>
+    ${m.suspended ? '<span class="chip crit">이용 멈춤</span>' : cur ? '<span class="chip info">지금</span>' : '<span class="go">바꾸기 →</span>'}</button>`;
+}
+function acadSwitchDialog() {
+  const d = dialogEl(), list = memsList();
+  d.innerHTML = `<div class="dlg">
+    <h2>학원 · 역할 바꾸기</h2>
+    <p class="muted small" style="margin:-6px 0 0">한 아이디로 여러 학원을 쓸 수 있어요. 학원마다 역할이 따로예요(예: A학원 원장 · B학원 원장 · C학원 학부모). 누르면 그 학원 화면으로 바로 바뀌어요.${USER ? '' : ' <b>예시 계정에서는 모양만 볼 수 있어요.</b>'}</p>
+    <div class="acc-list">${list.map(m => memRow(m, m.academy_id === curAcadId() && !m.suspended)).join('')}</div>
+    <div class="ms-add">
+      <button type="button" class="btn" data-act="newAcad">${ic('plus')}새 학원 열기</button>
+      <button type="button" class="btn" data-act="joinAcad">${ic('ext')}초대 코드로 다른 학원 들어가기</button>
+    </div>
+    <p class="muted small">수강료 · 통장 · 카드 결제 연결 · 단체 문자 한도 · 센터 이용료는 모두 <b>학원마다 따로</b>예요. 화면 왼쪽 위 학원 이름을 보면 지금 어느 학원인지 알 수 있어요. 통장은 학원마다 따로 연결하는 것을 권해요.</p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  d.querySelectorAll('[data-go-acad]').forEach(b => b.onclick = () => { if (!USER) { toast('예시 계정에서는 학원을 바꿀 수 없어요 · 실제 계정에서는 누르면 바로 바뀌어요'); return; } goAcademy(b.dataset.goAcad); });
+  d.querySelector('[data-act="newAcad"]').onclick = newAcademyDialog;
+  d.querySelector('[data-act="joinAcad"]').onclick = joinAcademyDialog;
+}
+const FAMILY_ROLE_PICK = def => `<div class="f">학부모·학생용 코드라면 <span class="muted small">원장용 · 강사용 코드는 코드대로 정해져요</span>
+  <span class="role-pick">${[['parent', '학부모로'], ['student', '학생(본인)으로']].map(([v, l]) => `<label><input type="radio" name="fam_as" value="${v}" ${v === def ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`;
+const famDefault = () => ['parent', 'student'].includes(PROFILE && PROFILE.role) ? PROFILE.role : 'parent';
+function newAcademyDialog() {
+  if (!USER) { toast('예시 계정에서는 학원을 만들 수 없어요'); return; }
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="naForm" novalidate>
+    <h2>새 학원 열기</h2>
+    <p class="muted small" style="margin:-6px 0 0">이 아이디로 학원을 하나 더 열어요. 새 학원의 원장이 되고, 강사 · 학부모 초대 코드가 따로 생겨요. 지금 학원의 자료는 섞이지 않아요.</p>
+    <label class="f">학원 이름<input name="aname" maxlength="100" placeholder="예: 별빛수학학원"></label>
+    <div class="f">지역 <span class="muted small">시·도를 고르면 시·군·구가 나와요</span>${regionPicker('region')}</div>
+    <div class="f">어떤 학원인가요?
+      <label class="chk-line"><input type="radio" name="family" value="1" checked><span><b>어린이 · 청소년 학원</b> · 학부모님과 함께 써요</span></label>
+      <label class="chk-line"><input type="radio" name="family" value="0"><span><b>성인 학원</b> · 수강생 본인만 써요</span></label></div>
+    <p class="muted small">센터 지원(행정 · 강사 · 학생·학부모 · 제휴 · 홍보)은 학원마다 따로 신청해요. 원생 · 출결 · 일정 · 채팅 같은 기본 프로그램은 바로 쓸 수 있어요.</p>
+    <p class="msg" id="naMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="naCancel">취소</button><button class="btn primary">학원 만들기</button></div></form>`;
+  d.showModal(); bindRegionPickers(d);
+  $('#naCancel').onclick = () => d.close();
+  $('#naForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, name = el.aname.value.trim(), m = $('#naMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (!name) return fail('학원 이름을 적어 주세요.');
+    if (!el.region.value) return fail('지역을 골라 주세요. 채용 공고 · 제휴 연결에 쓰여요.');
+    if (MEMS.some(x => x.name.replace(/\s/g, '') === name.replace(/\s/g, '') && x.role === 'owner') && !confirm(`이미 원장인 "${name}"이 있어요. 그래도 새로 만들까요?`)) return;
+    const { data, error } = await SB.rpc('create_academy', { p_name: name, p_region: el.region.value.trim() || null, p_family: el.family.value === '1' });
+    if (error) return fail(joinError(error));
+    toast('새 학원을 만들었어요 · 그 학원으로 여는 중…'); goAcademy(data);
+  };
+}
+function joinAcademyDialog() {
+  if (!USER) { toast('예시 계정에서는 코드를 넣을 수 없어요'); return; }
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="jaForm" novalidate>
+    <h2>초대 코드로 다른 학원 들어가기</h2>
+    <p class="muted small" style="margin:-6px 0 0">지금 학원은 그대로 두고 학원을 하나 더 더해요. 원장용 코드면 원장, 강사용이면 강사, 학부모·학생용이면 아래에서 고른 역할로 들어가요. (예: 내 학원 원장이면서 아이 학원에는 학부모로)</p>
+    <label class="f">초대 코드<input name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" style="text-transform:uppercase"></label>
+    ${FAMILY_ROLE_PICK(famDefault())}
+    <p class="msg" id="jaMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="jaCancel">취소</button><button class="btn primary">들어가기</button></div></form>`;
+  d.showModal();
+  $('#jaCancel').onclick = () => d.close();
+  $('#jaForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, code = el.code.value.trim(), m = $('#jaMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (!code) return fail('초대 코드를 적어 주세요.');
+    const { data, error } = await SB.rpc('join_academy', { p_code: code, p_as: el.fam_as.value });
+    if (error) return fail(joinError(error));
+    toast('학원에 들어갔어요 · 그 학원으로 여는 중…'); goAcademy(data);
+  };
+}
+// 센터가 이용을 멈춘 학원: 자료는 그대로 두고 안내만 (다른 학원으로 바꾸기 · 센터에 문의 · 로그아웃)
+function suspendedScreen(user, cur) {
+  MY = null;
+  const staff = cur.role === 'owner' || cur.role === 'teacher', others = MEMS.filter(m => m.academy_id !== cur.academy_id);
+  $('.layout').style.display = 'block';
+  $('.layout').innerHTML = `
+  <div class="picker"><div class="card">
+    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <h1>${esc(cur.name)} 이용이 잠시 멈춰 있어요</h1>
+    <p class="muted">${staff ? '센터와의 이용 계약이 아직이거나 끝나서 이 학원 화면을 잠시 닫아 두었어요. 원생 · 출결 · 수납 같은 자료는 지우지 않고 그대로 있어서, 센터가 다시 열면 그대로 이어서 쓸 수 있어요.' : '학원에서 이 프로그램 이용을 잠시 멈췄어요. 출결 · 수납 · 공지는 학원에 직접 문의해 주세요.'}</p>
+    ${cur.suspend_note ? `<p class="msg" style="display:block">센터 안내: ${esc(cur.suspend_note)}</p>` : ''}
+    ${others.length ? `<h3 class="ct-h">내 다른 학원</h3><div class="acc-list">${others.map(m => memRow(m, false)).join('')}</div>` : ''}
+    ${staff ? `<form class="f-stack" id="susAsk" novalidate>
+      <label class="f">센터에 문의하기 <span class="muted small">계약 · 다시 열기 문의</span><textarea name="msg" rows="3" maxlength="2000" placeholder="예: 이 학원도 계약하고 싶어요. 연락 주세요."></textarea></label>
+      <p class="msg" id="susMsg" hidden></p>
+      <button class="btn primary">문의 보내기</button></form>` : ''}
+    <div class="row-btns"><button type="button" class="btn" id="susNew">${ic('plus')}새 학원 열기</button><button type="button" class="btn" id="susJoin">${ic('ext')}초대 코드로 들어가기</button></div>
+    <p class="muted small"><a href="#" id="susOut" style="color:var(--blue-600);font-weight:600">로그아웃</a></p>
+  </div></div>`;
+  $('.layout').querySelectorAll('[data-go-acad]').forEach(b => b.onclick = () => goAcademy(b.dataset.goAcad));
+  $('#susNew').onclick = newAcademyDialog; $('#susJoin').onclick = joinAcademyDialog;
+  $('#susOut').onclick = async e => { e.preventDefault(); await SB.auth.signOut({ scope: 'local' }); location.href = '/'; };
+  if ($('#susAsk')) $('#susAsk').onsubmit = async e => {
+    e.preventDefault();
+    const msg = e.target.elements.msg.value.trim(), m = $('#susMsg'), say = t => { m.textContent = t; m.hidden = false; };
+    if (!msg) return say('문의 내용을 적어 주세요.');
+    const { data, error } = await SB.rpc('submit_inquiry', { p_name: null, p_contact: user.phone || PROFILE.phone || null, p_category: '계약 · 이용', p_message: `[${cur.name} · 이용 멈춤] ${msg}`, p_agreed: false, p_academy: cur.academy_id });
+    if (error) return say('보내지 못했어요. 잠시 후 다시 시도해 주세요.');
+    e.target.innerHTML = `<p class="msg" style="display:block">문의를 보냈어요 (접수 번호 ${esc(data)}). 센터에서 연락드릴게요.</p>`;
+  };
+}
+// 설정 "우리 학원" 안: 내 학원 · 역할 한눈에
+function memsSetLine() {
+  const list = memsList();
+  return `<div class="set-line ms-line"><div><b>내 학원 · 역할 ${list.length}곳</b><small>${list.map(m => `${esc(m.name)} ${MEM_ROLE_NAME[m.role] || ''}${m.suspended ? '(멈춤)' : ''}`).join(' · ')}</small></div>
+    <span class="btns"><button class="btn sm primary" data-act="switchAcad">바꾸기</button><button class="btn sm" data-act="newAcad">새 학원 열기</button><button class="btn sm" data-act="joinAcad">코드로 더하기</button></span></div>`;
+}
+// 센터 관리: 학원 하나만 이용 멈추기 · 다시 열기 (같은 원장의 다른 학원은 그대로)
+async function acadStop(id) {
+  const a = CENTER.academies.find(x => x.id === id); if (!a) return;
+  const on = !a.suspended_at;
+  let note = null;
+  if (on) {
+    const sib = sameOwnerAcads(a);
+    note = prompt(`${a.name} 이용을 멈출까요?\n원장 · 강사 · 학부모 · 학생 모두 이 학원 화면 대신 안내를 봐요. 자료는 지우지 않아요.${sib.length ? `\n같은 원장의 ${sib.map(x => x.name).join(', ')}은(는) 그대로예요.` : ''}\n\n원장님께 보일 안내(비워도 돼요):`, '센터 이용 계약 후 다시 열어 드려요.');
+    if (note === null) return;
+  } else if (!confirm(`${a.name} 이용을 다시 열까요? 바로 예전처럼 쓸 수 있어요.`)) return;
+  const { error } = await SB.rpc('set_academy_suspended', { p_academy: id, p_on: on, p_note: note });
+  if (error) { toast(dbErr(error)); return; }
+  a.suspended_at = on ? new Date().toISOString() : null; a.suspend_note = on ? note : null;
+  render(); toast(on ? `${a.name} 이용을 멈췄어요` : `${a.name}을(를) 다시 열었어요`);
+}
+const sameOwnerAcads = a => CENTER.academies.filter(x => x.id !== a.id && (x.owner_ids || []).some(o => (a.owner_ids || []).includes(o)));
+function bindR19() {
+  on('[data-act="switchAcad"]', acadSwitchDialog);
+  on('[data-act="newAcad"]', newAcademyDialog);
+  on('[data-act="joinAcad"]', joinAcademyDialog);
+  on('[data-acad-stop]', (b, e) => { e.preventDefault(); acadStop(b.dataset.acadStop); });
 }
 
 boot();
