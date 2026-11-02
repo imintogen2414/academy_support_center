@@ -1593,3 +1593,14 @@ body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
 .stack .li .r.feed-do { flex-wrap: nowrap; }
 .feed-do select { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
 .rec-grid { align-items: start; }
+
+/* 19라운드: 학원 · 역할 바꾸기 · 학원 이용 멈춤 */
+.acad-switch.can { cursor: pointer; transition: background .15s; }
+.acad-switch.can:hover { background: rgba(255,255,255,.14); }
+.acad-switch .acad-n { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.16); white-space: nowrap; }
+.ms-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.ms-add .btn { flex: 1 1 200px; justify-content: center; }
+.ms-line .btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.ov-row.stop > summary { opacity: .7; }
+.ov-row.stop > summary .ov-name b { text-decoration: line-through; text-decoration-color: var(--crit); }
+.ov-stop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
