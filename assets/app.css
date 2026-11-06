@@ -1641,3 +1641,13 @@ body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
   .tx-li { grid-template-columns: auto minmax(0, 1fr); }
   .tx-li .r.btns { grid-column: 1 / -1; justify-content: flex-start; }
 }
+.tx-steps2 { display: grid; gap: 14px; }
+.tx-step-h { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px; }
+.tx-step-h i { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--blue-500); color: #fff; font-style: normal; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.tx-step-h b { display: block; font-size: 15px; }
+.tx-step-h small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.tx-step .tx-form { margin-left: 34px; }
+.tx-ded { gap: 6px; }
+.tx-dh { font-size: 14px; margin: 14px 0 4px; color: var(--muted); }
+#tdForm .f small { display: block; font-size: 12px; margin-top: 3px; line-height: 1.4; }
+@media (max-width: 640px) { .tx-step .tx-form { margin-left: 0; } }
