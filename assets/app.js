@@ -2307,8 +2307,8 @@ const PAPER_DOCS = [
   ['wht', '원천세 계산표', '보고 있는 달 강사 급여 3.3%', 'doc'],
   ['biz', '사업장현황 수입 요약', '지난해 월별 수입 · 지출', 'chart']
 ];
-async function makePaperDoc(kind) {
-  const acad = REAL.academy.name, m = MONTH, y = +TODAY.slice(0, 4) - 1;
+async function makePaperDoc(kind, yr) {
+  const acad = REAL.academy.name, m = MONTH, y = yr || +TODAY.slice(0, 4) - 1;
   const title = (t, extra = '') => [[`${acad} ${t}${extra}`], [`만든 날 ${TODAY}`], []];
   let rows, file, widths;
   if (kind === 'roster') {
@@ -7728,6 +7728,7 @@ const AREAS = {
         }, render: financePage },
         approvals: { name: '결재', icon: 'check', desc: '강사가 올린 물품 · 재정 결재', stat: () => `결재 대기 ${apvInbox().filter(a => a.status === 'pending').length}건`, render: approvalsOwnerPage },
         paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage },
+        tax: { name: '세금 · 신고', icon: 'calc', desc: '세금 달력 · 원천세 · 사업장현황 · 종합소득세 미리 보기 → 홈택스에 옮겨 적기', stat: () => { const n = taxDeadlines(taxSrc()).find(x => !x.done); return n ? `${n.title} ${dday(n.due) < 0 ? '기한 지남' : `D-${dday(n.due)}`}` : '다가오는 신고 없음'; }, render: taxPage },
         payroll: { name: '원천세 계산', icon: 'calc', desc: '강사 지급액 → 소득세 · 지방세 · 실지급액 · 엑셀', stat: () => REAL ? `${+MONTH.slice(5)}월 지급 ${payOf(MONTH).length}명` : '3.3% · 일용직 계산', render: payrollPage },
         supplies: SUPPLY_AREA,
         auto: { name: '자동으로 처리', icon: 'bolt', desc: '매달 청구 · 미납 안내 · 서류 마감을 저절로', stat: () => REAL ? `켜 둔 일 ${AUTO_ITEMS.filter(([k]) => autoOn(k)).length}개` : '켜 두면 저절로', render: autoPage },
@@ -7818,6 +7819,7 @@ function teacherMenus() {
   const admin = { ...o.admin, stat: attendStat, subs: { attend: { ...o.admin.subs.attend, desc: '수업 중에 우리 반 출석 체크 · 입구 QR 출석 화면' } } };
   admin.subs.supplies = o.admin.subs.supplies;
   ['billing', 'finance', 'approvals', 'paper', 'payroll'].filter(can).forEach(k => { admin.subs[k] = k === 'approvals' ? { ...o.admin.subs.approvals, name: '결재 처리', desc: '다른 강사가 올린 결재 승인 · 반려' } : o.admin.subs[k]; });
+  if (can('finance')) admin.subs.tax = o.admin.subs.tax;
   const more = Object.keys(admin.subs).slice(1).map(k => admin.subs[k].name);
   admin.desc = more.length ? `출결 · ${more.join(' · ')}` : '출결 · 입구 QR 출석 화면';
   const ms = o.members.subs, members = { ...o.members, desc: '상담·등록부터 원생 명단, 할 일 · 리포트까지',
@@ -8165,7 +8167,7 @@ function guidePage() {
     </section>`).join('') + (startSteps().length ? `<a class="hint" href="#home" data-act="showGuide">${ic('check')}<span>처음 시작 안내를 다시 보고 싶으면</span><b>홈에 다시 띄우기 →</b></a>` : '') + howtoAll();
 }
 // 위쪽 검색: 메뉴 이름 · 설명에서 찾아요
-const SEARCH_WORDS = { 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자' };
+const SEARCH_WORDS = { 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자' };
 function searchMenus(q) {
   q = q.trim(); if (!q) return [];
   const out = [], hit = (...t) => t.join(' ').includes(q);
@@ -8426,7 +8428,7 @@ const AREA_INTRO = {
 };
 // 분야 첫 화면: 세부 메뉴가 많으면 하는 일끼리 작은 묶음으로 나눠 보여요 ("센터에 맡기기"는 아래 한 줄로)
 const SUB_GROUPS = {
-  admin: [['매일 쓰는 것', '출석 체크 · 수강료 받기 · 결재', ['attend', 'billing', 'approvals']], ['돈 · 세금', '매출 · 지출 · 고정 지출 · 강사 원천세', ['finance', 'payroll']], ['비품 · 서류', '교재 · 비품 수량과 교육청 · 세무 서류', ['supplies', 'paper']], ['자동 처리 · 연결', '매달 청구 · 미납 안내 · 서류를 저절로 · 카드 결제 · 통장 · 전문 앱 연결', ['auto', 'connect']]],
+  admin: [['매일 쓰는 것', '출석 체크 · 수강료 받기 · 결재', ['attend', 'billing', 'approvals']], ['돈 · 세금', '매출 · 지출 · 세금 미리 계산 · 강사 원천세', ['finance', 'tax', 'payroll']], ['비품 · 서류', '교재 · 비품 수량과 교육청 · 세무 서류', ['supplies', 'paper']], ['자동 처리 · 연결', '매달 청구 · 미납 안내 · 서류를 저절로 · 카드 결제 · 통장 · 전문 앱 연결', ['auto', 'connect']]],
   members: [['상담 · 원생', '문의부터 등록 · 명단 · 앱 초대까지', ['leads', 'students', 'invite']], ['수업 관리', '학생 할 일 · 성장 리포트 · 전문 앱 성적표', ['todos', 'reports', 'records']], ['학부모 소통', '공지 · 읽음 확인', ['notices']]],
   teachers: [['우리 강사', '강사 · 담당 반 · 직책과 권한', ['staff', 'roles']], ['교육 · 채용', '강사 교육 영상 · 채용 공고', ['training', 'hire']]],
   get center() { return CENTER_GROUPS; }
@@ -10357,7 +10359,7 @@ function mustItems() {
     ['month', '금액이 다른 고정 지출 확인', 'half', '공과금처럼 달마다 다른 금액만 고지서대로 고치기', '#admin/finance', (R ? R.expenses : []).filter(e => e.need_check).length === 0],
     ['month', '원천세 · 강사 급여', 'half', '지급액만 넣으면 세금 계산 · 신고 서류까지', '#admin/payroll', d ? false : payOf(m).length > 0],
     ['year', '연간 결산서 받기', 'self', '1년 수입 · 지출 · 순이익 · 통장 잔액 · 미수금 한 파일', '#admin/finance', null],
-    ['year', '사업장현황신고 (1월 ~ 2월 10일)', 'half', '서류 · 행정에 저절로 떠요 · 수입 요약을 바로 만들어요', '#admin/paper', d ? false : R.paperwork.some(p => /사업장현황/.test(p.title) && p.status === 'done' && (p.due || '').startsWith(TODAY.slice(0, 4)))],
+    ['year', '사업장현황신고 (1월 ~ 2월 10일)', 'half', '세금 · 신고에서 홈택스에 옮겨 적을 숫자를 바로 보여 줘요', '#admin/tax', d ? false : R.paperwork.some(p => /사업장현황/.test(p.title) && p.status === 'done' && (p.due || '').startsWith(TODAY.slice(0, 4)))],
     ['year', '교육청 서류 (교습비 · 강사 변경 등)', 'half', '바뀐 게 있으면 서류 · 행정에 저절로 떠요', '#admin/paper', d ? true : !R.paperwork.some(p => p.status !== 'done' && (p.due || '9') <= addDays(TODAY, 30))]
   ];
 }
@@ -10625,7 +10627,217 @@ function renameAcademyDialog() {
     useAcademy(); d.close(); render(); toast('학원 이름을 바꿨어요');
   };
 }
+/* ---------- 세금 · 신고 (#admin/tax, 원장 · 재정 권한 강사) ----------
+   학원 장부(수납 · 수입 · 지출 · 원천세 계산)로 세금을 미리 계산하고, 홈택스에 옮겨 적을 숫자를 신고서 칸 순서대로 보여 줘요.
+   신고는 원장님이 홈택스 · 위택스에서 직접 해요(대신 신고하지 않아요 — 세무 대리는 세무사만).
+   "신고했어요" 표시는 서류(paperwork.auto_key)에 남겨요: wht:달 원천세 · simple:달 간이지급명세서(사업소득) · daily:달 일용근로 지급명세서
+   · biz:해 사업장현황신고 · income:해 종합소득세 · mid:해 중간예납 · yearend:해 근로 연말정산. 예시 계정은 sessionStorage asc-demo-tax. */
+let TAX_TAB = 'cal', TAX_M = null, TAX_Y = null;
+const TAX_TABS = [['cal', '세금 달력'], ['wht', '원천세 · 지급명세서'], ['biz', '사업장현황신고'], ['income', '종합소득세 미리 보기']];
+const HOMETAX = 'https://www.hometax.go.kr', WETAX = 'https://www.wetax.go.kr';
+// 종합소득세 세율: [과세표준 이하, 세율, 누진공제]
+const INCOME_BRACKETS = [[14e6, .06, 0], [50e6, .15, 1.26e6], [88e6, .24, 5.76e6], [150e6, .35, 15.44e6], [300e6, .38, 19.94e6], [500e6, .40, 25.94e6], [1e9, .42, 35.94e6], [Infinity, .45, 65.94e6]];
+const incomeTax = base => { if (base <= 0) return 0; const [, r, d] = INCOME_BRACKETS.find(([max]) => base <= max); return cut10(base * r - d); };
+const TAX_BOOK = 75e6, TAX_SINCERE = 750e6; // 교육서비스업: 직전 해 수입 7,500만 원 이상 복식부기 · 7.5억 원 이상 성실신고
+const PAY_CODE = { wage: ['A01', '근로소득 (간이세액)'], daily: ['A03', '일용근로소득'], freelance: ['A25', '사업소득 (매월징수)'], other: ['', '직접 넣은 것 (소득 종류 확인)'] };
+const workDay = s => { const d = day0(s); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); return ymd(d); };
+const TAX_ITEM = {
+  wht: m => [`${+m.slice(5)}월분 원천세 신고 · 납부`, `${shiftMonth(m, 1)}-10`, '홈택스 · 위택스', 'wht', '강사 지급액에서 뗀 소득세는 홈택스, 지방소득세는 위택스로 내요'],
+  simple: m => [`${+m.slice(5)}월분 간이지급명세서 (사업소득)`, monthEnd(shiftMonth(m, 1)), '홈택스', 'wht', '프리랜서 강사마다 이름 · 주민등록번호 · 지급액을 내요'],
+  daily: m => [`${+m.slice(5)}월분 일용근로소득 지급명세서`, monthEnd(shiftMonth(m, 1)), '홈택스', 'wht', '일용직 강사마다 근무일 · 지급액을 내요'],
+  biz: y => [`${y}년 사업장현황신고`, `${+y + 1}-02-10`, '홈택스', 'biz', '학원은 부가세가 없는 면세사업자라 1년 수입 · 경비를 이것으로 신고해요'],
+  income: y => [`${y}년 종합소득세 · 지방소득세 신고`, `${+y + 1}-05-31`, '홈택스 · 위택스', 'income', '1년 이익에 대한 세금이에요 (성실신고 대상이면 6월 30일)'],
+  mid: y => [`${y}년 종합소득세 중간예납`, `${y}-11-30`, '홈택스', 'income', '지난해 종합소득세가 있으면 그 절반 고지서가 와요 (50만 원 미만이면 없어요)'],
+  yearend: y => [`${y}년 근로소득 연말정산 · 지급명세서`, `${+y + 1}-03-10`, '홈택스', 'wht', '근로계약 강사의 1년 세금을 정산해 3월 급여에 반영해요']
+};
+const taxInfo = key => { const [k, a] = key.split(':'), [title, due, org, tab, desc] = TAX_ITEM[k](a); return { key, title, due: workDay(due), org, tab, desc, arg: a }; };
+const demoTaxMap = () => { try { return JSON.parse(sessionStorage.getItem('asc-demo-tax') || '{}'); } catch (e) { return {}; } };
+
+// 예시 계정: 지난해 1월부터 오늘까지 달마다 비슷한 장부 · 강사 지급
+let DEMO_TAX = null;
+function demoTax() {
+  if (DEMO_TAX) return DEMO_TAX;
+  const led = [], pays = {}, y0 = +TODAY.slice(0, 4) - 1;
+  for (let m = `${y0}-01`; m <= TODAY.slice(0, 7); m = shiftMonth(m, 1)) {
+    const k = +m.slice(5), w = 1 + ((k * 7) % 5) / 50, d = n => `${m}-${String(n).padStart(2, '0')}`;
+    const add = (day, kind, cat, amount, method, vary = true) => { if (d(day) <= TODAY) led.push({ day: d(day), kind, cat, amount: vary ? Math.round(amount * w / 1000) * 1000 : amount, method, memo: '', src: kind === 'out' ? 'exp' : cat === '수강료' ? 'inv' : 'inc' }); };
+    add(3, 'in', '수강료', 3000000, '카드'); add(6, 'in', '수강료', 2000000, '계좌이체'); add(7, 'in', '수강료', 300000, '현금'); add(12, 'in', '교재 판매', 280000);
+    add(5, 'out', '임대료', 2200000, null, false); add(10, 'out', '공과금', 180000); add(15, 'out', '통신비', 55000, null, false); add(14, 'out', '교재비', 185000);
+    add(18, 'out', '비품', 50000); add(20, 'out', '홍보비', 200000, null, false); add(25, 'out', '세무 · 회계', 150000, null, false);
+    add(25, 'out', '강사 급여', 1200000, null, false); add(25, 'out', '강사 급여', 600000, null, false);
+    if (`${m}-25` <= TODAY) pays[m] = [{ person_name: '김민지', kind: 'freelance', gross: 1200000, ...calcTax('freelance', 1200000) }, { person_name: '박하늘', kind: 'daily', days: 3, gross: 600000, ...calcTax('daily', 600000, 3) }];
+  }
+  return (DEMO_TAX = { led, pay: m => pays[m] || [] });
+}
+// 실제 학원 · 예시 계정을 한 모양으로: 장부 · 그달 강사 지급 · 신고했는지
+function taxSrc() {
+  if (!REAL) { const d = demoTax(), o = demoTaxMap(); return { led: d.led, payIn: d.pay, wage: false, done: (k, due) => k in o ? o[k] : due < TODAY }; }
+  const pay = REAL.payroll || [];
+  const payIn = m => {
+    const p = pay.filter(x => x.month === m); if (p.length) return p;
+    // 원천세 계산에 안 넣었으면 재정의 "강사 급여" 지출을 프리랜서 3.3%로 어림해요
+    return REAL.expenses.filter(x => x.category === '강사 급여' && ymOf(x.day) === m).map(x => ({ person_name: x.memo || '강사 급여', kind: 'freelance', gross: x.amount, ...calcTax('freelance', x.amount), guess: true }));
+  };
+  return { led: ledger(), payIn, wage: pay.some(x => x.kind === 'wage'), done: k => (REAL.paperwork || []).some(p => p.auto_key === k && p.status === 'done') };
+}
+// 한 해 장부 숫자: 수입(환불은 빼요) · 결제 방법별 · 경비 묶음
+function taxYear(s, y, upto = `${y}-12-31`) {
+  const l = s.led.filter(e => e.day.startsWith(String(y)) && e.day <= upto);
+  const inc = l.filter(e => e.kind === 'in'), out = l.filter(e => e.kind === 'out' && e.cat !== '환불'), refund = sum(l.filter(e => e.cat === '환불'), e => e.amount);
+  const by = f => sum(inc.filter(f), e => e.amount);
+  const card = by(e => e.src === 'inv' && e.method === '카드'), cashy = by(e => e.src === 'inv' && e.method !== '카드'), other = by(e => e.src !== 'inv');
+  const cat = c => sum(out.filter(e => c.includes(e.cat)), e => e.amount);
+  const rent = cat(['임대료']), labor = cat(['강사 급여']), buy = cat(['교재비', '비품']), all = sum(out, e => e.amount);
+  return { revenue: card + cashy + other - refund, card, cashy, other, refund, rent, labor, buy, etc: all - rent - labor - buy, cost: all, tax: cat(['세무 · 회계']) };
+}
+function taxDeadlines(s) {
+  const out = [], cur = TODAY.slice(0, 7), y = +TODAY.slice(0, 4);
+  const push = (key, extra = '') => { const t = taxInfo(key); out.push({ ...t, extra, done: s.done(key, t.due) }); };
+  for (let i = -3; i <= 0; i++) {
+    const m = shiftMonth(cur, i), p = s.payIn(m); if (!p.length) continue;
+    push(`wht:${m}`, `강사 ${p.length}명 · 지급 ${won(sum(p, x => x.gross))} · 원천세 ${won(sum(p, x => x.income_tax + x.local_tax))}`);
+    if (p.some(x => x.kind === 'freelance')) push(`simple:${m}`);
+    if (p.some(x => x.kind === 'daily')) push(`daily:${m}`);
+  }
+  if (s.wage) push(`yearend:${y - 1}`);
+  [y - 1, y].forEach(yy => { push(`biz:${yy}`); push(`income:${yy}`); });
+  push(`mid:${y}`);
+  return out.filter(x => dday(x.due) <= 220 && dday(x.due) >= (x.done ? -40 : -60)).sort((a, b) => a.due.localeCompare(b.due));
+}
+const taxCanMark = () => !REAL || can('paper');
+const taxDoneBtn = (key, done) => !taxCanMark() ? '' : done ? `<button class="btn sm ghost" data-tax-done="${key}" data-on="0">되돌리기</button>` : `<button class="btn sm primary" data-tax-done="${key}" data-on="1">${ic('check')}신고했어요</button>`;
+const txNum = (n, label = '') => `<button type="button" class="tx-num num" data-copy="${Math.max(0, Math.round(n))}" title="${label ? `${label} · ` : ''}눌러서 복사">${comma(Math.max(0, Math.round(n))) || '0'}<i>${ic('copy')}</i></button>`;
+
+function taxPage() {
+  const s = taxSrc(), y = +TODAY.slice(0, 4);
+  if (!TAX_M) TAX_M = shiftMonth(TODAY.slice(0, 7), -1);
+  if (!TAX_Y) TAX_Y = +TODAY.slice(5, 7) <= 5 ? y - 1 : y;
+  const list = taxDeadlines(s), next = list.find(x => !x.done), ty = taxYear(s, y, TODAY), last = taxYear(s, y - 1);
+  const acts = `<a class="btn" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 ${ic('ext')}</a><a class="btn" href="${WETAX}" target="_blank" rel="noopener">위택스 ${ic('ext')}</a>`;
+  const book = last.revenue >= TAX_SINCERE ? ['crit', '성실신고 대상'] : last.revenue >= TAX_BOOK ? ['warn', '복식부기 의무'] : ['good', '간편장부 대상'];
+  return head('세금 · 신고', '학원 장부로 세금을 미리 계산하고, 홈택스에 옮겨 적을 숫자를 신고서 순서대로 보여 줘요. 신고는 원장님이 홈택스에서 직접 "제출"만 누르면 돼요.', acts) + `
+  <div class="stats">
+    <div class="stat"><span>다음 신고</span><b class="tx-next">${next ? esc(next.title) : '지금은 없어요'}</b><small>${next ? `${md(next.due)}까지 ${ddChip(next.due)}` : '&nbsp;'}</small></div>
+    <div class="stat"><span>${y}년 들어온 돈 (지금까지)</span><b class="num">${won(ty.revenue)}</b><small class="muted">경비 ${won(ty.cost)}</small></div>
+    <div class="stat"><span>장부 방식 (${y - 1}년 수입 기준)</span><b><span class="chip ${book[0]}">${book[1]}</span></b><small class="muted">${y - 1}년 수입 ${won(last.revenue)}</small></div>
+  </div>
+  <div class="tabs fin-tabs">${TAX_TABS.map(([k, l]) => `<button class="${TAX_TAB === k ? 'on' : ''}" data-tax-tab="${k}">${l}</button>`).join('')}</div>
+  ${TAX_TAB === 'wht' ? taxWht(s) : TAX_TAB === 'biz' ? taxBiz(s) : TAX_TAB === 'income' ? taxIncome(s) : taxCal(list)}
+  <p class="muted small tx-note">${ic('help')}<span>장부에 넣은 숫자로 계산한 <b>참고용</b>이에요. 빠진 수입 · 지출이 있으면 실제 세액과 달라요. 신고 · 납부 기한이 주말이면 다음 평일이고, 공휴일이면 그다음 날이에요. 복잡한 경우(성실신고 · 세무 조정)는 세무사와 상의해 주세요.</span></p>`;
+}
+function taxCal(list) {
+  if (!list.length) return `<section class="card empty"><span class="tile-ic">${ic('calc')}</span><h2>다가오는 신고가 없어요</h2></section>`;
+  return `<section class="card"><div class="card-head"><h2>다가오는 신고</h2><span class="sub">강사 지급 · 장부를 보고 저절로 채워요</span></div>
+    <div class="list">${list.map(x => `
+      <div class="li tx-li ${x.done ? 'done' : ''}">
+        <span class="av time-av num">${md(x.due)}</span>
+        <div><div class="t">${esc(x.title)} ${x.done ? '<span class="chip good">신고 완료</span>' : ddChip(x.due)}</div>
+          <div class="d">${esc(x.org)} · ${esc(x.extra || x.desc)}</div></div>
+        <div class="r btns"><button class="btn sm" data-tax-go="${x.tab}" data-arg="${x.arg}">숫자 보기 ›</button>${taxDoneBtn(x.key, x.done)}</div>
+      </div>`).join('')}</div></section>
+  <section class="card tx-how"><div class="card-head"><h2>이렇게 신고해요</h2></div>
+    <ol class="tx-steps"><li><b>숫자 보기</b>를 눌러 신고서 칸 순서대로 숫자를 확인해요.</li><li>홈택스에 로그인해서 같은 칸에 붙여 넣어요. 숫자를 누르면 복사돼요.</li><li>제출하고 세금을 낸 뒤 여기서 <b>신고했어요</b>를 눌러 두면 다음 신고만 보여요.</li></ol></section>`;
+}
+function taxWht(s) {
+  const m = TAX_M, p = s.payIn(m), n = +m.slice(5), due = taxInfo(`wht:${m}`).due;
+  const nav = `<div class="pager"><button class="btn sm" data-tax-m="-1" aria-label="이전 달">‹</button><b>${monthLabel(m)} 지급분</b><button class="btn sm" data-tax-m="1" aria-label="다음 달">›</button></div>`;
+  if (!p.length) return `<div class="sec-row">${nav}</div><section class="card empty"><span class="tile-ic">${ic('calc')}</span><h2>${n}월에 강사에게 준 돈이 없어요</h2><p class="muted">"원천세 계산"에 강사 지급액을 넣거나 재정에 "강사 급여" 지출을 넣으면 여기 숫자가 채워져요.</p><a class="btn primary" href="#admin/payroll">원천세 계산 ›</a></section>`;
+  const groups = Object.entries(PAY_CODE).map(([k, [code, label]]) => { const l = p.filter(x => (x.kind || 'freelance') === k); return { code, label, cnt: l.length, g: sum(l, x => x.gross), it: sum(l, x => x.income_tax), lt: sum(l, x => x.local_tax) }; }).filter(g => g.cnt);
+  const tot = { cnt: p.length, g: sum(p, x => x.gross), it: sum(p, x => x.income_tax), lt: sum(p, x => x.local_tax) };
+  const fl = p.filter(x => (x.kind || 'freelance') === 'freelance'), dl = p.filter(x => x.kind === 'daily');
+  const tsv = rows => rows.map(r => r.join('\t')).join('\n');
+  return `<div class="sec-row">${nav}<span class="muted small">신고 · 납부 ${md(due)}까지 ${ddChip(due)}</span></div>
+  ${p.some(x => x.guess) ? `<p class="tx-hint">${ic('help')} 원천세 계산에 넣은 지급이 없어서 재정의 "강사 급여"를 프리랜서 3.3%로 어림했어요. <a href="#admin/payroll">원천세 계산에서 강사마다 넣기 ›</a></p>` : ''}
+  <section class="card"><div class="card-head"><h2>① 원천세 신고서 (홈택스)</h2><span class="sub">세금신고 → 원천세 신고 → 정기신고</span></div>
+    <div class="tx-form">
+      <div class="tx-r tx-h"><span>코드 · 소득 종류</span><span>인원</span><span>총지급액</span><span>소득세</span></div>
+      ${groups.map(g => `<div class="tx-r"><span><b>${g.code || '?'}</b> ${g.label}</span><span class="num">${g.cnt}</span>${txNum(g.g, '총지급액')}${txNum(g.it, '소득세')}</div>`).join('')}
+      <div class="tx-r tot"><span><b>A99</b> 총합계</span><span class="num">${tot.cnt}</span>${txNum(tot.g, '총지급액')}${txNum(tot.it, '소득세')}</div>
+    </div>
+    <div class="row-btns" style="margin-top:12px"><a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a>${taxDoneBtn(`wht:${m}`, s.done(`wht:${m}`, due))}</div></section>
+  <section class="card"><div class="card-head"><h2>② 지방소득세 (위택스)</h2><span class="sub">특별징수 · 홈택스 신고 뒤 "위택스로 바로 신고"를 눌러도 돼요</span></div>
+    <div class="tx-form"><div class="tx-r two"><span>납부할 지방소득세 (소득세의 10%)</span>${txNum(tot.lt, '지방소득세')}</div><div class="tx-r two"><span>원천징수 합계 (소득세 + 지방소득세)</span><b class="num">${won(tot.it + tot.lt)}</b></div></div></section>
+  ${fl.length ? `<section class="card"><div class="card-head"><h2>③ 간이지급명세서 (사업소득)</h2><span class="sub">${md(taxInfo(`simple:${m}`).due)}까지 · 지급명세서 → 간이지급명세서(거주자의 사업소득)</span></div>
+    <div class="tx-form"><div class="tx-r tx-h"><span>이름</span><span></span><span>지급액</span><span>소득세</span></div>
+      ${fl.map(x => `<div class="tx-r"><span>${esc(x.person_name)}</span><span></span>${txNum(x.gross, '지급액')}${txNum(x.income_tax, '소득세')}</div>`).join('')}</div>
+    <p class="muted small">주민등록번호는 여기에 저장하지 않아요. 홈택스에서 직접 넣어 주세요. 업종코드는 보통 <b>940903 (학원 강사)</b>예요.</p>
+    <div class="row-btns"><button class="btn sm" data-copy="${esc(tsv([['이름', '지급액', '소득세', '지방소득세'], ...fl.map(x => [x.person_name, x.gross, x.income_tax, x.local_tax])]))}">${ic('copy')}표 복사 (엑셀에 붙여 넣기)</button>${taxDoneBtn(`simple:${m}`, s.done(`simple:${m}`, taxInfo(`simple:${m}`).due))}</div></section>` : ''}
+  ${dl.length ? `<section class="card"><div class="card-head"><h2>④ 일용근로소득 지급명세서</h2><span class="sub">${md(taxInfo(`daily:${m}`).due)}까지</span></div>
+    <div class="tx-form"><div class="tx-r tx-h"><span>이름</span><span>근무일</span><span>지급액</span><span>소득세</span></div>
+      ${dl.map(x => `<div class="tx-r"><span>${esc(x.person_name)}</span><span class="num">${x.days || ''}</span>${txNum(x.gross, '지급액')}${txNum(x.income_tax, '소득세')}</div>`).join('')}</div>
+    <div class="row-btns" style="margin-top:12px">${taxDoneBtn(`daily:${m}`, s.done(`daily:${m}`, taxInfo(`daily:${m}`).due))}</div></section>` : ''}`;
+}
+function taxYearNav(label) {
+  const y = +TODAY.slice(0, 4);
+  return `<div class="pager"><button class="btn sm" data-tax-y="-1" aria-label="이전 해" ${TAX_Y <= y - 3 ? 'disabled' : ''}>‹</button><b>${TAX_Y}년 ${label}</b><button class="btn sm" data-tax-y="1" aria-label="다음 해" ${TAX_Y >= y ? 'disabled' : ''}>›</button></div>`;
+}
+function taxBiz(s) {
+  const y = TAX_Y, now = y === +TODAY.slice(0, 4), t = taxYear(s, y), key = `biz:${y}`, due = taxInfo(key).due;
+  return `<div class="sec-row">${taxYearNav('수입')}<span class="muted small">${now ? `올해는 아직 진행 중이라 <b>오늘까지</b> 숫자예요 · ` : ''}신고 ${y + 1}년 ${md(due)}까지 ${ddChip(due)}</span></div>
+  <section class="card"><div class="card-head"><h2>① 수입금액</h2><span class="sub">홈택스 → 세금신고 → 사업장현황신고</span></div>
+    <div class="tx-form">
+      <div class="tx-r two big"><span><b>수입금액 합계</b><small>납부 확인한 수강료 + 직접 넣은 수입${t.refund ? ` − 환불 ${won(t.refund)}` : ''}</small></span>${txNum(t.revenue, '수입금액')}</div>
+    </div></section>
+  <section class="card"><div class="card-head"><h2>② 수입금액 구성</h2><span class="sub">결제 방법별로 나눠 적어요</span></div>
+    <div class="tx-form">
+      <div class="tx-r two"><span>계산서 발행금액<small>학원은 보통 없어요</small></span><b class="num">0</b></div>
+      <div class="tx-r two"><span>신용카드 매출<small>수납에서 "카드"로 받은 수강료</small></span>${txNum(t.card, '신용카드')}</div>
+      <div class="tx-r two"><span>현금영수증 매출 · 기타 매출<small>계좌이체 · 현금 수강료 ${won(t.cashy)} + 다른 수입 ${won(t.other)}${t.refund ? ` − 환불 ${won(t.refund)}` : ''} · 이 중 현금영수증을 끊어 준 만큼은 "현금영수증", 나머지는 "기타"</small></span>${txNum(t.cashy + t.other - t.refund, '현금 · 기타')}</div>
+    </div>
+    <p class="muted small">홈택스가 카드 · 현금영수증 매출을 국세청 자료로 미리 채워 줘요. 여기 숫자와 다르면 빠진 납부 확인이 없는지 수납에서 확인해 주세요.</p></section>
+  <section class="card"><div class="card-head"><h2>③ 기본사항 (1년 경비)</h2><span class="sub">재정에 넣은 지출로 채워요</span></div>
+    <div class="tx-form">
+      <div class="tx-r two"><span>임차료<small>지출 "임대료"</small></span>${txNum(t.rent, '임차료')}</div>
+      <div class="tx-r two"><span>매입액<small>지출 "교재비 · 비품"</small></span>${txNum(t.buy, '매입액')}</div>
+      <div class="tx-r two"><span>인건비<small>지출 "강사 급여"</small></span>${txNum(t.labor, '인건비')}</div>
+      <div class="tx-r two"><span>기타 제경비<small>공과금 · 통신비 · 홍보비 · 렌탈 같은 나머지</small></span>${txNum(t.etc, '기타 제경비')}</div>
+      <div class="tx-r two tot"><span>경비 합계</span><b class="num">${won(t.cost)}</b></div>
+    </div>
+    <div class="row-btns" style="margin-top:12px">${REAL ? `<button class="btn sm" data-tax-bizdoc="${y}">${ic('sheet')}월별 수입 요약 엑셀</button>` : ''}<a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a>${now ? '' : taxDoneBtn(key, s.done(key, due))}</div></section>`;
+}
+function taxIncome(s) {
+  const y = TAX_Y, cy = +TODAY.slice(0, 4), now = y === cy, t = taxYear(s, y, now ? TODAY : `${y}-12-31`);
+  const days = now ? Math.max(1, Math.round((day0(TODAY) - day0(`${y}-01-01`)) / 864e5) + 1) : 365, k = now ? 365 / days : 1;
+  const prof = t.revenue - t.cost, yearProf = Math.round(prof * k), base = Math.max(0, yearProf - 1.5e6), it = incomeTax(base), lt = cut10(it * 0.1);
+  const rev = Math.round(t.revenue * k), key = `income:${y}`, due = taxInfo(key).due;
+  const warn = rev >= TAX_SINCERE ? `수입이 7.5억 원을 넘으면 성실신고 대상이라 세무사 확인이 꼭 필요해요.` : rev >= TAX_BOOK ? `1년 수입이 7,500만 원을 넘을 것 같아요. 그러면 다음 해부터 복식부기 장부를 써야 해요(교육서비스업 기준).` : rev >= TAX_BOOK * 0.8 ? `1년 수입이 7,500만 원에 가까워요. 넘으면 다음 해부터 복식부기 장부를 써야 해요.` : '';
+  const row = (l, v, sub = '', cls = '') => `<div class="tx-r two ${cls}"><span>${l}${sub ? `<small>${sub}</small>` : ''}</span><b class="num">${v}</b></div>`;
+  return `<div class="sec-row">${taxYearNav('소득')}<span class="muted small">신고 ${y + 1}년 ${md(due)}까지</span></div>
+  ${warn ? `<p class="tx-hint warn">${ic('help')} ${warn}</p>` : ''}
+  <section class="card tx-big"><div class="tx-est"><span>${now ? '올해 이대로 가면 내년 5월에 낼 세금' : `${y}년 소득으로 낼 세금`} (어림)</span><b class="num">${won(it + lt)}</b><small class="muted">종합소득세 ${won(it)} + 지방소득세 ${won(lt)}</small></div></section>
+  <section class="card"><div class="card-head"><h2>어떻게 계산했나요</h2><span class="sub">${now ? `1월 1일 ~ 오늘(${days}일)을 1년으로 늘려 계산했어요` : '1년 장부 그대로'}</span></div>
+    <div class="tx-form">
+      ${row('들어온 돈 (수입금액)', won(t.revenue), now ? `1년 꼴 ${won(rev)}` : '')}
+      ${row('나간 돈 (필요경비)', won(t.cost), '재정에 넣은 지출')}
+      ${row('이익 (사업소득금액)', signWon(prof), now ? `1년 꼴 ${signWon(yearProf)}` : '', 'tot')}
+      ${row('본인 기본공제', `− ${won(1.5e6)}`, '부양가족 · 노란우산 · 연금 같은 공제는 다음 단계에서 넣어요')}
+      ${row('과세표준', won(base), '', 'tot')}
+      ${row('종합소득세', won(it), base ? `세율 ${Math.round(INCOME_BRACKETS.find(([mx]) => base <= mx)[1] * 100)}% 구간` : '')}
+      ${row('지방소득세', won(lt), '종합소득세의 10%')}
+    </div>
+    ${t.tax ? `<p class="tx-hint">${ic('help')} ${now ? '올해' : `${y}년`} 장부에 "세무 · 회계"로 나간 돈이 ${won(t.tax)}이에요. 간편장부 대상이면 이 화면 숫자로 홈택스에서 직접 신고할 수 있어요.</p>` : ''}
+    <div class="row-btns" style="margin-top:12px"><a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a>${now ? '' : taxDoneBtn(key, s.done(key, due))}</div></section>`;
+}
+async function taxMark(key, on) {
+  const t = taxInfo(key);
+  if (!REAL) { const o = demoTaxMap(); o[key] = on; try { sessionStorage.setItem('asc-demo-tax', JSON.stringify(o)); } catch (e) {} render(); toast(on ? `${t.title} — 신고 완료로 표시했어요` : '되돌렸어요'); return; }
+  const p = (REAL.paperwork || []).find(x => x.auto_key === key);
+  const { error } = await (p ? SB.from('paperwork').update({ status: on ? 'done' : 'todo' }).eq('id', p.id)
+    : SB.from('paperwork').insert({ academy_id: REAL.academy.id, auto_key: key, title: t.title, org: t.org, due: t.due, status: on ? 'done' : 'todo', memo: '세금 · 신고 화면에서 표시했어요' }));
+  if (error) { toast(dbErr(error)); return; }
+  await loadPaperwork(); render(); toast(on ? `${t.title} — 신고 완료로 표시했어요 · 서류·행정에도 남아요` : '되돌렸어요');
+}
+function bindTax() {
+  on('[data-tax-tab]', b => { TAX_TAB = b.dataset.taxTab; render(); });
+  on('[data-tax-go]', b => { TAX_TAB = b.dataset.taxGo; const a = b.dataset.arg; if (TAX_TAB === 'wht') TAX_M = a; else TAX_Y = +a; render(); scrollTo(0, 0); });
+  on('[data-tax-m]', b => { TAX_M = shiftMonth(TAX_M, +b.dataset.taxM); render(); });
+  on('[data-tax-y]', b => { TAX_Y += +b.dataset.taxY; render(); });
+  on('[data-tax-done]', b => { b.disabled = true; taxMark(b.dataset.taxDone, b.dataset.on === '1'); });
+  on('[data-tax-bizdoc]', b => makePaperDoc('biz', +b.dataset.taxBizdoc));
+}
+
 function bindR19() {
+  bindTax();
   on('[data-act="renameAcad"]', renameAcademyDialog);
   on('[data-act="switchAcad"]', acadSwitchDialog);
   on('[data-act="newAcad"]', newAcademyDialog);
