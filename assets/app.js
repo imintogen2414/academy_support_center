@@ -9644,7 +9644,7 @@ async function boot() {
     useAcademy();
     await loadServices();
     if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies(), loadLeadNotes(), loadExt()]);
-    if (ROLE === 'owner') await Promise.all([loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadFixed(), loadAccounts(), loadPaperwork(), loadJobs(), loadPartnerApps(),
+    if (ROLE === 'owner') await Promise.all([loadTaxProfiles(), loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadFixed(), loadAccounts(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks(), loadPayroll(), loadAutoLogs(), loadStaffPerms(), loadCnews()]);
     // 강사: 기본 + 원장님이 켜 준 권한의 자료만 (권한이 없으면 DB도 돌려주지 않아요)
     if (ROLE === 'teacher') await Promise.all([loadPromoReqs(), loadPartnerApps(), loadMyClasses(), loadCnews(),
@@ -10662,7 +10662,7 @@ function demoTax() {
     const k = +m.slice(5), w = 1 + ((k * 7) % 5) / 50, d = n => `${m}-${String(n).padStart(2, '0')}`;
     const add = (day, kind, cat, amount, method, vary = true) => { if (d(day) <= TODAY) led.push({ day: d(day), kind, cat, amount: vary ? Math.round(amount * w / 1000) * 1000 : amount, method, memo: '', src: kind === 'out' ? 'exp' : cat === '수강료' ? 'inv' : 'inc' }); };
     add(3, 'in', '수강료', 3000000, '카드'); add(6, 'in', '수강료', 2000000, '계좌이체'); add(7, 'in', '수강료', 300000, '현금'); add(12, 'in', '교재 판매', 280000);
-    add(5, 'out', '임대료', 2200000, null, false); add(10, 'out', '공과금', 180000); add(15, 'out', '통신비', 55000, null, false); add(14, 'out', '교재비', 185000);
+    add(5, 'out', '임대료', 1600000, null, false); add(10, 'out', '공과금', 180000); add(15, 'out', '통신비', 55000, null, false); add(14, 'out', '교재비', 185000);
     add(18, 'out', '비품', 50000); add(20, 'out', '홍보비', 200000, null, false); add(25, 'out', '세무 · 회계', 150000, null, false);
     add(25, 'out', '강사 급여', 1200000, null, false); add(25, 'out', '강사 급여', 600000, null, false);
     if (`${m}-25` <= TODAY) pays[m] = [{ person_name: '김민지', kind: 'freelance', gross: 1200000, ...calcTax('freelance', 1200000) }, { person_name: '박하늘', kind: 'daily', days: 3, gross: 600000, ...calcTax('daily', 600000, 3) }];
@@ -10747,7 +10747,7 @@ function taxWht(s) {
   const fl = p.filter(x => (x.kind || 'freelance') === 'freelance'), dl = p.filter(x => x.kind === 'daily');
   const tsv = rows => rows.map(r => r.join('\t')).join('\n');
   return `<div class="sec-row">${nav}<span class="muted small">신고 · 납부 ${md(due)}까지 ${ddChip(due)}</span></div>
-  ${p.some(x => x.guess) ? `<p class="tx-hint">${ic('help')} 원천세 계산에 넣은 지급이 없어서 재정의 "강사 급여"를 프리랜서 3.3%로 어림했어요. <a href="#admin/payroll">원천세 계산에서 강사마다 넣기 ›</a></p>` : ''}
+  ${p.some(x => x.guess) ? `<p class="tx-hint">${ic('help')}<span>원천세 계산에 넣은 지급이 없어서 재정의 "강사 급여"를 프리랜서 3.3%로 어림했어요. <a href="#admin/payroll">원천세 계산에서 강사마다 넣기 ›</a></span></p>` : ''}
   <section class="card"><div class="card-head"><h2>① 원천세 신고서 (홈택스)</h2><span class="sub">세금신고 → 원천세 신고 → 정기신고</span></div>
     <div class="tx-form">
       <div class="tx-r tx-h"><span>코드 · 소득 종류</span><span>인원</span><span>총지급액</span><span>소득세</span></div>
@@ -10795,29 +10795,110 @@ function taxBiz(s) {
     </div>
     <div class="row-btns" style="margin-top:12px">${REAL ? `<button class="btn sm" data-tax-bizdoc="${y}">${ic('sheet')}월별 수입 요약 엑셀</button>` : ''}<a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a>${now ? '' : taxDoneBtn(key, s.done(key, due))}</div></section>`;
 }
+/* 종합소득세: 원장님 본인 공제(tax_profiles, 본인 것만 · 해마다 한 줄)로 계산하고 홈택스 신고 화면 순서대로 숫자를 보여 줘요.
+   간편장부 기준 · 학원 사업소득만 · 참고용. 인적공제 1명 150만(70세 이상 +100만 · 장애인 +200만) · 국민연금 전액 · 노란우산(소득 4천만 이하 600만 · 1억 이하 400만 · 넘으면 200만)
+   · 자녀세액공제(8세 이상 1명 25만 · 2명 55만 · 셋째부터 1명 40만) · 연금계좌(연 900만까지, 종합소득 4,500만 이하 15% · 넘으면 12%) · 표준세액공제 7만 · 전자신고 2만. 지역 건강보험료는 필요경비. */
+const TAX_DED_FIELDS = [
+  ['spouse', '배우자 공제', 'check', '배우자 1년 소득이 100만 원 이하일 때 (근로소득만이면 총급여 500만 원 이하)'],
+  ['deps', '부양가족 수 (배우자 빼고)', 'count', '20세 이하 자녀 · 60세 이상 부모님처럼 소득이 거의 없는 가족'],
+  ['kids8', '그중 8세 이상 자녀 수', 'count', '자녀세액공제'],
+  ['elder', '그중 70세 이상 어르신 수', 'count', '경로우대 추가공제 1명 100만 원'],
+  ['disabled', '본인 · 가족 중 장애인 수', 'count', '1명 200만 원 더'],
+  ['pension', '1년 동안 낸 국민연금', 'won', '전액 소득공제'],
+  ['health', '1년 동안 낸 지역 건강보험료', 'won', '사업자 본인 것은 필요경비로 들어가요 (재정에 지출로 넣었다면 비워 두세요)'],
+  ['yellow', '노란우산공제에 넣은 돈', 'won', '소득에 따라 200만 ~ 600만 원까지 공제'],
+  ['annuity', '연금저축 · IRP에 넣은 돈', 'won', '연 900만 원까지 12 ~ 15% 세액공제'],
+  ['prepaid', '이미 낸 중간예납 세액', 'won', '11월에 고지서로 낸 금액'],
+  ['other', '학원 말고 다른 소득이 있어요', 'check', '근로 · 임대 · 이자 · 배당(2천만 원 넘게) 소득은 합쳐서 계산해야 해서 이 화면 숫자보다 세금이 늘어요']
+];
+const YELLOW_CAP = inc => inc <= 40e6 ? 6e6 : inc <= 100e6 ? 4e6 : 2e6;
+const childCredit = n => n <= 0 ? 0 : n === 1 ? 250000 : n === 2 ? 550000 : 550000 + (n - 2) * 400000;
+const DEMO_TAX_DED = { spouse: true, deps: 1, kids8: 1, pension: 2400000, health: 1800000, yellow: 1200000, annuity: 0, prepaid: 0 };
+const demoDedMap = () => { try { return JSON.parse(sessionStorage.getItem('asc-demo-taxded') || 'null') || { [+TODAY.slice(0, 4)]: DEMO_TAX_DED, [+TODAY.slice(0, 4) - 1]: DEMO_TAX_DED }; } catch (e) { return {}; } };
+const taxDedOf = y => REAL ? ((REAL.tax_profiles || []).find(p => p.year === y) || {}).data || null : demoDedMap()[y] || null;
+const taxDedCan = () => ROLE === 'owner';
+function taxCalcIncome(t, d, k = 1) {
+  d = d || {};
+  const n = f => Math.max(0, +d[f] || 0);
+  const health = n('health'), rev = Math.round(t.revenue * k), cost = Math.round(t.cost * k) + health;
+  const prof = rev - cost, income = Math.max(0, prof);
+  const people = 1 + (d.spouse ? 1 : 0) + n('deps');
+  const person = people * 1.5e6 + n('elder') * 1e6 + n('disabled') * 2e6;
+  const pension = n('pension'), yellowCap = YELLOW_CAP(income), yellow = Math.min(n('yellow'), yellowCap);
+  const base = Math.max(0, income - person - pension - yellow), calc = incomeTax(base);
+  let left = calc; const take = v => { const x = Math.min(left, Math.round(v)); left -= x; return x; };
+  const credits = { child: take(childCredit(n('kids8'))), annuity: take(Math.min(n('annuity'), 9e6) * (income <= 45e6 ? .15 : .12)), std: take(70000), efile: take(20000) };
+  const fixed = cut10(left), local = cut10(fixed * 0.1), prepaid = n('prepaid');
+  return { rev, cost, health, prof, income, people, person, pension, yellow, yellowCap, base, calc, credits, fixed, local, prepaid, pay: fixed - prepaid };
+}
 function taxIncome(s) {
   const y = TAX_Y, cy = +TODAY.slice(0, 4), now = y === cy, t = taxYear(s, y, now ? TODAY : `${y}-12-31`);
   const days = now ? Math.max(1, Math.round((day0(TODAY) - day0(`${y}-01-01`)) / 864e5) + 1) : 365, k = now ? 365 / days : 1;
-  const prof = t.revenue - t.cost, yearProf = Math.round(prof * k), base = Math.max(0, yearProf - 1.5e6), it = incomeTax(base), lt = cut10(it * 0.1);
-  const rev = Math.round(t.revenue * k), key = `income:${y}`, due = taxInfo(key).due;
-  const warn = rev >= TAX_SINCERE ? `수입이 7.5억 원을 넘으면 성실신고 대상이라 세무사 확인이 꼭 필요해요.` : rev >= TAX_BOOK ? `1년 수입이 7,500만 원을 넘을 것 같아요. 그러면 다음 해부터 복식부기 장부를 써야 해요(교육서비스업 기준).` : rev >= TAX_BOOK * 0.8 ? `1년 수입이 7,500만 원에 가까워요. 넘으면 다음 해부터 복식부기 장부를 써야 해요.` : '';
-  const row = (l, v, sub = '', cls = '') => `<div class="tx-r two ${cls}"><span>${l}${sub ? `<small>${sub}</small>` : ''}</span><b class="num">${v}</b></div>`;
-  return `<div class="sec-row">${taxYearNav('소득')}<span class="muted small">신고 ${y + 1}년 ${md(due)}까지</span></div>
-  ${warn ? `<p class="tx-hint warn">${ic('help')} ${warn}</p>` : ''}
-  <section class="card tx-big"><div class="tx-est"><span>${now ? '올해 이대로 가면 내년 5월에 낼 세금' : `${y}년 소득으로 낼 세금`} (어림)</span><b class="num">${won(it + lt)}</b><small class="muted">종합소득세 ${won(it)} + 지방소득세 ${won(lt)}</small></div></section>
-  <section class="card"><div class="card-head"><h2>어떻게 계산했나요</h2><span class="sub">${now ? `1월 1일 ~ 오늘(${days}일)을 1년으로 늘려 계산했어요` : '1년 장부 그대로'}</span></div>
-    <div class="tx-form">
-      ${row('들어온 돈 (수입금액)', won(t.revenue), now ? `1년 꼴 ${won(rev)}` : '')}
-      ${row('나간 돈 (필요경비)', won(t.cost), '재정에 넣은 지출')}
-      ${row('이익 (사업소득금액)', signWon(prof), now ? `1년 꼴 ${signWon(yearProf)}` : '', 'tot')}
-      ${row('본인 기본공제', `− ${won(1.5e6)}`, '부양가족 · 노란우산 · 연금 같은 공제는 다음 단계에서 넣어요')}
-      ${row('과세표준', won(base), '', 'tot')}
-      ${row('종합소득세', won(it), base ? `세율 ${Math.round(INCOME_BRACKETS.find(([mx]) => base <= mx)[1] * 100)}% 구간` : '')}
-      ${row('지방소득세', won(lt), '종합소득세의 10%')}
+  const d = taxDedOf(y), c = taxCalcIncome(t, d, k), key = `income:${y}`, due = taxInfo(key).due, prevRev = taxYear(s, y - 1).revenue;
+  const dbl = prevRev >= TAX_BOOK, sincere = c.rev >= TAX_SINCERE;
+  const warn = sincere ? '수입이 7.5억 원을 넘으면 성실신고 대상이라 세무사 확인이 꼭 필요해요 (신고는 6월 30일까지).'
+    : dbl ? `${y - 1}년 수입이 7,500만 원을 넘어서 ${y}년 소득은 복식부기 장부(재무제표 · 세무 조정)로 신고해야 해요. 아래 숫자는 참고용이고, 세무사와 상의하시길 권해요.`
+    : c.rev >= TAX_BOOK ? `1년 수입이 7,500만 원을 넘을 것 같아요. 그러면 ${y + 1}년 소득부터 복식부기 장부를 써야 해요(교육서비스업 기준).`
+    : c.rev >= TAX_BOOK * 0.8 ? '1년 수입이 7,500만 원에 가까워요. 넘으면 다음 해부터 복식부기 장부를 써야 해요.' : '';
+  const row = (l, v, sub = '', cls = '') => `<div class="tx-r two ${cls}"><span>${l}${sub ? `<small>${sub}</small>` : ''}</span>${typeof v === 'number' ? txNum(v, l) : `<b class="num">${v}</b>`}</div>`;
+  const step = (no, title, where, rows) => `<div class="tx-step"><div class="tx-step-h"><i>${no}</i><div><b>${title}</b>${where ? `<small>${where}</small>` : ''}</div></div>${rows ? `<div class="tx-form">${rows}</div>` : ''}</div>`;
+  const dedRows = d ? [d.spouse && '배우자', +d.deps && `부양가족 ${d.deps}명`, +d.kids8 && `8세 이상 자녀 ${d.kids8}명`, +d.elder && `70세 이상 ${d.elder}명`, +d.disabled && `장애인 ${d.disabled}명`,
+    +d.pension && `국민연금 ${won(+d.pension)}`, +d.health && `건강보험료 ${won(+d.health)}`, +d.yellow && `노란우산 ${won(+d.yellow)}`, +d.annuity && `연금저축 · IRP ${won(+d.annuity)}`, +d.prepaid && `중간예납 ${won(+d.prepaid)}`].filter(Boolean) : [];
+  const dedCard = `<section class="card"><div class="card-head"><h2>원장님 공제 정보</h2><span class="sub">${y}년 · 원장님 본인만 보여요</span></div>
+    ${!taxDedCan() ? '<p class="muted small" style="margin:0">공제 정보는 원장님 개인 정보라 원장님만 넣고 볼 수 있어요. 여기서는 본인 기본공제만 넣어 계산했어요.</p>'
+    : d ? `<div class="pick-chips tx-ded">${dedRows.length ? dedRows.map(x => `<span class="chip info">${esc(x)}</span>`).join('') : '<span class="muted small">본인 기본공제만</span>'}${d.other ? '<span class="chip warn">다른 소득 있음</span>' : ''}</div>
+      <div class="row-btns" style="margin-top:10px"><button class="btn sm" data-act="taxDed" data-year="${y}">${ic('pen')}공제 고치기</button>${REAL ? '' : '<span class="muted small">예시 계정은 이 창에서만 바뀌어요</span>'}</div>`
+    : `<p class="muted small" style="margin:0 0 10px">부양가족 · 국민연금 · 노란우산 · 연금저축을 넣으면 세금이 훨씬 정확해져요. 1년에 한 번만 넣으면 돼요.</p><button class="btn primary sm" data-act="taxDed" data-year="${y}">${ic('plus')}공제 넣기</button>`}</section>`;
+  const cr = c.credits, crSum = cr.child + cr.annuity + cr.std + cr.efile;
+  return `<div class="sec-row">${taxYearNav('소득')}<span class="muted small">신고 ${y + 1}년 ${md(due)}까지 ${now ? '' : ddChip(due)}</span></div>
+  ${warn ? `<p class="tx-hint warn">${ic('help')}<span>${warn}</span></p>` : ''}
+  ${d && d.other ? `<p class="tx-hint warn">${ic('help')}<span>다른 소득이 있으면 학원 소득과 합쳐서 세율이 정해져요. 이 화면은 학원 소득만 계산해서 실제 세금보다 적게 나와요.</span></p>` : ''}
+  <section class="card tx-big"><div class="tx-est"><span>${now ? '올해 이대로 가면 내년 5월에 낼 세금' : `${y}년 소득으로 낼 세금`} (어림)</span><b class="num">${won(Math.max(0, c.pay) + c.local)}</b>
+    <small class="muted">종합소득세 ${won(c.fixed)}${c.prepaid ? ` − 중간예납 ${won(c.prepaid)}` : ''} + 지방소득세 ${won(c.local)}${c.pay < 0 ? ` · 종합소득세 ${won(-c.pay)} 돌려받아요` : ''}</small>
+    ${now ? `<small class="muted">1월 1일 ~ 오늘(${days}일) 장부를 1년으로 늘려 계산했어요</small>` : ''}</div></section>
+  ${dedCard}
+  <section class="card"><div class="card-head"><h2>홈택스에서 이렇게 신고해요</h2><span class="sub">${now ? '내년 5월에 이 순서대로 (지금은 1년 꼴 숫자)' : '화면 순서대로 · 숫자를 누르면 복사돼요'}</span></div>
+    <div class="tx-steps2">
+    ${step(1, '신고 시작', '홈택스 → 세금신고 → 종합소득세 신고 → 일반신고 (정기신고)', '')}
+    ${step(2, '기본사항', '', row('기장의무', dbl ? '복식부기의무자' : '간편장부대상자') + row('신고유형', dbl ? '복식부기 (세무사 상담 권장)' : '간편장부') + row('소득 종류', '사업소득 (교육서비스업)'))}
+    ${step(3, '사업소득 · 간편장부 소득금액 계산서', '', row('총수입금액', c.rev, '납부 확인한 수강료 + 다른 수입 − 환불') + row('필요경비', c.cost, `재정 지출${c.health ? ` + 건강보험료 ${won(c.health)}` : ''}`) + row('사업소득금액', c.income, '', 'tot'))}
+    ${step(4, '종합소득공제', '', row('인적공제', c.person, `본인${d && d.spouse ? ' · 배우자' : ''}${d && +d.deps ? ` · 부양가족 ${d.deps}명` : ''} (${c.people}명 × 150만 원)${d && (+d.elder || +d.disabled) ? ' + 추가공제' : ''}`) + row('연금보험료공제', c.pension, '국민연금') + row('소기업 · 소상공인 공제부금', c.yellow, `노란우산 · 한도 ${won(c.yellowCap)}`) + row('과세표준', c.base, c.base ? `세율 ${Math.round(INCOME_BRACKETS.find(([mx]) => c.base <= mx)[1] * 100)}% 구간` : '', 'tot'))}
+    ${step(5, '세액계산', '', row('산출세액', c.calc) + row('자녀세액공제', cr.child, d && +d.kids8 ? `8세 이상 자녀 ${d.kids8}명` : '') + row('연금계좌세액공제', cr.annuity) + row('표준세액공제', cr.std, '특별세액공제를 받지 않는 사업자') + row('전자신고세액공제', cr.efile, '원장님이 직접 전자신고하면') + row('결정세액', c.fixed, crSum ? `세액공제 합계 ${won(crSum)}` : '', 'tot'))}
+    ${step(6, '납부할 세액', '', row('기납부세액 (중간예납)', c.prepaid) + row(c.pay < 0 ? '돌려받을 세액' : '납부할 세액', Math.abs(c.pay), c.pay < 0 ? '환급 계좌를 넣어요' : '제출한 뒤 계좌이체 · 카드로 내요', 'tot'))}
+    ${step(7, '지방소득세 (위택스)', '홈택스 신고를 마치면 나오는 "지방소득세 신고 바로가기"를 눌러요', row('지방소득세', c.local, '결정세액의 10%'))}
     </div>
-    ${t.tax ? `<p class="tx-hint">${ic('help')} ${now ? '올해' : `${y}년`} 장부에 "세무 · 회계"로 나간 돈이 ${won(t.tax)}이에요. 간편장부 대상이면 이 화면 숫자로 홈택스에서 직접 신고할 수 있어요.</p>` : ''}
-    <div class="row-btns" style="margin-top:12px"><a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a>${now ? '' : taxDoneBtn(key, s.done(key, due))}</div></section>`;
+    ${t.tax ? `<p class="tx-hint">${ic('help')}<span>${now ? '올해' : `${y}년`} 장부에 "세무 · 회계"로 나간 돈이 ${won(t.tax)}이에요.${dbl ? '' : ' 간편장부 대상이면 이 순서대로 원장님이 직접 신고할 수 있어요.'}</span></p>` : ''}
+    <div class="row-btns" style="margin-top:12px"><a class="btn sm" href="${HOMETAX}" target="_blank" rel="noopener">홈택스 열기 ${ic('ext')}</a><a class="btn sm" href="${WETAX}" target="_blank" rel="noopener">위택스 열기 ${ic('ext')}</a>${now ? '' : taxDoneBtn(key, s.done(key, due))}</div></section>`;
 }
+function taxDedDialog(y) {
+  const cur = taxDedOf(y) || {}, d = dialogEl();
+  const field = ([k, l, type, sub]) => type === 'check'
+    ? `<label class="chk-line"><input type="checkbox" name="${k}" ${cur[k] ? 'checked' : ''}><span>${l}<small class="muted" style="display:block">${sub}</small></span></label>`
+    : type === 'count' ? `<label class="f">${l}<input name="${k}" type="number" min="0" max="20" inputmode="numeric" value="${+cur[k] || ''}" placeholder="0"><small class="muted">${sub}</small></label>`
+    : `<label class="f">${l}<span class="won-wrap"><input name="${k}" class="won-in" inputmode="numeric" value="${+cur[k] ? comma(cur[k]) : ''}" placeholder="0"><i>원</i></span><small class="muted">${sub}</small></label>`;
+  d.innerHTML = `<form method="dialog" class="dlg" id="tdForm" novalidate>
+    <h2>${y}년 공제 정보</h2>
+    <p class="muted small" style="margin:0">원장님 본인 것만 저장되고 다른 사람(강사 · 다른 원장)은 볼 수 없어요. 홈택스 "연말정산 간소화"나 국민연금 · 건강보험 납부 내역에서 금액을 확인할 수 있어요.</p>
+    <h3 class="tx-dh">가족</h3>${TAX_DED_FIELDS.slice(0, 5).map(field).join('')}
+    <h3 class="tx-dh">낸 돈</h3><div class="two">${TAX_DED_FIELDS.slice(5, 10).map(field).join('')}</div>
+    <h3 class="tx-dh">그 밖에</h3>${field(TAX_DED_FIELDS[10])}
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div></form>`;
+  d.showModal();
+  const f = $('#tdForm'), el = f.elements;
+  $('#dlgCancel').onclick = () => d.close();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const data = {};
+    TAX_DED_FIELDS.forEach(([k, , type]) => { data[k] = type === 'check' ? el[k].checked : type === 'count' ? Math.min(20, Math.max(0, Math.round(+el[k].value || 0))) : Math.max(0, numOf(el[k].value) || 0); });
+    if (data.kids8 + data.elder > data.deps + (data.spouse ? 1 : 0) + 1) { const m = $('#dlgMsg'); m.textContent = '8세 이상 자녀 · 70세 이상 어르신은 부양가족 수 안에 들어가요. 부양가족 수를 확인해 주세요.'; m.hidden = false; return; }
+    if (!REAL) { const o = demoDedMap(); o[y] = data; try { sessionStorage.setItem('asc-demo-taxded', JSON.stringify(o)); } catch (x) {} d.close(); render(); toast('공제 정보를 넣었어요 (예시 계정은 이 창에서만)'); return; }
+    const { error } = await SB.from('tax_profiles').upsert({ academy_id: REAL.academy.id, year: y, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id,academy_id,year' });
+    if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
+    d.close(); await loadTaxProfiles(); render(); toast('공제 정보를 저장했어요 · 세금을 다시 계산했어요');
+  };
+}
+const loadTaxProfiles = () => loadRows('tax_profiles', 'year');
 async function taxMark(key, on) {
   const t = taxInfo(key);
   if (!REAL) { const o = demoTaxMap(); o[key] = on; try { sessionStorage.setItem('asc-demo-tax', JSON.stringify(o)); } catch (e) {} render(); toast(on ? `${t.title} — 신고 완료로 표시했어요` : '되돌렸어요'); return; }
@@ -10834,6 +10915,7 @@ function bindTax() {
   on('[data-tax-y]', b => { TAX_Y += +b.dataset.taxY; render(); });
   on('[data-tax-done]', b => { b.disabled = true; taxMark(b.dataset.taxDone, b.dataset.on === '1'); });
   on('[data-tax-bizdoc]', b => makePaperDoc('biz', +b.dataset.taxBizdoc));
+  on('[data-act="taxDed"]', b => taxDedDialog(+b.dataset.year));
 }
 
 function bindR19() {
