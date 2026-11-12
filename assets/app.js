@@ -259,7 +259,7 @@ function financePage() {
   if (REAL) return realFinancePage();
   const f = DATA.finance;
   const max = Math.max(...f.items.map(i => i[1]));
-  return head('재정', '10월 1일 – 25일 기준 · 수납과 급여 지급이 자동으로 반영돼요.', `<button class="btn" data-act="finReport">${ic('sheet')}재정 보고서 받기 (예시)</button><button class="btn" data-act="cashbook">${ic('sheet')}출납부</button><button class="btn" data-act="yearClose">${ic('sheet')}연간 결산서</button>`) + feedCard('bank') + `
+  return head('재정', '10월 1일 – 25일 기준 · 수납과 급여 지급이 자동으로 반영돼요.', `${ROLE === 'owner' ? `<button class="btn" data-photo="ledger" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}영수증 · 장부 사진</button>` : ''}<button class="btn" data-act="finReport">${ic('sheet')}재정 보고서 받기 (예시)</button><button class="btn" data-act="cashbook">${ic('sheet')}출납부</button><button class="btn" data-act="yearClose">${ic('sheet')}연간 결산서</button>`) + feedCard('bank') + `
   <div class="stats">
     <div class="stat"><span>수입</span><b class="num">${won(f.income * 1e4)}</b></div>
     <div class="stat"><span>지출</span><b class="num">${won(f.expense * 1e4)}</b></div>
@@ -913,7 +913,7 @@ function plansCard() {
   const ps = REAL.plans, with_ = REAL.students.filter(planOf).length;
   return `
   <section class="card" style="margin-bottom:16px">
-    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length > 1 ? `<button class="btn sm" data-act="orderPlans">${ic('move')}순서 · 묶음 정리</button>` : ''}${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}<button class="btn sm" data-photo="tuition">${ic('image')}사진으로 올리기</button><button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
+    <div class="card-head"><h2>정해 둔 수강료 ${ps.length}개</h2><span class="btns">${ps.length > 1 ? `<button class="btn sm" data-act="orderPlans">${ic('move')}순서 · 묶음 정리</button>` : ''}${ps.length ? '<button class="btn sm" data-act="applyPlan">학생에게 붙이기</button>' : ''}${ROLE === 'owner' ? `<button class="btn sm" data-photo="tuition">${ic('image')}수강료표 사진으로 넣기</button>` : ''}<button class="btn sm primary" data-act="addPlan">${ic('plus')}수강료 추가</button></span></div>
     ${ps.length ? `<div class="plans-box">${planGroups().map(([g, list], gi, all) => `${all.length > 1 || g ? `<h3 class="plan-gh" data-sort-group="${esc(g)}">${esc(g || '묶음 없음')} <small>${list.length}개</small></h3>` : ''}<div class="plan-list">${list.map(p => {
       const n = REAL.students.filter(x => x.tuition_plan_id === p.id).length;
       return `<div class="plan-item" data-sort-id="${p.id}"><button class="plan" data-edit-plan="${p.id}"><b>${esc(p.name)}</b><span class="num">${won(p.amount)}</span><small>${p.class_name ? `${esc(p.class_name)} · ` : ''}학생 ${n}명</small></button>${ps.length > 1 ? '<span class="grip" data-grip title="끌어서 순서 바꾸기 · 다른 묶음 위에 놓으면 그 묶음으로">⋮⋮</span>' : ''}</div>`;
@@ -1203,7 +1203,7 @@ function realFinancePage() {
   const unpaid = REAL.invoices.filter(i => !i.paid_at && months.has(i.month));
   const check = REAL.expenses.filter(e => e.need_check).length, fx = fixedData().filter(f => f.active);
   const more = `<details class="more-menu"><summary class="btn">더 보기 ▾</summary><div class="mm-pop"><button type="button" data-act="finReport">${ic('sheet')}재정 보고서 받기 <small>통장별 입금 · 출금 · 고정비 · 잔고</small></button><button type="button" data-act="finXlsx">${ic('download')}거래 내역만 받기 <small>이 기간 · 엑셀 · 넘버스</small></button><button type="button" data-act="cashbook">${ic('sheet')}출납부 받기 <small>이 기간 · 날짜순 · 월계 · 누계 · 잔액</small></button><button type="button" data-act="yearClose">${ic('sheet')}연간 결산서 받기 <small>월별 손익 · 항목별 · 통장 · 미수금</small></button><button type="button" data-import="bank">${ic('upload')}통장 거래내역 넣기 <small>은행에서 받은 엑셀 · 넘버스</small></button><button type="button" data-import="expenses">${ic('upload')}지출 파일로 넣기 <small>적어 둔 지출 한꺼번에</small></button></div></details>`;
-  const acts = `<button class="btn primary" data-act="addExpense">${ic('plus')}나간 돈</button><button class="btn" data-act="addIncome">${ic('plus')}들어온 돈</button><button class="btn" data-act="finReport" title="재정 보고서 양식 그대로 받아요">${ic('sheet')}재정 보고서</button>${more}`;
+  const acts = `<button class="btn primary" data-act="addExpense">${ic('plus')}나간 돈</button><button class="btn" data-act="addIncome">${ic('plus')}들어온 돈</button>${ROLE === 'owner' ? `<button class="btn" data-photo="ledger" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}영수증 · 장부 사진</button>` : ''}<button class="btn" data-act="finReport" title="재정 보고서 양식 그대로 받아요">${ic('sheet')}재정 보고서</button>${more}`;
   const bankNew = feedData().filter(f => f.source === 'bank' && f.status === 'new').length;
   const tabs = [['sum', '한눈에'], ['list', `거래 내역 ${list.length}`], ['acct', `통장 ${accts().length || ''}${bankNew ? ` · 정리 ${bankNew}` : ''}`.trim()], ['fixed', `매달 나가는 돈 ${fx.length}${check ? ' · 확인 필요' : ''}`]];
   const kinds = [['all', '전체'], ['in', '들어온 돈'], ['out', '나간 돈']], shown = list.filter(e => FIN_KIND === 'all' || e.kind === FIN_KIND);
@@ -1952,6 +1952,7 @@ const PHOTO_IMPORTS = {
       ['subject', '과목', { max: 50 }], ['room', '강의실', { max: 30 }], ['teacher_name', '담당 강사', { max: 50 }]],
     bad: r => !r.class_name ? '반 이름을 넣어 주세요' : !r.start_time || !r.end_time ? '시간을 넣어 주세요' : r.end_time <= r.start_time ? '끝나는 시간이 시작보다 늦어야 해요' : null,
     dup: r => (REAL ? REAL.timetable : DATA.timetable).some(t => t.class_name === r.class_name && +t.weekday === +r.weekday && hm(t.start_time) === r.start_time),
+    blank: ['', 1, '16:00', '17:20', '', '', ''],
     sample: [['초등 A반', 1, '15:00', '16:20', '영어 파닉스', '1강의실', '김민지'], ['초등 A반', 3, '15:00', '16:20', '영어 파닉스', '1강의실', '김민지'], ['초등 B반', 2, '16:30', '17:50', '영어 리딩', '2강의실', '김민지'],
       ['초등 B반', 4, '16:30', '17:50', '영어 리딩', '2강의실', '김민지'], ['중등 A반', 1, '18:00', '19:50', '영어 문법', '3강의실', '박서준', 1], ['중등 A반', 5, '18:00', '19:50', '영어 독해', '3강의실', '박서준']]
   },
@@ -1961,7 +1962,42 @@ const PHOTO_IMPORTS = {
     cols: [['name', '이름', { required: true, max: 50 }], ['amount', '한 달 금액', { type: 'won' }], ['class_name', '주로 쓰는 반', { max: 50 }], ['memo', '메모', { max: 200 }]],
     bad: r => !r.name ? '이름을 넣어 주세요' : !(r.amount > 0) ? '금액을 넣어 주세요' : null,
     dup: r => (REAL ? REAL.plans || [] : []).some(p => p.name === r.name && p.amount === r.amount),
-    sample: [['초등 주 2회', 220000, '', '교재비 별도'], ['초등 주 3회', 300000, '초등 B반', '교재비 별도'], ['중등 주 3회', 340000, '중등 A반', ''], ['고등 내신반', 420000, '', '시험 기간 보강 포함', 1]]
+    sample: [['초등 주 2회', 220000, '', '교재비 별도'], ['초등 주 3회', 300000, '초등 B반', '교재비 별도'], ['중등 주 3회', 340000, '중등 A반', ''], ['고등 내신반', 420000, '', '시험 기간 보강 포함', 1]],
+    blank: ['', 0, '', '']
+  },
+  // 원생 명단: 종이 명부 · 상담 카드 · 다른 프로그램 화면 캡처 (성인 학원은 학부모 칸 대신 연락처)
+  students: {
+    title: '원생 명단 사진으로 넣기', what: '원생', table: 'students', after: () => loadStudents(),
+    hint: '종이 명부 · 출석부 · 다른 프로그램의 명단 화면을 찍어 주세요. 이름 · 학년 · 반 · 연락처가 보이면 돼요.',
+    get cols() { return famOn() ? [['name', '이름', { required: true, max: 30 }], ['grade', '학년', { max: 20 }], ['class_name', '반', { max: 50 }], ['parent_name', '학부모', { max: 30 }], ['parent_phone', '학부모 연락처', { type: 'tel' }]]
+      : [['name', '이름', { required: true, max: 30 }], ['grade', '구분', { max: 20 }], ['class_name', '반', { max: 50 }], ['phone', '연락처', { type: 'tel' }]]; },
+    fix: r => famOn() ? r : { ...r, phone: r.phone || r.parent_phone || '' },
+    bad: r => !r.name ? '이름을 넣어 주세요' : null,
+    dup: r => (REAL ? REAL.allStudents || REAL.students : DATA.students).some(x => x.name === r.name),
+    get sample() { return famOn() ? [['김하늘', '초3', '초등 A반', '김지영', '010-0000-1234'], ['이서준', '초5', '초등 B반', '이민호', '010-0000-2345'], ['박지우', '중2', '중등 A반', '', '010-0000-3456', 1]]
+      : [['김하늘', '성인 · 직장인', '토익 오전반', '010-0000-1234'], ['이서준', '대학생', '회화 저녁반', '010-0000-2345']]; },
+    get blank() { return famOn() ? ['', '', '', '', ''] : ['', '', '', '']; }
+  },
+  // 재정: 영수증 한 장 · 손으로 쓴 장부 · 통장 거래내역 캡처 → 나간 돈(지출) · 들어온 돈(수입)
+  ledger: {
+    title: '영수증 · 장부 사진으로 넣기', what: '거래', table: 'expenses', after: () => Promise.all([loadExpenses(), loadIncomes()]),
+    hint: '영수증 · 손으로 쓴 장부 · 통장 거래내역 화면을 찍어 주세요. 날짜와 금액이 보이면 돼요. (수강료는 수납에서 납부 확인하면 저절로 들어와요)',
+    cols: [['day', '날짜', { type: 'date' }], ['kind', '구분', { type: 'select', options: [['out', '나간 돈'], ['in', '들어온 돈']] }],
+      ['category', '항목', { type: 'select', options: [{ group: '나간 돈', options: EXP_CATS }, { group: '들어온 돈', options: INC_CATS }] }], ['amount', '금액', { type: 'won' }], ['memo', '내용', { max: 200 }]],
+    fix: r => { const k = r.kind === 'in' ? 'in' : 'out', cats = k === 'in' ? INC_CATS : EXP_CATS;
+      const cat = cats.includes(r.category) ? r.category : k === 'in' ? (/교재/.test(r.memo || '') ? '교재 판매' : /특강/.test(r.memo || '') ? '특강' : '기타') : ((EXP_RULES.find(([re]) => re.test(r.memo || '')) || [])[1] || '기타');
+      return { ...r, kind: k, category: cat, day: /^\d{4}-\d{2}-\d{2}$/.test(r.day || '') ? r.day : TODAY }; },
+    bad: r => !r.day ? '날짜를 넣어 주세요' : !(r.amount > 0) ? '금액을 넣어 주세요' : (r.kind === 'in' ? !INC_CATS.includes(r.category) : !EXP_CATS.includes(r.category)) ? `${r.kind === 'in' ? '들어온 돈' : '나간 돈'} 항목을 골라 주세요` : null,
+    dup: r => REAL ? (r.kind === 'in' ? REAL.incomes : REAL.expenses).some(x => x.day === r.day && x.amount === r.amount) : false,
+    save: async ok => {
+      const pick = (k, cats) => ok.filter(r => (r.kind === 'in') === (k === 'in')).map(r => ({ academy_id: REAL.academy.id, day: r.day, category: cats.includes(r.category) ? r.category : '기타', amount: r.amount, memo: r.memo || null }));
+      const ex = pick('out', EXP_CATS), inc = pick('in', INC_CATS);
+      if (ex.length) { const { error } = await SB.from('expenses').insert(ex); if (error) return error; }
+      if (inc.length) { const { error } = await SB.from('incomes').insert(inc); if (error) return error; }
+      return null;
+    },
+    sample: [[TODAY.slice(0, 8) + '05', 'out', '임대료', 2200000, '상가 월세'], [TODAY.slice(0, 8) + '10', 'out', '공과금', 182300, '전기요금'], [TODAY.slice(0, 8) + '12', 'in', '교재 판매', 299000, '교재 10권'], [TODAY.slice(0, 8) + '15', 'out', '비품', 12800, '다이소 · 문구', 1]],
+    blank: [TODAY, 'out', '기타', 0, '']
   }
 };
 // 사진을 긴 쪽 1600px JPEG로 줄여요 (보내는 시간 · 크기 줄이기)
@@ -2146,9 +2182,10 @@ async function readPhoto(kind, b64, level = 'auto', ocrText = '') {
 }
 function photoImportDialog(kind) {
   const cfg = PHOTO_IMPORTS[kind], d = dialogEl();
-  const toRow = x => Array.isArray(x)
+  const toRow0 = x => Array.isArray(x)
     ? Object.fromEntries([...cfg.cols.map(([k], i) => [k, x[i] ?? '']), ['unsure', !!x[cfg.cols.length]]])
-    : { ...x, start_time: x.start_time ? String(x.start_time).slice(0, 5) : '', end_time: x.end_time ? String(x.end_time).slice(0, 5) : '' };
+    : { ...x, ...(kind === 'timetable' ? { start_time: x.start_time ? String(x.start_time).slice(0, 5) : '', end_time: x.end_time ? String(x.end_time).slice(0, 5) : '' } : {}) };
+  const toRow = x => cfg.fix ? cfg.fix(toRow0(x)) : toRow0(x);
   let rows = [], photo = null, note = '', left, mode = 'free', ocrText = '';
   const PH_MODE = { free: ['info', '무료로 읽음'], manual: ['mute', '직접 넣기'], fast: ['good', 'AI로 읽음'], precise: ['good', 'AI(가장 정확하게)로 읽음'] };
   const start = async msg => {
@@ -2180,7 +2217,7 @@ function photoImportDialog(kind) {
   const reading = (title, sub) => {
     d.innerHTML = `<div class="dlg ph-reading"><img src="${photo.preview}" alt=""><div><span class="spin"></span><b>${title}</b><small class="muted" id="phProg">${sub}</small></div></div>`;
   };
-  const blankRow = () => toRow(kind === 'timetable' ? ['', 1, '16:00', '17:20', '', '', ''] : ['', 0, '', '']);
+  const blankRow = () => toRow(cfg.blank);
   // ① 무료로 읽기 (이 기기 안에서)
   const freeRead = async () => {
     reading('무료로 읽고 있어요…', '처음 한 번은 글자 파일을 받느라 20~40초쯤 걸려요. 사진은 이 기기 밖으로 나가지 않아요.');
@@ -2231,6 +2268,9 @@ function photoImportDialog(kind) {
     const v = r[k] ?? '';
     const input = o.type === 'weekday' ? `<select data-k="${k}">${WEEK.map(w => `<option value="${w}" ${+v === w ? 'selected' : ''}>${WD[w]}요일</option>`).join('')}</select>`
       : o.type === 'time' ? `<input type="time" step="300" data-k="${k}" value="${esc(v)}">`
+      : o.type === 'date' ? `<input type="date" data-k="${k}" value="${esc(v)}">`
+      : o.type === 'tel' ? `<input type="tel" inputmode="tel" data-k="${k}" maxlength="20" value="${esc(v)}" placeholder="010-0000-0000">`
+      : o.type === 'select' ? `<select data-k="${k}">${o.options.map(g => g.group ? `<optgroup label="${esc(g.group)}">${g.options.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup>` : `<option value="${esc(g[0])}" ${g[0] === v ? 'selected' : ''}>${esc(g[1])}</option>`).join('')}</select>`
       : o.type === 'won' ? `<input inputmode="numeric" data-k="${k}" value="${v ? Number(v).toLocaleString('ko-KR') : ''}" placeholder="0">`
       : `<input data-k="${k}" maxlength="${o.max || 100}" value="${esc(v)}">`;
     return `<label class="ph-f"><span>${lab}</span>${input}</label>`;
@@ -2285,7 +2325,7 @@ function photoImportDialog(kind) {
       const ok = rows.filter(r => r.on).map(r => Object.fromEntries(cfg.cols.map(([k, , o]) => [k, r[k] === '' ? null : r[k]])));
       if (!REAL) { d.close(); return toast(`예시 계정이라 저장하지 않았어요 · 실제로는 ${ok.length}개가 바로 들어가요`); }
       const btn = $('#phSave'); btn.disabled = true; btn.textContent = '저장하는 중…';
-      const { error } = await SB.from(cfg.table).insert(ok.map(r => ({ ...r, academy_id: REAL.academy.id })));
+      const error = cfg.save ? await cfg.save(ok) : (await SB.from(cfg.table).insert(ok.map(r => ({ ...r, academy_id: REAL.academy.id })))).error;
       if (error) { btn.disabled = false; btn.textContent = '다시 저장'; const m = $('#dlgMsg'); m.textContent = /service|policy|42501/i.test(`${error.code} ${error.message}`) ? '저장할 권한이 없어요. 원장님 계정인지 확인해 주세요.' : '저장하지 못했어요. 잠시 후 다시 눌러 주세요.'; m.hidden = false; return; }
       d.close(); await cfg.after(); render(); toast(`${cfg.what} ${ok.length}개를 넣었어요 · 칸을 누르면 언제든 고칠 수 있어요`);
     };
@@ -2970,9 +3010,9 @@ function schedulePage() {
   const classes = [...new Set([...tt.map(t => t.class_name)])].sort();
   const opts = [...(myClasses().length ? [['mine', ROLE === 'student' ? '내 반' : '우리 아이 반']] : []), ['all', '전체'], ...(staff ? classes.map(x => [x, x]) : [])];
   // 위쪽 버튼은 둘만: 수업 넣기 · 일정 넣기, 나머지는 "더 보기" 안에
-  const more = [ROLE === 'owner' ? `<button type="button" data-photo="timetable">${ic('image')}종이 시간표 사진으로 올리기</button>` : '', `<button type="button" data-act="ttMakeup">${ic('plus')}보강 넣기</button>`,
+  const more = [`<button type="button" data-act="ttMakeup">${ic('plus')}보강 넣기</button>`,
     `<button type="button" data-act="ttCopyWeek">${ic('cal')}다른 주 시간표 가져오기</button>`, tt.length ? `<button type="button" data-act="cleanTT">${ic('trash')}시간표 정리 · 여러 칸 지우기</button>` : ''].filter(Boolean);
-  const acts = staff ? `<button class="btn ${SCH_VIEW === 'week' ? 'primary' : ''}" data-act="addTT">${ic('plus')}수업 넣기</button><button class="btn ${SCH_VIEW === 'month' ? 'primary' : ''}" data-act="addEv">${ic('plus')}일정 넣기</button>
+  const acts = staff ? `<button class="btn ${SCH_VIEW === 'week' ? 'primary' : ''}" data-act="addTT">${ic('plus')}수업 넣기</button><button class="btn ${SCH_VIEW === 'month' ? 'primary' : ''}" data-act="addEv">${ic('plus')}일정 넣기</button>${ROLE === 'owner' ? `<button class="btn" data-photo="timetable" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}시간표 사진으로 넣기</button>` : ''}
     <details class="more-menu"><summary class="btn">더 보기 ▾</summary><div class="mm-pop">${more.join('')}</div></details>` : '';
   const todayTT = tt.filter(t => +t.weekday === day0(TODAY).getDay() && ttOn(t, mondayOf(TODAY)) && classOk(t.class_name)).sort(ttSort);
   const todayEv = ev.filter(e => evOn(e, TODAY) && classOk(e.target_class));
@@ -5324,7 +5364,7 @@ function studentsPage() {
   if (REAL) return realStudentsPage();
   const mine = DATA.students.filter(s => demoMine(s.cls));
   const list = mine.filter(s => stuMatch(STU_Q, s.name, s.cls, s.parent, s.phone, s.grade));
-  return head('원생 명단', ROLE === 'teacher' && !can('students') ? `담당 반(${DEMO_MY_CLASSES.join(' · ')}) 학생 ${mine.length}명이에요. 이름을 누르면 학생 한 명을 자세히 봐요.` : `원생 ${DATA.academy.students}명 · 이름을 누르면 한 학생의 출결 · 수납 · 연락처를 한 화면에서 봐요. 번호를 누르면 전화가 걸려요.`) + stuFilterBar([...new Set(mine.map(s => s.cls))].sort(), list.length) + famSwitch('card') + `
+  return head('원생 명단', ROLE === 'teacher' && !can('students') ? `담당 반(${DEMO_MY_CLASSES.join(' · ')}) 학생 ${mine.length}명이에요. 이름을 누르면 학생 한 명을 자세히 봐요.` : `원생 ${DATA.academy.students}명 · 이름을 누르면 한 학생의 출결 · 수납 · 연락처를 한 화면에서 봐요. 번호를 누르면 전화가 걸려요.`, `${ROLE === 'owner' ? `<button class="btn" data-photo="students" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}명단 사진으로 넣기</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`) + stuFilterBar([...new Set(mine.map(s => s.cls))].sort(), list.length) + famSwitch('card') + `
   <section class="card"><div class="table">
     <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>${ROLE === 'teacher' ? '' : '10월 수납'}</span></div>
     ${list.map(s => `
@@ -5524,7 +5564,7 @@ function mgXlsx(n) {
 function realStudentsPage() {
   const all = REAL.allStudents, inView = s => STU_ST === 'all' || (s.status || 'active') === STU_ST;
   const list = all.filter(s => inView(s) && stuMatch(STU_Q, s.name, s.class_name, s.parent_name, s.parent_phone, s.grade, s.memo)), canEdit = can('students'), bill = can('billing');
-  const add = `${canEdit ? `<button class="btn" data-act="roster">${ic('users')}원생 정리</button><button class="btn" data-act="quickStudents">${ic('plus')}여러 명 빠르게 넣기</button><button class="btn" data-import="students" title="엑셀에 적어 둔 명단을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button>` : ''}${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="parent">${ic('chat')}단체 문자</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
+  const add = `${ROLE === 'owner' ? `<button class="btn" data-photo="students" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}명단 사진으로 넣기</button>` : ''}${canEdit ? `<button class="btn" data-act="roster">${ic('users')}원생 정리</button><button class="btn" data-act="quickStudents">${ic('plus')}여러 명 빠르게 넣기</button><button class="btn" data-import="students" title="엑셀에 적어 둔 명단을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button>` : ''}${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="parent">${ic('chat')}단체 문자</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
   const by = x => x.added_by_role === 'teacher' ? `<span class="d small" style="display:block;margin-top:2px">${esc(x.added_by_name || '강사')} 선생님이 추가</span>` : '';
   const body = (all.length ? rosterSummary() + stuStatusBar() : '') + (list.length ? stuFilterBar(allClassNames(), list.length) + `
   <section class="card"><div class="table">

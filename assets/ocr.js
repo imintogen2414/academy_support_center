@@ -33,10 +33,10 @@ async function ocrRead(kind, image, onProg) {
       await w.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: '1' });
       const { data } = await w.recognize(pre, {}, { text: true, blocks: true });
       const lines = ocrLines(data);
-      return { rows: kind === 'timetable' ? ttFromOcr(lines) : feeFromOcr(lines), text: (data.text || '').slice(0, 4000), lines: lines.length };
+      return { rows: (OCR_KINDS[kind] || feeFromOcr)(lines), text: (data.text || '').slice(0, 4000), lines: lines.length };
     };
     // 두 방식으로 읽고 점수가 높은 쪽: 확실한 줄 2점 · 짐작한 줄 1점 · 이름에 한글이 있으면 1점 더
-    const score = r => r.rows.reduce((a, x) => a + (x.unsure ? 1 : 2) + (/[가-힣]/.test(x.class_name || x.name || '') ? 1 : 0), 0);
+    const score = r => r.rows.reduce((a, x) => a + (x.unsure ? 1 : 2) + (/[가-힣]/.test(x.class_name || x.name || x.memo || '') ? 1 : 0), 0);
     let best = await once('6');
     const alt = await once('11');
     if (score(alt) > score(best)) best = alt;
@@ -115,7 +115,15 @@ function ocrDays(s) {
 const cutSpans = (s, spans) => { let out = s; [...spans].sort((a, b) => b[0] - a[0]).forEach(([a, b]) => { out = out.slice(0, a) + ' ' + out.slice(b); }); return out; };
 // 한글 띄어쓰기 다듬기: "주 2 회" → "주2회", "내 신반" → "내신반"(한 글자만 떨어져 나온 것은 뒤에 붙여요)
 const tidyKo = s => s.replace(/(^|\s)([가-힣]?)\s?(\d{1,2})\s(회|시간|일|개월|학년|반)(?=\s|$)/g, '$1$2$3$4')
-  .replace(/(^|\s)([가-힣])\s(?=[가-힣]{1,3}(\s|$))/g, '$1$2');
+  .split(' ').reduce((o, t, i, a) => {
+    // 한 글자씩 떨어진 한글: 두 개 넘게 이어지면 서로 붙이고("다 이 소" → "다이소"), 하나만 있으면 뒤 낱말에 붙여요("내 신반" → "내신반")
+    const one = x => /^[가-힣]$/.test(x || '');
+    if (one(t) && one(a[i - 1])) o[o.length - 1] += t;
+    else if (o.glue) { o[o.length - 1] += t; o.glue = false; }
+    else o.push(t);
+    if (one(t) && !one(a[i - 1]) && !one(a[i + 1]) && /^[가-힣]{1,3}$/.test(a[i + 1] || '')) o.glue = true;
+    return o;
+  }, []).join(' ');
 const cleanName = s => tidyKo(s).replace(/^[^0-9A-Za-z가-힣]+/, '').replace(/[~\-:,()[\]{}·/]+/g, ' ').replace(/\b(요일|시간|수업|부터|까지)\b/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50);
 
 // 시간표: 한 줄짜리 목록("초등A반 월수금 15:00~16:20 영어")이 먼저, 안 되면 요일이 위에 늘어선 격자표
@@ -228,4 +236,68 @@ function moneyX(l, m) {
 }
 // 무료 결과가 쓸 만한지: 줄이 있고 "확인 필요"가 절반 아래
 const ocrGood = rows => rows.length > 0 && rows.filter(r => r.unsure).length / rows.length < 0.5;
-if (typeof module !== 'undefined') module.exports = { ttFromOcr, feeFromOcr, ocrTimes, ocrDays, ocrMoney, ocrGood };
+// 원생 명단: 줄마다 이름(한글 2~4자) · 학년(초3 · 중2 · 고1 …) · 반(…반) · 연락처(010-…). 첫 번호는 학부모, 둘째는 학생 본인
+const PHONE_RE = /(01[016789])[-\s.]?(\d{3,4})[-\s.]?(\d{4})/g;
+const ocrPhone = m => `${m[1]}-${m[2]}-${m[3]}`;
+const HEAD_WORDS = /^(이름|성명|학생|학생명|원생|학년|반|연락처|전화|전화번호|휴대폰|학부모|보호자|부모|번호|비고|메모|명단|원생명단|수강생|구분|등록일|생년월일)$/;
+function normGrade(t) {
+  let m = t.match(/(초|중|고)(?:등)?\s?(\d)(?:\s?학년)?/);
+  if (m) return `${m[1]}${m[2]}`;
+  if ((m = t.match(/(\d)\s?학년/))) return `초${m[1]}`;
+  if (/미취학|유치/.test(t)) return '미취학';
+  if (/성인|직장/.test(t)) return '성인 · 직장인';
+  if (/대학/.test(t)) return '대학생';
+  return '';
+}
+function stuFromOcr(lines) {
+  const rows = [];
+  lines.forEach(l => {
+    const ps = [...l.text.matchAll(PHONE_RE)];
+    let rest = l.text; ps.forEach(m => { rest = rest.replace(m[0], ' '); });
+    const gm = rest.match(/(초|중|고)(등)?\s?\d(\s?학년)?|\d\s?학년|미취학|유치부|성인|직장인|대학생/);
+    const grade = gm ? normGrade(gm[0]) : '';
+    if (gm) rest = rest.replace(gm[0], ' ');
+    const cm = rest.match(/[0-9A-Za-z가-힣]*반(?=\s|$)/);
+    const cls = cm && cm[0] !== '반' ? cm[0] : '';
+    if (cm) rest = rest.replace(cm[0], ' ');
+    const names = rest.split(/[\s,·()]+/).map(w => w.replace(/[^가-힣]/g, '')).filter(w => /^[가-힣]{2,4}$/.test(w) && !HEAD_WORDS.test(w));
+    if (!names.length || (!ps.length && !grade && !cls)) return; // 제목 · 머리줄은 건너뛰어요
+    rows.push({ name: names[0], grade, class_name: cls, parent_name: names[1] && !/어머니|아버지|모$|부$/.test(names[1]) ? names[1] : '', parent_phone: ps[0] ? ocrPhone(ps[0]) : '', phone: ps[1] ? ocrPhone(ps[1]) : '', unsure: !ps.length });
+  });
+  return rows;
+}
+// 재정: 장부 · 통장 거래내역은 줄마다 날짜 + 금액, 영수증은 "합계 · 결제금액" 한 줄로
+const DATE_RE = /(20\d{2})\s?[.\-/년]\s?(\d{1,2})\s?[.\-/월]\s?(\d{1,2})\s?일?|(?:^|\s)(\d{1,2})\s?[./월]\s?(\d{1,2})\s?일?(?=\s|$)/;
+function ocrDate(s, year = new Date().getFullYear()) {
+  const m = s.match(DATE_RE); if (!m) return null;
+  const y = m[1] ? +m[1] : year, mo = +(m[2] || m[4]), d = +(m[3] || m[5]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return { day: `${y}-${pad2(mo)}-${pad2(d)}`, at: m.index, len: m[0].length };
+}
+function ocrWon(s) { // 영수증의 작은 금액도 (100원 이상)
+  const out = [], re = /(\d{1,3}(?:,\d{3})+|\d{3,8})\s*원?/g; let m;
+  while ((m = re.exec(s))) { const v = +m[1].replace(/,/g, ''); if (v >= 100 && v <= 100000000 && !/^(19|20)\d\d$/.test(m[1])) out.push({ v, at: m.index, end: m.index + m[0].length }); }
+  return out;
+}
+function ledgerFromOcr(lines) {
+  const today = new Date(), ymdT = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+  const total = lines.find(l => /합\s?계|총\s?액|결제\s?금액|받을\s?금액|청구\s?금액|총\s?결제/.test(l.text) && ocrWon(l.text).length);
+  if (total) { // 영수증 한 장 = 한 줄
+    const dt = lines.map(l => ocrDate(l.text)).find(Boolean), ws = ocrWon(total.text);
+    const store = lines.find(l => /[가-힣]{2,}/.test(l.text) && !ocrWon(l.text).length);
+    return [{ day: dt ? dt.day : ymdT, kind: 'out', category: '', amount: ws[ws.length - 1].v, memo: cleanName(store ? store.text : '영수증'), unsure: !dt }];
+  }
+  const rows = [];
+  lines.forEach(l => {
+    const dt = ocrDate(l.text); if (!dt) return;
+    const rest = l.text.slice(0, dt.at) + ' ' + l.text.slice(dt.at + dt.len), ws = ocrWon(rest).filter(w => !/\d{1,2}:\d{2}/.test(rest.slice(Math.max(0, w.at - 3), w.end + 3)));
+    if (!ws.length) return;
+    const isIn = /입금|수입|받음|이자|환급|\+/.test(rest) && !/출금|지출|결제|이체출금/.test(rest);
+    let memo = rest; ws.forEach(w => { memo = memo.replace(rest.slice(w.at, w.end), ' '); });
+    memo = cleanName(memo.replace(/입금|출금|지출|수입|잔액|거래|\d{1,2}:\d{2}(:\d{2})?/g, ' '));
+    rows.push({ day: dt.day, kind: isIn ? 'in' : 'out', category: '', amount: ws[0].v, memo, unsure: ws.length > 2 || !memo });
+  });
+  return rows;
+}
+const OCR_KINDS = { timetable: ttFromOcr, tuition: feeFromOcr, students: stuFromOcr, ledger: ledgerFromOcr };
+if (typeof module !== 'undefined') module.exports = { ttFromOcr, feeFromOcr, stuFromOcr, ledgerFromOcr, ocrTimes, ocrDays, ocrMoney, ocrGood };

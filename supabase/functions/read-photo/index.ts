@@ -1,4 +1,4 @@
-// 사진으로 올리기 — "AI로 더 정확하게 읽기": 시간표 · 수강료표 사진을 Claude가 읽어서 표(JSON)로 돌려줘요.
+// 사진으로 넣기 — "AI로 더 정확하게 읽기": 시간표 · 수강료표 · 원생 명단 · 영수증 · 장부 사진을 Claude가 읽어서 표(JSON)로 돌려줘요.
 // (먼저 화면이 이 기기 안에서 무료로 읽고, 틀릴 때만 여기로 와요. 무료로 읽은 글자 ocr_text도 참고로 받아요.)
 // 원장만 쓸 수 있고, 학원마다 한 달 10장까지예요(센터 관리자는 제한 없음 · start_photo_read). 읽기에 실패하면 장수를 되돌려요.
 // 비용을 아끼려고 level auto는 빠르고 싼 Claude Haiku 5.5(effort low)로 먼저 읽고, 줄이 없거나 "확인 필요"가 30% 이상이면
@@ -77,6 +77,62 @@ const KINDS: Record<string, { schema: Record<string, unknown>; prompt: string }>
 - 글씨가 흐리거나 짐작한 칸이 있으면 unsure를 true로.
 - note: 못 읽은 부분이나 원장님이 확인할 점을 한두 문장으로(없으면 빈 문자열).
 수강료표가 아니면 rows를 비우고 note에 이유를 적어 주세요.`,
+  },
+  students: {
+    schema: {
+      type: "object",
+      properties: {
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { name: str, grade: str, class_name: str, parent_name: str, parent_phone: str, phone: str, unsure: { type: "boolean" } },
+            required: ["name", "grade", "class_name", "parent_name", "parent_phone", "phone", "unsure"],
+            additionalProperties: false,
+          },
+        },
+        note: str,
+      },
+      required: ["rows", "note"],
+      additionalProperties: false,
+    },
+    prompt: `이 사진은 한국 학원의 원생 명단(종이 명부 · 출석부 · 프로그램 화면)이에요. 학생 한 명을 한 줄로 모두 적어 주세요.
+- name: 학생 이름. 머리줄(이름 · 학년 · 연락처 같은 칸 이름)은 빼요.
+- grade: 학년을 이 중 하나로: 미취학, 초1~초6, 중1~중3, 고1~고3, N수생, 대학생, 성인 · 직장인. 없으면 빈 문자열.
+- class_name: 반 이름(예: 초등 A반). 없으면 빈 문자열.
+- parent_name · parent_phone: 학부모 이름 · 연락처. phone: 학생 본인 연락처. 연락처는 "010-0000-0000" 모양으로, 하나뿐이고 누구 것인지 모르면 parent_phone에.
+- 글씨가 흐리거나 짐작한 칸이 있으면 unsure를 true로.
+- note: 못 읽은 부분이나 원장님이 확인할 점을 한두 문장으로(없으면 빈 문자열).
+원생 명단이 아니면 rows를 비우고 note에 이유를 적어 주세요.`,
+  },
+  ledger: {
+    schema: {
+      type: "object",
+      properties: {
+        rows: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { day: str, kind: { type: "string", enum: ["out", "in"] }, category: str, amount: { type: "integer" }, memo: str, unsure: { type: "boolean" } },
+            required: ["day", "kind", "category", "amount", "memo", "unsure"],
+            additionalProperties: false,
+          },
+        },
+        note: str,
+      },
+      required: ["rows", "note"],
+      additionalProperties: false,
+    },
+    prompt: `이 사진은 한국 학원의 돈 기록이에요(영수증 한 장 · 손으로 쓴 장부 · 통장 거래내역 화면). 거래 하나를 한 줄로 적어 주세요.
+- 영수증 한 장이면 합계(결제 금액) 한 줄만. 물건마다 나누지 마세요.
+- day: "YYYY-MM-DD". 연도가 없으면 올해(${new Date().getFullYear()})로. 날짜가 없으면 빈 문자열로 두고 unsure를 true로.
+- kind: 학원에서 나간 돈은 "out", 들어온 돈은 "in". 통장 내역의 잔액 칸은 금액이 아니에요.
+- category: 나간 돈이면 "강사 급여", "임대료", "공과금", "통신비", "렌탈", "교재비", "비품", "홍보비", "세무 · 회계", "보험", "이자 · 할부", "구독", "차량·간식", "기타" 중 하나 그대로, 들어온 돈이면 "교재 판매", "특강", "방학 캠프", "입학금", "기타" 중 하나 그대로.
+- amount: 원 단위 정수. memo: 가게 이름 · 거래 내용(짧게).
+- 학생 수강료 입금은 수납에서 따로 관리하니 memo에 "수강료"라고 적고 unsure를 true로.
+- 글씨가 흐리거나 짐작한 칸이 있으면 unsure를 true로.
+- note: 못 읽은 부분이나 원장님이 확인할 점을 한두 문장으로(없으면 빈 문자열).
+돈 기록이 아니면 rows를 비우고 note에 이유를 적어 주세요.`,
   },
 };
 const TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
