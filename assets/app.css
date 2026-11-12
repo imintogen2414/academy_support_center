@@ -1651,3 +1651,12 @@ body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
 .tx-dh { font-size: 14px; margin: 14px 0 4px; color: var(--muted); }
 #tdForm .f small { display: block; font-size: 12px; margin-top: 3px; line-height: 1.4; }
 @media (max-width: 640px) { .tx-step .tx-form { margin-left: 0; } }
+/* 사진 읽기: 무료로 먼저 → AI로 더 정확하게 */
+.ph-how { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.ph-how b { color: var(--ink); }
+.ph-ai { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--sunk); margin: 2px 0; }
+.ph-ai > div { display: grid; gap: 2px; font-size: 14px; }
+.ph-ai small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.ph-ai .btn { flex: none; }
+.ph-ai.hot { border-color: var(--blue-500); background: var(--blue-50); }
+@media (max-width: 640px) { .ph-ai { flex-direction: column; align-items: stretch; } }

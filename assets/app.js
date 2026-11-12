@@ -1940,7 +1940,9 @@ function importDialog(kind) {
 }
 
 /* ---------- 사진으로 올리기 (시간표 · 수강료표) ----------
-   사진을 고르면 줄여서 Edge Function read-photo(Claude가 읽음)로 보내고, 읽은 줄을 칸마다 고칠 수 있게 보여 줘요.
+   사진을 고르면 먼저 이 기기 안에서 무료로 읽고(ocr.js, 사진이 밖으로 안 나가요), 틀리면 "AI로 더 정확하게 읽기"로 Edge Function read-photo에 보내요
+   (서버가 빠른 AI(Haiku)로 먼저 읽고 흐린 칸이 많으면 저절로 정확한 AI(Sonnet)로 다시 — 한 장으로 셈. "가장 정확하게 다시 읽기"는 바로 Sonnet).
+   읽은 줄은 칸마다 고칠 수 있게 보여 줘요.
    원장님이 확인하고 "저장하기"를 눌러야 들어가요. 예시 계정은 예시 결과를 보여 주고 저장은 안 해요. */
 const PHOTO_IMPORTS = {
   timetable: {
@@ -2122,21 +2124,23 @@ function shrinkPhoto(file) {
 }
 // 학원마다 한 달 10장 (센터 관리자는 제한 없음 · DB start_photo_read가 막아요)
 const PHOTO_LIMIT = 10;
+let DEMO_PHOTO_USED = 1; // 예시 계정: 이 창에서만 세요
 const photoLeft = async () => {
-  if (!REAL) return PHOTO_LIMIT - 1;
+  if (!REAL) return Math.max(0, PHOTO_LIMIT - DEMO_PHOTO_USED);
   const { data, error } = await SB.rpc('photo_read_left', { p_academy: REAL.academy.id });
   return error ? undefined : data;
 };
-const leftText = n => n === null ? '센터 관리자라 장수 제한이 없어요' : n === undefined ? '' : `이번 달 ${PHOTO_LIMIT}장 중 <b>${n}장</b> 남았어요${n ? '' : ' · 다음 달 1일에 다시 채워져요'}`;
+const leftText = n => n === null ? 'AI 읽기: 센터 관리자라 장수 제한이 없어요' : n === undefined ? '' : `AI 읽기: 이번 달 ${PHOTO_LIMIT}장 중 <b>${n}장</b> 남았어요${n ? '' : ' · 다음 달 1일에 다시 채워져요 (무료로 읽기는 계속 돼요)'}`;
 const PHOTO_ERR = {
-  no_key: '사진 읽기가 아직 준비 중이에요. 센터가 설정을 마치면 바로 쓸 수 있어요. 지금은 직접 넣거나 "엑셀 · 넘버스로 넣기"로 넣어 주세요.',
+  no_key: 'AI 읽기는 아직 준비 중이에요. 센터가 설정을 마치면 바로 쓸 수 있어요. 지금은 무료로 읽은 결과를 고치거나 직접 넣어 주세요.',
   owner_only: '사진으로 올리기는 원장님만 쓸 수 있어요.', too_big: '사진이 너무 커요. 조금 멀리서 다시 찍어 주세요.',
   busy: '지금 사진을 읽는 사람이 많아요. 잠시 후 다시 눌러 주세요.',
-  photo_limit: `이번 달 사진 ${PHOTO_LIMIT}장을 모두 썼어요. 다음 달 1일에 다시 채워져요. 지금은 직접 넣거나 "엑셀 · 넘버스로 넣기"로 넣어 주세요.`, refused: '이 사진은 읽을 수 없어요. 시간표 · 수강료표만 보이게 다시 찍어 주세요.'
+  photo_limit: `이번 달 AI 읽기 ${PHOTO_LIMIT}장을 모두 썼어요. 다음 달 1일에 다시 채워져요. 무료로 읽기 · 직접 넣기는 계속 쓸 수 있어요.`, refused: '이 사진은 읽을 수 없어요. 시간표 · 수강료표만 보이게 다시 찍어 주세요.'
 };
-async function readPhoto(kind, b64) {
-  if (!REAL) { await new Promise(r => setTimeout(r, 1200)); return { rows: PHOTO_IMPORTS[kind].sample, note: '예시 계정이라 예시 결과를 보여 드려요.', demo: true, left: PHOTO_LIMIT - 1 }; }
-  const { data, error } = await SB.functions.invoke('read-photo', { body: { kind, image: b64, media_type: 'image/jpeg', academy_id: REAL.academy.id } });
+// AI 읽기: level auto(빠른 AI → 흐리면 저절로 정확한 AI) · precise(바로 정확한 AI). 무료로 읽은 글자(ocr_text)도 함께 보내 AI가 참고해요
+async function readPhoto(kind, b64, level = 'auto', ocrText = '') {
+  if (!REAL) { await new Promise(r => setTimeout(r, 1200)); DEMO_PHOTO_USED++; return { rows: PHOTO_IMPORTS[kind].sample, note: '예시 계정이라 예시 결과를 보여 드려요.', demo: true, tier: level === 'precise' ? 'precise' : 'fast', left: Math.max(0, PHOTO_LIMIT - DEMO_PHOTO_USED) }; }
+  const { data, error } = await SB.functions.invoke('read-photo', { body: { kind, image: b64, media_type: 'image/jpeg', academy_id: REAL.academy.id, level, ocr_text: (ocrText || '').slice(0, 4000) } });
   if (error) { let code = ''; try { code = (await error.context.json()).error; } catch (e) { /* 연결 오류 */ } throw new Error(code || 'network'); }
   return data;
 }
@@ -2145,12 +2149,16 @@ function photoImportDialog(kind) {
   const toRow = x => Array.isArray(x)
     ? Object.fromEntries([...cfg.cols.map(([k], i) => [k, x[i] ?? '']), ['unsure', !!x[cfg.cols.length]]])
     : { ...x, start_time: x.start_time ? String(x.start_time).slice(0, 5) : '', end_time: x.end_time ? String(x.end_time).slice(0, 5) : '' };
-  let rows = [], photo = null, note = '', left;
+  let rows = [], photo = null, note = '', left, mode = 'free', ocrText = '';
+  const PH_MODE = { free: ['info', '무료로 읽음'], manual: ['mute', '직접 넣기'], fast: ['good', 'AI로 읽음'], precise: ['good', 'AI(가장 정확하게)로 읽음'] };
   const start = async msg => {
     d.innerHTML = `
     <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
       <h2>${cfg.title}</h2>
-      <p class="muted small" style="margin:0">${cfg.hint} 사진을 읽어 표로 먼저 채워 드려요. 저장하기 전에 칸마다 고칠 수 있어요.</p>
+      <p class="muted small" style="margin:0">${cfg.hint}</p>
+      <ol class="ph-how"><li><b>무료로 먼저 읽어요</b> — 이 기기 안에서 읽어서 사진이 밖으로 나가지 않아요. 반듯한 표 · 화면 캡처에 잘 맞아요.</li>
+        <li><b>틀리면 "AI로 더 정확하게 읽기"</b> — 손글씨 · 복잡한 표도 읽어요. 쉬운 사진은 빠른 AI로, 어려우면 저절로 더 정확한 AI로 읽어요.</li>
+        <li>저장하기 전에 칸마다 고칠 수 있어요.</li></ol>
       <div class="ph-drop">
         <label class="btn primary file-btn">${ic('plus')}사진 고르기 · 찍기<input type="file" id="phFile" accept="image/*"></label>
         <span class="muted small">JPG · PNG · 휴대폰 사진 · 화면 캡처</span>
@@ -2160,24 +2168,64 @@ function photoImportDialog(kind) {
       <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div>
     </form>`;
     $('#dlgCancel').onclick = () => d.close();
-    if (left === undefined) photoLeft().then(n => { left = n; const el = $('#phLeft'); if (el) el.innerHTML = leftText(n); if (n === 0) $('#phFile').disabled = true; });
-    else if (left === 0) $('#phFile').disabled = true;
+    if (left === undefined) photoLeft().then(n => { left = n; const el = $('#phLeft'); if (el) el.innerHTML = leftText(n); });
     $('#phFile').onchange = async e => {
       const f = e.target.files[0];
       if (!f) return;
       if (!/^image\//.test(f.type)) return start('사진 파일만 올릴 수 있어요. 엑셀은 "엑셀 · 넘버스로 넣기"를 써 주세요.');
       try { photo = await shrinkPhoto(f); } catch (err) { return start('사진을 열지 못했어요. 다른 사진으로 해 주세요. (아이폰 HEIC 사진은 캡처해서 올리면 돼요)'); }
-      reading();
-      try {
-        const res = await readPhoto(kind, photo.b64);
-        rows = (res.rows || []).map(toRow); note = res.note || ''; if (res.left !== undefined) left = res.left;
-        if (!rows.length) return start(note || '사진에서 읽을 줄을 찾지 못했어요. 더 밝고 가깝게 찍어 주세요.');
-        review();
-      } catch (err) { if (err.message === 'photo_limit') left = 0; start(PHOTO_ERR[err.message] || '사진을 읽지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요. (못 읽은 사진은 장수에서 빠지지 않아요)'); }
+      freeRead();
     };
   };
-  const reading = () => {
-    d.innerHTML = `<div class="dlg ph-reading"><img src="${photo.preview}" alt=""><div><span class="spin"></span><b>사진을 읽고 있어요…</b><small class="muted">보통 10~30초쯤 걸려요</small></div></div>`;
+  const reading = (title, sub) => {
+    d.innerHTML = `<div class="dlg ph-reading"><img src="${photo.preview}" alt=""><div><span class="spin"></span><b>${title}</b><small class="muted" id="phProg">${sub}</small></div></div>`;
+  };
+  const blankRow = () => toRow(kind === 'timetable' ? ['', 1, '16:00', '17:20', '', '', ''] : ['', 0, '', '']);
+  // ① 무료로 읽기 (이 기기 안에서)
+  const freeRead = async () => {
+    reading('무료로 읽고 있어요…', '처음 한 번은 글자 파일을 받느라 20~40초쯤 걸려요. 사진은 이 기기 밖으로 나가지 않아요.');
+    try {
+      const res = await ocrRead(kind, photo.preview, m => {
+        const el = $('#phProg'); if (!el) return;
+        if (/recogniz/.test(m.status)) el.textContent = `글자를 읽는 중 ${Math.round((m.progress || 0) * 100)}%`;
+        else if (/load|initializ/.test(m.status)) el.textContent = '무료 읽기 준비 중 (처음 한 번만 조금 걸려요)';
+      });
+      ocrText = res.text || ''; mode = 'free'; note = '';
+      rows = res.rows.map(toRow);
+      if (!rows.length) return noFree('무료로는 표를 찾지 못했어요. 손글씨나 복잡한 표는 AI가 더 잘 읽어요.');
+      review();
+    } catch (err) { noFree('이 기기에서는 무료로 읽지 못했어요(오래된 브라우저일 수 있어요). AI로 읽거나 직접 넣어 주세요.'); }
+  };
+  // 무료로 못 읽었을 때: AI로 읽기 · 직접 넣기 · 다른 사진
+  const noFree = (msg, aiDone) => {
+    d.innerHTML = `
+    <div class="dlg">
+      <h2>${cfg.title}</h2>
+      <div class="ph-top"><img src="${photo.preview}" alt="올린 사진"><div><p style="margin:0"><b>${esc(msg)}</b></p>${aiDone ? '' : `<p class="small muted" style="margin:6px 0 0">${leftText(left)}</p>`}</div></div>
+      <div class="acts"><button type="button" class="btn" id="phAgain">다른 사진</button><button type="button" class="btn" id="phManual">직접 넣기</button><span style="flex:1"></span>
+        ${aiDone ? '' : `<button type="button" class="btn primary" id="phAi" ${left === 0 ? 'disabled' : ''}>${ic('bolt')}AI로 읽기</button>`}</div>
+    </div>`;
+    $('#phAgain').onclick = () => start();
+    $('#phManual').onclick = () => { rows = [blankRow()]; mode = 'manual'; note = ''; review(); };
+    const ai = $('#phAi'); if (ai) ai.onclick = () => aiRead('auto');
+  };
+  // ② AI로 더 정확하게 읽기 (한 번 = 한 장)
+  const aiRead = async level => {
+    const keep = { rows, mode, note };
+    const back = why => { rows = keep.rows; mode = keep.mode; note = keep.note; review(why); };
+    reading(level === 'precise' ? '가장 정확한 AI로 읽고 있어요…' : 'AI가 읽고 있어요…', '보통 10~30초쯤 걸려요');
+    try {
+      const res = await readPhoto(kind, photo.b64, level, ocrText);
+      if (res.left !== undefined) left = res.left;
+      const got = (res.rows || []).map(toRow);
+      if (!got.length) return keep.rows.length ? back(res.note || 'AI도 읽을 줄을 찾지 못했어요.') : noFree(res.note || 'AI도 읽을 줄을 찾지 못했어요. 더 밝고 가깝게 찍어 주세요.', true);
+      rows = got; note = res.note || ''; mode = res.tier === 'precise' ? 'precise' : 'fast';
+      review();
+    } catch (err) {
+      if (err.message === 'photo_limit') left = 0;
+      const why = PHOTO_ERR[err.message] || '사진을 읽지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요. (못 읽은 사진은 장수에서 빠지지 않아요)';
+      if (keep.rows.length) back(why); else noFree(why, err.message === 'photo_limit' || err.message === 'no_key');
+    }
   };
   const cell = (r, i, [k, lab, o]) => {
     const v = r[k] ?? '';
@@ -2187,18 +2235,21 @@ function photoImportDialog(kind) {
       : `<input data-k="${k}" maxlength="${o.max || 100}" value="${esc(v)}">`;
     return `<label class="ph-f"><span>${lab}</span>${input}</label>`;
   };
-  const review = () => {
-    const dupN = rows.filter(r => cfg.dup(r)).length;
+  const review = (msg) => {
+    const dupN = rows.filter(r => cfg.dup(r)).length, pm = PH_MODE[mode], weak = (mode === 'free' || mode === 'manual') && !ocrGood(rows);
+    const aiBox = mode === 'precise' ? '' : `<div class="ph-ai ${weak ? 'hot' : ''}"><div><b>${mode === 'fast' ? '그래도 틀린 곳이 많나요?' : mode === 'manual' ? '사진을 AI로 읽어 채울까요?' : weak ? '흐리거나 짐작한 칸이 많아요' : '틀린 곳이 많나요?'}</b>
+      <small>${mode === 'fast' ? '가장 정확한 AI로 한 번 더 읽어요.' : 'AI가 사진을 다시 읽어요. 쉬운 사진은 빠른 AI로, 어려우면 저절로 더 정확한 AI로 읽어요.'} ${leftText(left)}</small></div>
+      <button type="button" class="btn sm ${weak ? 'primary' : ''}" id="phAi" ${left === 0 ? 'disabled' : ''}>${ic('bolt')}${mode === 'fast' ? '가장 정확하게 다시 읽기' : 'AI로 더 정확하게 읽기'}</button></div>`;
     d.innerHTML = `
     <form method="dialog" class="dlg wide" id="dlgForm" novalidate>
       <h2>${cfg.title} · 확인하고 고치기</h2>
       <div class="ph-top"><img src="${photo.preview}" alt="올린 사진"><div>
-        <p style="margin:0"><b>${rows.length}개</b>를 읽었어요. 틀린 칸은 바로 고치고, 넣지 않을 줄은 체크를 끄세요.</p>
+        <p style="margin:0"><span class="chip ${pm[0]}">${pm[1]}</span> ${mode === 'manual' ? '칸을 채워 넣어 주세요.' : `<b>${rows.length}개</b>를 읽었어요. 틀린 칸은 바로 고치고, 넣지 않을 줄은 체크를 끄세요.`}</p>
         ${rows.some(r => r.unsure) ? '<p class="small" style="margin:4px 0 0"><span class="chip warn">확인 필요</span> 표시는 흐리거나 짐작한 칸이 있는 줄이에요.</p>' : ''}
         ${dupN ? `<p class="small muted" style="margin:4px 0 0">이미 있는 ${dupN}줄은 체크를 꺼 두었어요.</p>` : ''}
         ${note ? `<p class="small muted" style="margin:4px 0 0">${esc(note)}</p>` : ''}
-        ${left !== undefined ? `<p class="small muted" style="margin:4px 0 0">${leftText(left)}</p>` : ''}
       </div></div>
+      ${aiBox}
       <div class="ph-rows">${rows.map((r, i) => `
         <div class="ph-row ${r.unsure ? 'unsure' : ''}" data-i="${i}">
           <label class="ph-on"><input type="checkbox" ${cfg.dup(r) ? '' : 'checked'}><span>${i + 1}</span></label>
@@ -2208,7 +2259,7 @@ function photoImportDialog(kind) {
         </div>`).join('')}
       </div>
       <button type="button" class="btn sm" id="phAdd">${ic('plus')}줄 더하기</button>
-      <p class="msg" id="dlgMsg" hidden></p>
+      <p class="msg" id="dlgMsg" ${msg ? '' : 'hidden'}>${msg ? esc(msg) : ''}</p>
       <div class="acts"><button type="button" class="btn" id="phAgain">다른 사진</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button>
         <button class="btn primary" id="phSave"></button></div>
     </form>`;
@@ -2222,7 +2273,8 @@ function photoImportDialog(kind) {
     f.querySelectorAll('input[inputmode=numeric]').forEach(x => x.oninput = () => { const n = numOf(x.value); x.value = n ? n.toLocaleString('ko-KR') : ''; });
     f.oninput = f.onchange = count; count();
     f.querySelectorAll('[data-ph-del]').forEach(b => b.onclick = () => { read(); rows.splice(+b.dataset.phDel, 1); review(); });
-    $('#phAdd').onclick = () => { read(); rows.push(toRow(kind === 'timetable' ? ['', 1, '16:00', '17:20', '', '', ''] : ['', 0, '', ''])); review(); };
+    $('#phAdd').onclick = () => { read(); rows.push(blankRow()); review(); };
+    const ai = $('#phAi'); if (ai) ai.onclick = () => { read(); aiRead(mode === 'fast' ? 'precise' : 'auto'); };
     $('#phAgain').onclick = () => start();
     $('#dlgCancel').onclick = () => d.close();
     f.onsubmit = async e => {
