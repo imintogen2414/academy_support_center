@@ -1,6 +1,9 @@
-// 사진으로 올리기: 시간표 · 수강료표 사진을 Claude가 읽어서 표(JSON)로 돌려줘요.
+// 사진으로 올리기 — "AI로 더 정확하게 읽기": 시간표 · 수강료표 사진을 Claude가 읽어서 표(JSON)로 돌려줘요.
+// (먼저 화면이 이 기기 안에서 무료로 읽고, 틀릴 때만 여기로 와요. 무료로 읽은 글자 ocr_text도 참고로 받아요.)
 // 원장만 쓸 수 있고, 학원마다 한 달 10장까지예요(센터 관리자는 제한 없음 · start_photo_read). 읽기에 실패하면 장수를 되돌려요.
-// 모델은 중간 모델 Claude Sonnet 5.5. 키는 코드에 쓰지 않고 Supabase 비밀 값 ANTHROPIC_API_KEY로 받아요.
+// 비용을 아끼려고 level auto는 빠르고 싼 Claude Haiku 5.5(effort low)로 먼저 읽고, 줄이 없거나 "확인 필요"가 30% 이상이면
+// 같은 요청 안에서 Claude Sonnet 5.5로 다시 읽어요(한 장으로 셈). level precise는 바로 Sonnet 5.5. 어느 쪽까지 썼는지는 photo_reads.tier.
+// 키는 코드에 쓰지 않고 Supabase 비밀 값 ANTHROPIC_API_KEY로 받아요.
 // 돌려준 줄은 화면에서 원장님이 확인 · 고친 뒤에 저장해요(여기서는 저장하지 않아요).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -88,7 +91,7 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return reply({ error: "login" }, 401);
 
-  let body: { kind?: string; image?: string; media_type?: string; academy_id?: string };
+  let body: { kind?: string; image?: string; media_type?: string; academy_id?: string; level?: string; ocr_text?: string };
   try { body = await req.json(); } catch { return reply({ error: "bad_body" }, 400); }
   const cfg = KINDS[body.kind || ""];
   const media = body.media_type || "image/jpeg";
@@ -108,27 +111,50 @@ Deno.serve(async (req) => {
   const fail = async (data: Record<string, unknown>, status: number) => { await sb.rpc("cancel_photo_read", { p_id: readId }); return reply(data, status); };
 
   const client = new Anthropic({ apiKey: key });
+  const hint = (body.ocr_text || "").slice(0, 4000).trim();
+  const prompt = cfg.prompt + (hint ? `\n\n참고: 이 기기에서 먼저 글자 인식으로 읽은 글자예요. 틀린 글자가 많을 수 있으니 사진을 기준으로 하고, 흐린 글자를 알아보는 데만 참고하세요.\n"""\n${hint}\n"""` : "");
+  const content = [
+    { type: "image", source: { type: "base64", media_type: media, data: body.image } },
+    { type: "text", text: prompt },
+  ];
+  // 한 번 읽기: 결과 { rows, note } 또는 null(거절 · 결과 없음)
+  const ask = async (tier: "fast" | "precise") => {
+    const res = tier === "fast"
+      ? await client.messages.create({
+          model: "claude-haiku-5-5",
+          max_tokens: 16000,
+          output_config: { effort: "low", format: { type: "json_schema", schema: cfg.schema } },
+          messages: [{ role: "user", content }],
+        } as any)
+      : await client.beta.messages.create({
+          model: "claude-sonnet-5-5",
+          max_tokens: 16000,
+          betas: ["server-side-fallback-2026-07-01"],
+          fallbacks: "default",
+          output_config: { format: { type: "json_schema", schema: cfg.schema } },
+          messages: [{ role: "user", content }],
+        } as any);
+    if ((res as any).stop_reason === "refusal") return null;
+    const text = (res as any).content.find((b: any) => b.type === "text");
+    if (!text) return null;
+    try { const o = JSON.parse(text.text); return { rows: Array.isArray(o.rows) ? o.rows : [], note: o.note || "" }; } catch { return null; }
+  };
+  // 빠른 AI 결과가 약하면(줄이 없거나 확인 필요가 30% 이상) 정확한 AI로
+  const weak = (o: { rows: any[] } | null) => !o || !o.rows.length || o.rows.filter((r) => r.unsure).length / o.rows.length >= 0.3;
   try {
-    const res = await client.beta.messages.create({
-      model: "claude-sonnet-5-5",
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { format: { type: "json_schema", schema: cfg.schema } },
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: media, data: body.image } },
-          { type: "text", text: cfg.prompt },
-        ],
-      }],
-    } as any);
-    if (res.stop_reason === "refusal") return fail({ error: "refused" }, 422);
-    const text = res.content.find((b: any) => b.type === "text") as any;
-    if (!text) return fail({ error: "no_result" }, 502);
-    const out = JSON.parse(text.text);
+    let tier: "fast" | "precise" = body.level === "precise" ? "precise" : "fast";
+    let out: { rows: any[]; note: string } | null = null;
+    if (tier === "fast") {
+      try { out = await ask("fast"); } catch (e) {
+        if (e instanceof Anthropic.RateLimitError || e instanceof Anthropic.AuthenticationError) throw e;
+        out = null; // 빠른 AI가 안 되면 정확한 AI로
+      }
+      if (weak(out)) { const better = await ask("precise"); tier = "precise"; if (better && (!out || better.rows.length)) out = better; }
+    } else out = await ask("precise");
+    if (!out) return fail({ error: "refused" }, 422);
+    await sb.rpc("note_photo_read", { p_id: readId, p_tier: tier });
     const left = await sb.rpc("photo_read_left", { p_academy: body.academy_id });
-    return reply({ rows: out.rows || [], note: out.note || "", left: left.error ? undefined : left.data });
+    return reply({ rows: out.rows, note: out.note, tier, left: left.error ? undefined : left.data });
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return fail({ error: "busy" }, 429);
     if (e instanceof Anthropic.AuthenticationError) return fail({ error: "no_key" }, 503);

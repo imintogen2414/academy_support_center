@@ -8,6 +8,10 @@
   "dependencies": {
     "@e965/xlsx": "0.20.3",
     "@supabase/supabase-js": "2.117.0",
-    "qrcode-generator": "2.0.4"
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/kor": "1.0.0",
+    "qrcode-generator": "2.0.4",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0"
   }
 }

@@ -19,6 +19,11 @@ cpSync('node_modules/qrcode-generator/dist/qrcode.js', `${out}/assets/vendor/qrc
 // 넘버스(.numbers) 읽기 · 쓰기 — SheetJS 0.20.3 (Apache-2.0, npm @e965/xlsx). 넘버스 파일을 고를 때만 불러와요
 cpSync('node_modules/@e965/xlsx/dist/xlsx.full.min.js', `${out}/assets/vendor/xlsx.full.min.js`);
 cpSync('node_modules/@e965/xlsx/dist/xlsx.zahl.js', `${out}/assets/vendor/xlsx.zahl.js`);
+// 사진 무료로 읽기 — Tesseract.js 7 (Apache-2.0) + 한글 · 영어 글자 파일(best_int). LSTM 읽기 프로그램 3가지(기기에 맞는 것 하나만 받아요). 사진을 고를 때만 불러와요
+mkdirSync(`${out}/assets/vendor/tess/lang`, { recursive: true });
+for (const f of ['tesseract.min.js', 'worker.min.js']) cpSync(`node_modules/tesseract.js/dist/${f}`, `${out}/assets/vendor/tess/${f}`);
+for (const f of ['tesseract-core-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js']) cpSync(`node_modules/tesseract.js-core/${f}`, `${out}/assets/vendor/tess/${f}`);
+for (const l of ['kor', 'eng']) cpSync(`node_modules/@tesseract.js-data/${l}/4.0.0_best_int/${l}.traineddata.gz`, `${out}/assets/vendor/tess/lang/${l}.traineddata.gz`);
 
 // 4) 검색 노출: 분야마다 제목 · 설명이 들어간 페이지(/area/admin → area/admin.html, /jobs → jobs.html, vercel.json이 이어 줘요) + robots.txt · sitemap.xml
 const SITE = 'https://academysupportcenter.vercel.app';
