@@ -4463,6 +4463,8 @@ function settingsPage() {
   }
   const tm = themeMode();
   const app = card('화면 · 사용', `
+    <div class="set-line"><div><b>간단히 보기</b><small>켜면 메뉴 · 홈 · 안내를 꼭 필요한 것만 보여요 · 끄면 묶음 · 설명 · 안내를 모두 보여요 (이 기기에 저장)</small></div>
+      <label class="switch"><input type="checkbox" data-act="simpleMode" ${SIMPLE() ? 'checked' : ''}><span></span></label></div>
     <div class="set-line"><div><b>화면 밝기</b><small>기기 설정을 따르거나 밝게 · 어둡게 고정해요</small></div>
       <div class="seg">${[['system', '기기 설정'], ['light', '밝게'], ['dark', '어둡게']].map(([k, l]) => `<button class="${tm === k ? 'on' : ''}" data-theme-set="${k}">${l}</button>`).join('')}</div></div>
     <div class="set-line"><div><b>로그인 유지하기</b><small>끄면 다음 로그인부터 창을 닫을 때 로그아웃돼요 · 공용 PC라면 꺼 주세요</small></div>
@@ -8126,7 +8128,8 @@ let NAV_OPEN = (() => { try { return JSON.parse(localStorage.getItem('asc-nav') 
 function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
-  const set = `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
+  const set = SIMPLE() ? `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
+    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `<button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 초대 코드</span></button>` : ''}<button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>` : `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
     <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `${can('invite') && MY && MY.members ? `<a class="nav-item" href="#members/invite">${ic('users')}<span>초대하기 (코드 · 링크)</span></a>` : ''}<button type="button" class="nav-item" data-act="joinAcad">${ic('plus')}<span>초대 코드 넣기</span></button><button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
   if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   // 센터 관리자(학원 없이): 센터 관리 세부 메뉴를 종류별 묶음으로 바로
@@ -8140,7 +8143,7 @@ function navHtml(area, badge) {
     }).join('') + `<div class="nav-group open"><div class="nav-gi">${item('messages', MY.messages.name, MY.messages.icon)}</div></div>` + set;
   }
   const gs = navGroups();
-  if (Object.keys(MY).length <= 4) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('') + set;
+  if (Object.keys(MY).length <= 4 || SIMPLE()) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('') + set;
   // 처음엔 모든 묶음을 펼쳐 두고, 접은 묶음은 기억해요 (지금 보는 메뉴가 든 묶음은 늘 펼침)
   return item('home', '홈', 'home') + gs.map(([label, , ids], i) => {
     const open = !NAV_OPEN || NAV_OPEN[label] !== false || ids.includes(area);
@@ -8216,6 +8219,10 @@ const howtoKeyOf = key => ROLE === 'partner' && HOWTO_PARTNER[key] ? HOWTO_PARTN
 const howtoSteps = key => { const h = HOWTO[howtoKeyOf(key)]; if (!h) return null; const r = Array.isArray(h) ? h : h[ROLE] || (key.startsWith('center/') ? h.admin : ROLE === 'teacher' ? h.owner : null); return r && r.length ? r : null; };
 const howtoStore = key => `asc-howto-${ROLE}-${key}`;
 const howtoHidden = key => { try { return localStorage.getItem(howtoStore(key)) === '1'; } catch (e) { return false; } };
+// 이번에 연 동안은 계속 보이고(다시 그려도), 다음에 열 때부터 접혀요
+const HOWTO_NOW = new Set();
+const howtoSeen = key => { if (HOWTO_NOW.has(key)) return false; try { return localStorage.getItem(`asc-hseen-${ROLE}-${key}`) === '1'; } catch (e) { return false; } };
+const howtoMarkSeen = key => { HOWTO_NOW.add(key); try { localStorage.setItem(`asc-hseen-${ROLE}-${key}`, '1'); } catch (e) { /* 다음에도 보여요 */ } };
 const howtoHiddenAll = () => { try { return Object.keys(localStorage).filter(k => k.startsWith(`asc-howto-${ROLE}-`)); } catch (e) { return []; } };
 let HOWTO_OPEN = ''; // 숨긴 안내를 "사용법" 버튼으로 잠깐 연 화면
 const howtoList = steps => `<ol class="howto-steps">${steps.map(([t, d], i) => `<li><span class="n">${i + 1}</span><div><b>${t}</b><small>${d}</small></div></li>`).join('')}</ol>`;
@@ -8238,8 +8245,8 @@ function addHowto(parts) {
   const key = parts.slice(0, 2).filter(Boolean).join('/'), steps = howtoSteps(key), ph = $('#view .page-head'), kind = stateKind(key);
   let html = '';
   if (steps) {
-    const hidden = howtoHidden(key);
-    if (!hidden || HOWTO_OPEN === key) html += howtoCard(key, steps, hidden);
+    const hidden = howtoHidden(key) || (SIMPLE() && howtoSeen(key));
+    if (!hidden || HOWTO_OPEN === key) { html += howtoCard(key, steps, hidden); howtoMarkSeen(key); }
     else if (ph) {
       const btn = `<button class="btn sm howto-btn" type="button" data-howto-open="${key}">${ic('help')}사용법</button>`;
       const acts = ph.querySelector('.acts');
@@ -8249,7 +8256,7 @@ function addHowto(parts) {
   // 단계 설명도 ×로 닫으면 숨기고, 제목 옆 "단계 설명" 버튼으로 다시 봐요
   if (kind) {
     const side = ROLE === 'admin' || ROLE === 'partner' || key.startsWith('center/'), sk = `sg:${kind}`;
-    if (!howtoHidden(sk)) html += stateGuide(kind, false, side, true);
+    if (!howtoHidden(sk) && !(SIMPLE() && howtoSeen(sk))) { html += stateGuide(kind, false, side, true); howtoMarkSeen(sk); }
     else if (HOWTO_OPEN === sk) html += stateGuide(kind, true, side, 'open');
     else if (ph) {
       const btn = `<button class="btn sm howto-btn" type="button" data-howto-open="${sk}">${ic('help')}단계 설명</button>`, acts = ph.querySelector('.acts');
@@ -8376,7 +8383,7 @@ function favPaths() {
   return (list || FAV_DEFAULT[ROLE] || []).filter(p => all.includes(p)).slice(0, 8);
 }
 function favCard() {
-  if (SEEKER) return '';
+  if (SEEKER || (SIMPLE() && ['parent', 'student'].includes(ROLE))) return ''; // 학부모 · 학생은 메뉴가 적어서 아래 전체 메뉴 하나로
   const all = allMenus(), list = favPaths().map(p => all.find(m => m[0] === p));
   return `
   <section class="card fav">
@@ -8416,10 +8423,22 @@ function favDialog() {
 // 예시 강사(김민지)가 오늘 맡은 반
 const myDemoClassesToday = () => DATA.attendance.filter(c => c.teacher === ME.name);
 function todo(items) {
+  const li = ([t, d, href, chip]) => `
+      <a class="li link" href="${href}"><span class="dotmark"></span><div><div class="t">${t}</div><div class="d">${d}</div></div><div class="r">${chip}</div></a>`;
+  const cut = SIMPLE() && items.length > 4 ? 3 : items.length;
   return `<section class="card todo"><div class="card-head"><h2>오늘 챙길 일</h2><span class="sub">${items.length}건</span></div><div class="list">
-    ${items.map(([t, d, href, chip]) => `
-      <a class="li link" href="${href}"><span class="dotmark"></span><div><div class="t">${t}</div><div class="d">${d}</div></div><div class="r">${chip}</div></a>`).join('')}
-  </div></section>`;
+    ${items.slice(0, cut).map(li).join('')}
+  </div>${cut < items.length ? `<details class="todo-more"><summary>${items.length - cut}건 더 보기</summary><div class="list">${items.slice(cut).map(li).join('')}</div></details>` : ''}</section>`;
+}
+/* ---------- 간단히 보기 (기본 켜짐, 설정 → 화면 · 사용에서 끄면 예전처럼 모두) ----------
+   홈: 오늘 챙길 일(3개 + 더 보기) → 바로 가기 → 안내 한 줄만 → 전체 메뉴(아이콘 + 이름만)
+   왼쪽 메뉴: 묶음 제목 없이 한 줄씩, 아래는 "학원 · 초대 코드" · 로그아웃만 / 사용법 상자: 화면마다 처음 한 번만 펼쳐 보여요 */
+const SIMPLE = () => { try { return localStorage.getItem('asc-simple') !== '0'; } catch (e) { return true; } };
+const hints = (...xs) => pushHint() + (SIMPLE() ? xs.find(Boolean) || '' : xs.join(''));
+function menuTiles() {
+  if (!SIMPLE()) return `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+  const ids = SEEKER ? Object.keys(MY) : navGroups().flatMap(g => g[2]);
+  return `<h2 class="sec-title">전체 메뉴</h2><div class="tiles mini">${ids.map(id => `<a class="tile" href="#${id}"><span class="tile-ic">${ic(MY[id].icon)}</span><b>${MY[id].name}${ndot(id)}</b></a>`).join('')}</div>`;
 }
 
 // 원장 홈: 아직 이용하지 않는 분야가 있으면 한 줄 안내
@@ -8453,14 +8472,14 @@ function home() {
   if (ROLE === 'owner') {
     const urgent = DATA.leads.filter(l => l.urgent).length;
     // 급한 일 → 자주 쓰는 메뉴 → 처음 안내(휴대폰에선 접힘) → 전체 메뉴
-    return head(`안녕하세요, ${ME.name} 원장님`, `${DATA.today} · 할 일을 "학원 운영 · 강사·소통 · 센터 지원" 세 묶음으로 정리했어요.`) +
+    return head(`안녕하세요, ${ME.name} 원장님`, `${DATA.today} · ${DATA.academy.name}`) +
       todo(REAL ? realOwnerTodo() : [
         ['강사 채용 통보 서류 제출', '교육청 · 서식이 미리 채워져 있어요', '#admin/paper', '<span class="chip crit">D-0</span>'],
         [`새 문의 ${urgent}건에 전화하기`, '네이버 플레이스 · 전단지', '#members/leads', '<span class="chip crit">오늘</span>'],
         ...demoLate().length ? [[`미납 ${demoLate().length}건 납부 안내 보내기`, `가장 오래된 ${demoLate()[0].name} ${demoLate()[0].days}일 · 합계 ${won(sum(demoLate(), u => u.amount) * 1e4)}`, '#admin/billing', '<span class="chip crit">미납</span>']] : [],
         ['설명회 전단지 시안 확인', '인투마케팅 · 디자인 지원', '#promo/requests', '<span class="chip warn">확인 필요</span>'],
         [`김민지 강사 교육 미이수 ${DATA.training.filter(t => t.status['김민지'] !== 'done').length}건`, '센터 교육 영상 · 가장 빠른 마감 10/31', '#teachers/training', '<span class="chip mute">알림 보내기</span>']
-      ]) + mustHint() + favCard() + peopleCard() + phoneHint() + startGuide() + svcHint() + `<h2 class="sec-title">무엇을 도와드릴까요?</h2>` + tiles();
+      ]) + favCard() + hints(mustHint(), phoneHint0(), svcHint(), startGuide(), peopleCard()) + menuTiles();
   }
   if (ROLE === 'teacher') {
     const left = DATA.training.filter(t => t.status[ME.name] !== 'done');
@@ -8470,13 +8489,13 @@ function home() {
           .map(a => [`결재 ${APV_STATE[a.status][1]}: ${esc(a.title)}`, a.owner_comment ? esc(a.owner_comment) : '원장님이 결재했어요', '#approvals', `<span class="chip ${APV_STATE[a.status][0]}">${APV_STATE[a.status][1]}</span>`]))
         .concat(REAL ? scheduleTodo() : [])
         .concat(REAL || myDemoClassesToday().length ? [['오늘 수업 출결 입력', REAL ? `원생 ${REAL.students.length}명 · 수업 중에 바로 체크해 주세요` : `${myDemoClassesToday().map(c => `${c.cls} ${c.time}`).join(' · ')} · 수업 중에 입력해 주세요`, '#admin/attend', '<span class="chip info">오늘</span>'], ['입구 QR 출석 화면 켜기', '학생이 휴대폰 카메라로 QR을 찍어 직접 출석해요 · 인쇄해 붙여도 돼요', '#kiosk', '<span class="chip mute">QR</span>']] : [['오늘은 수업이 없어요', '다음 수업은 시간표에서 확인해요', '#schedule', '<span class="chip good">쉬는 날</span>']])) +
-      mustHint() + favCard() + peopleCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      favCard() + hints(mustHint(), phoneHint0(), startGuide(), peopleCard()) + menuTiles();
   }
   if (REAL && (ROLE === 'parent' || ROLE === 'student')) {
     const names = REAL.kids.map(k => `${esc(k.name)}${k.grade ? `(${esc(k.grade)})` : ''}`).join(' · ');
     return head(ROLE === 'student' ? `${ME.name}, 오늘도 힘내요!` : `${ME.name} 님, 안녕하세요`,
       `${DATA.today} · ${esc(REAL.academy.name)}${names && ROLE === 'parent' ? ` · ${names}` : ''}`) +
-      checkinHint() + attendAlert() + todayTodoCard() + todo(familyTodo()) + proHint() + favCard() + peopleCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      checkinHint() + attendAlert() + todayTodoCard() + todo(familyTodo()) + favCard() + hints(proHint(), phoneHint0(), startGuide(), peopleCard()) + menuTiles();
   }
   if (ROLE === 'parent') {
     const c = DATA.child;
@@ -8490,7 +8509,7 @@ function home() {
         c.today.length ? [`오늘 일정 ${c.today.length}개`, c.today.map(t => `${t.time} ${t.what.split(' ·')[0]}`).join(' · '), '#kid/schedule', '<span class="chip info">오늘</span>'] : ['오늘은 학원 일정이 없어요', '이번 주 일정은 일정 · 시간표에서 봐요', '#schedule', '<span class="chip good">쉬는 날</span>'],
         ['11월 학부모 설명회 안내', '하늘영어학원 공지', '#news', '<span class="chip mute">새 공지</span>'],
         ...promos
-      ]) + attendAlert() + proHint() + favCard() + phoneHint() + startGuide() + `<h2 class="sec-title">전체 메뉴</h2>` + tiles();
+      ]) + attendAlert() + favCard() + hints(proHint(), phoneHint0(), startGuide()) + menuTiles();
   }
   // 학생
   const c = DATA.child;
@@ -8500,7 +8519,7 @@ function home() {
       ${c.today.length ? c.today.map(t => `<div class="li"><span class="av time-av num">${t.time}</span><div><div class="t">${t.what}</div><div class="d">${t.where}</div></div><span></span></div>`).join('') : '<p class="muted" style="margin:0">오늘은 학원 일정이 없어요. 푹 쉬어요!</p>'}
     </div></section>
     <section class="card"><div class="card-head"><h2>오늘 할 숙제</h2><span class="sub">다 하면 체크!</span></div>${homeworkList()}</section>
-  </div>` + proHint() + favCard() + phoneHint() + startGuide();
+  </div>` + favCard() + hints(proHint(), phoneHint0(), startGuide());
 }
 
 /* ---------- 영역 첫 화면 (세부 메뉴 고르기) ---------- */
@@ -11098,6 +11117,7 @@ function bindTax() {
 
 function bindR19() {
   bindTax();
+  on('[data-act="simpleMode"]', b => { try { localStorage.setItem('asc-simple', b.checked ? '1' : '0'); } catch (e) { /* 이번만 */ } render(); toast(b.checked ? '간단히 보기로 바꿨어요' : '모두 보기로 바꿨어요'); });
   bindPushPay();
   on('[data-act="renameAcad"]', renameAcademyDialog);
   on('[data-act="switchAcad"]', acadSwitchDialog);
