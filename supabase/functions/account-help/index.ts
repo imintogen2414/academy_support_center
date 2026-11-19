@@ -46,6 +46,25 @@ async function hmac(key: string, msg: string) {
   return [...new Uint8Array(s)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
+// 솔라피로 보내기: IP가 고정인 데이터베이스 서버가 대신 보내요(public.solapi_relay). 함수는 서명만 만들어 넘기고 결과를 기다려요.
+async function solapi(path: string, payload: unknown) {
+  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
+  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
+  const auth = `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`;
+  const { data: id, error } = await admin.rpc("solapi_relay", { p_path: path, p_auth: auth, p_body: payload });
+  if (error || !id) throw new Error("relay " + (error ? error.message : "no_id"));
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 400));
+    const { data: res } = await admin.rpc("solapi_result", { p_id: id });
+    if (res) {
+      // deno-lint-ignore no-explicit-any
+      let body: any = null; try { body = JSON.parse(res.body || "null"); } catch { body = res.body; }
+      return { ok: res.status >= 200 && res.status < 300, status: res.status || 0, body, error: res.error };
+    }
+  }
+  throw new Error("relay_timeout");
+}
+
 async function sendEmail(to: string, subject: string, text: string) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -55,14 +74,8 @@ async function sendEmail(to: string, subject: string, text: string) {
   if (!r.ok) throw new Error("mail_failed " + r.status);
 }
 async function sendSms(to: string, text: string) {
-  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
-  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
-  const r = await fetch("https://api.solapi.com/messages/v4/send", {
-    method: "POST",
-    headers: { Authorization: `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message: { to, from: digits(env("SOLAPI_SENDER")), text } }),
-  });
-  if (!r.ok) { const t = await r.text().catch(() => ""); throw new Error("sms_failed " + r.status + " " + t.slice(0, 300)); }
+  const r = await solapi("/messages/v4/send", { message: { to, from: digits(env("SOLAPI_SENDER")), text } });
+  if (!r.ok) throw new Error("sms_failed " + r.status + " " + JSON.stringify(r.body || r.error).slice(0, 300));
 }
 
 // 아이디로 회원 찾기 (아이디 회원만 — 구글 회원은 비밀번호가 없어요)

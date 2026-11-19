@@ -25,6 +25,25 @@ async function hmac(key: string, msg: string) {
   return [...new Uint8Array(s)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
+// 솔라피로 보내기: IP가 고정인 데이터베이스 서버가 대신 보내요(public.solapi_relay). 함수는 서명만 만들어 넘기고 결과를 기다려요.
+async function solapi(path: string, payload: unknown) {
+  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
+  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
+  const auth = `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`;
+  const { data: id, error } = await admin.rpc("solapi_relay", { p_path: path, p_auth: auth, p_body: payload });
+  if (error || !id) throw new Error("relay " + (error ? error.message : "no_id"));
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 400));
+    const { data: res } = await admin.rpc("solapi_result", { p_id: id });
+    if (res) {
+      // deno-lint-ignore no-explicit-any
+      let body: any = null; try { body = JSON.parse(res.body || "null"); } catch { body = res.body; }
+      return { ok: res.status >= 200 && res.status < 300, status: res.status || 0, body, error: res.error };
+    }
+  }
+  throw new Error("relay_timeout");
+}
+
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return reply({ error: "post_only" }, 405);
@@ -32,7 +51,7 @@ Deno.serve(async req => {
   // deno-lint-ignore no-explicit-any
   let body: any;
   try { body = await req.json(); } catch { return reply({ error: "bad_json" }, 400); }
-  // 키가 맞는 모양인지(길이만 · 값은 돌려주지 않아요): 솔라피 API Key는 16자, Secret은 32자
+  // 키가 맞는 모양인지(길이만 · 값은 돌려주지 않아요): 솔라피 API Key(v3)는 22자, Secret은 32자
   if (body && body.check) return reply({ ready, optout: !!env("SOLAPI_OPTOUT"),
     shape: { key: sol("SOLAPI_API_KEY").length, key_raw: env("SOLAPI_API_KEY").length, secret: sol("SOLAPI_API_SECRET").length, secret_raw: env("SOLAPI_API_SECRET").length, sender: digits(env("SOLAPI_SENDER")).length } });
 
@@ -63,17 +82,14 @@ Deno.serve(async req => {
   const { data: left } = await sb.rpc("sms_left", { p_academy: A });
   if (left !== null && left !== undefined && to.length > Number(left)) return reply({ error: "limit", left });
 
-  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
-  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
   const from = digits(env("SOLAPI_SENDER"));
-  const r = await fetch("https://api.solapi.com/messages/v4/send-many/detail", {
-    method: "POST",
-    headers: { Authorization: `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: to.map((x: { phone: string; name: string }) => ({ to: x.phone, from, text: text.replaceAll("{이름}", x.name || "") })) }),
-  });
   // deno-lint-ignore no-explicit-any
-  let res: any = null; try { res = await r.json(); } catch { /* 아래에서 실패로 */ }
-  if (!r.ok) { console.error("solapi", r.status, res); return reply({ error: "send_failed" }); }
+  let res: any = null;
+  try {
+    const r = await solapi("/messages/v4/send-many/detail", { messages: to.map((x: { phone: string; name: string }) => ({ to: x.phone, from, text: text.replaceAll("{이름}", x.name || "") })) });
+    if (!r.ok) { console.error("solapi", r.status, r.body || r.error); return reply({ error: "send_failed" }); }
+    res = r.body;
+  } catch (e) { console.error(e); return reply({ error: "send_failed" }); }
   const failed = Array.isArray(res?.failedMessageList) ? res.failedMessageList.length : 0;
   const { data: p } = await admin.from("profiles").select("name, username").eq("id", u.user.id).maybeSingle();
   await admin.from("sms_logs").insert({ academy_id: A, by_id: u.user.id, by_name: p ? p.name || p.username : null, ad, body: text.slice(0, 2000),
