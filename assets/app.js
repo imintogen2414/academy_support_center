@@ -10590,7 +10590,7 @@ function undoSummary(b) {
   const one = l.length === 1 ? undoTitle(l[0].new || l[0].old) : '';
   const title = `${name} ${l.length > 1 ? `${b.n > (b.items || []).length && keys.length === 1 ? b.n : l.length}건 ` : ''}${UNDO_ACT[act] || ''}${one ? ` · ${one}` : ''}`;
   const rest = keys.filter(k => k !== main).map(k => { const [t, a] = k.split('|'); return `${(UNDO_TBL[t] || [t])[0]} ${g[k].length > 1 ? `${g[k].length}건 ` : ''}${UNDO_ACT[a]}`; });
-  return { head: title, rest, icon: (UNDO_TBL[tbl] || [0, 'doc'])[1], act, tbl, names: l.length > 1 ? l.slice(0, 6).map(x => { const r = x.new || x.old || {}; return r.student_name || r.name || undoTitle(r); }).filter(Boolean) : [], diff: l.length === 1 ? undoDiff(l[0]) : [] };
+  return { head: title, rest, icon: (UNDO_TBL[tbl] || [0, 'doc'])[1], act, tbl, names: l.length > 1 ? l.slice(0, 6).map(x => { const r = x.new || x.old || {}; return r.student_name || r.name || undoTitle(r); }).filter(Boolean) : [], diff: l.length === 1 || (act === 'update' && new Set(l.map(x => undoDiff(x).join('|'))).size === 1) ? undoDiff(l[0]) : [] };
 }
 const DEMO_UNDO = () => {
   const t = m => new Date(Date.now() - m * 60e3).toISOString();
@@ -10645,10 +10645,10 @@ async function undoDo(batch) {
   const s = undoSummary(b);
   if (!confirm(`"${s.head}"${b.undo_of ? '을(를) 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return;
   if (!REAL) { b.undone_at = new Date().toISOString(); b.undone_by_name = ME.name; render(); return toast('되돌렸어요 · 예시 계정은 이 화면에서만 바뀌어요'); }
-  let { data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batch: b.batch, p_force: false });
+  let { data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batches: b.batches || [b.batch], p_force: false });
   if (!error && data && data.changed && !data.ok) {
     if (!confirm(`그 뒤에 ${data.changed}건이 또 바뀌었어요. 그래도 되돌리면 그 뒤에 바뀐 것도 이때 모습으로 돌아가요. 되돌릴까요?`)) return;
-    ({ data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batch: b.batch, p_force: true }));
+    ({ data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batches: b.batches || [b.batch], p_force: true }));
   }
   if (error) return toast(/undo_failed/.test(error.message || '') ? '되돌리지 못했어요 · 이어진 자료(학생 · 반 등)가 이미 지워졌을 수 있어요' : dbErr(error));
   if (data && data.error === 'already') { UNDO.list = null; render(); return toast('이미 되돌린 일이에요'); }
