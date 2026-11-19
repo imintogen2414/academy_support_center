@@ -1,7 +1,8 @@
 // 휴대폰 · PC 알림 보내기 (웹 푸시). DB 트리거(private.push)가 push_outbox에 쌓고 pg_net으로 여기를 깨워요.
 //   POST /functions/v1/push-send   헤더 x-push-secret (vault push_hook과 같은 값 = 비밀 값 PUSH_HOOK_SECRET)
 // 웹 푸시 암호화(RFC 8291 aes128gcm) · VAPID 서명(RFC 8292)을 WebCrypto로 직접 해요 — 바깥 라이브러리 없이.
-// 비밀 값: VAPID_PUBLIC_KEY(앱 app.js의 PUSH_PUBLIC_KEY와 같은 값) · VAPID_PRIVATE_KEY(d, base64url) · PUSH_HOOK_SECRET · VAPID_SUBJECT(선택, mailto:)
+// 키: DB vault(push_vapid_pub · push_vapid_priv · push_hook)를 서비스 키 전용 RPC push_keys()로 읽어요 — 대시보드에 따로 넣을 필요 없어요.
+//   (Edge Function 비밀 값 VAPID_PUBLIC_KEY · VAPID_PRIVATE_KEY · PUSH_HOOK_SECRET이 있으면 그걸 먼저 써요. VAPID_SUBJECT는 선택, mailto:)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -48,8 +49,10 @@ export async function vapidAuth(endpoint: string, pub: string, d: string, subjec
 
 Deno.serve(async req => {
   if (req.method !== "POST") return reply({ error: "post_only" }, 405);
-  if (!env("PUSH_HOOK_SECRET") || req.headers.get("x-push-secret") !== env("PUSH_HOOK_SECRET")) return reply({ error: "bad_secret" }, 401);
-  const pub = env("VAPID_PUBLIC_KEY"), d = env("VAPID_PRIVATE_KEY"), subject = env("VAPID_SUBJECT") || "mailto:help@academysupportcenter.app";
+  const { data: k } = await admin.rpc("push_keys");
+  const hook = env("PUSH_HOOK_SECRET") || k?.hook || "";
+  if (!hook || req.headers.get("x-push-secret") !== hook) return reply({ error: "bad_secret" }, 401);
+  const pub = env("VAPID_PUBLIC_KEY") || k?.pub || "", d = env("VAPID_PRIVATE_KEY") || k?.priv || "", subject = env("VAPID_SUBJECT") || "mailto:help@academysupportcenter.app";
   if (!pub || !d) return reply({ error: "no_vapid" }, 500);
 
   const { data: jobs } = await admin.from("push_outbox").select("id, user_id, kind, title, body, url, tag").is("sent_at", null).order("id").limit(300);
