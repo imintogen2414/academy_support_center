@@ -142,3 +142,16 @@ revoke all on function public.change_list(uuid, bigint, int) from public, anon;
 revoke all on function public.undo_change(uuid, bigint[], boolean) from public, anon;
 grant execute on function public.change_list(uuid, bigint, int) to authenticated;
 grant execute on function public.undo_change(uuid, bigint[], boolean) to authenticated;
+
+-- 예전 화면(batch 하나를 보냄)도 되게: 그 batch가 들어 있는 "한 일" 전체를 되돌려요
+create or replace function public.undo_change(p_academy uuid, p_batch bigint, p_force boolean default false)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare r text := private.academy_role(p_academy); me uuid := auth.uid(); bs bigint[];
+begin
+  if me is null or r is null or r not in ('owner', 'teacher') then raise exception 'not_allowed'; end if;
+  select array_agg(c.batch) into bs from private.change_groups(p_academy, r, me) c
+  where c.g = (select x.g from private.change_groups(p_academy, r, me) x where x.batch = p_batch);
+  return public.undo_change(p_academy, coalesce(bs, array[p_batch]), p_force);
+end $$;
+revoke all on function public.undo_change(uuid, bigint, boolean) from public, anon;
+grant execute on function public.undo_change(uuid, bigint, boolean) to authenticated;
