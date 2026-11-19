@@ -4,6 +4,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const ICON = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -4472,6 +4473,7 @@ function settingsPage() {
     <div class="set-line"><div><b>홈 "자주 쓰는 메뉴"</b><small>홈에 둘 메뉴를 최대 8개 골라요 (이 기기에 저장)</small></div><button class="btn sm" data-act="editFav">바꾸기</button></div>
     <div class="set-line"><div><b>메뉴 사용법 안내</b><small>${howtoHiddenAll().length ? `숨긴 안내 ${howtoHiddenAll().length}개 · 다시 띄우면 화면마다 위쪽에 다시 보여요` : '화면마다 위쪽에 "이렇게 써요"가 보여요'}</small></div><span class="btns">${howtoHiddenAll().length ? '<button class="btn sm" data-act="howtoReset">다시 띄우기</button>' : ''}<a class="btn sm" href="#guide">모아 보기</a></span></div>
     ${startSteps().length ? `<div class="set-line"><div><b>처음 시작 안내</b><small>숨긴 안내를 홈에 다시 띄워요</small></div><a class="btn sm" href="#home" data-act="showGuide">다시 보기</a></div>` : ''}
+    ${undoHint()}
     <div class="set-line"><div><b>왼쪽 메뉴 묶음</b><small>접어 둔 묶음을 모두 펼쳐요</small></div><button class="btn sm" data-act="navOpenAll">모두 펼치기</button></div>`);
   const acct = card('계정', `
     <div class="set-line"><div><b>계정 전환</b><small>${DEMO ? '다른 역할의 예시 계정으로 바꿔요' : '이 기기에서 로그인한 다른 계정으로 비밀번호 없이 바꾸거나, 계정을 더해요'}</small></div><button class="btn sm" data-act="switchAcc">계정 전환</button></div>
@@ -7832,6 +7834,7 @@ const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록
 // 채용 공고 게시판: 학원에 아직 연결 안 된 강사(구직 중)만 봐요. 학원 강사 메뉴에는 없고, 공고 · 지원자 관리는 원장 "강사 채용"
 const JOBS_AREA = { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${jobData().posts.length}건`, render: jobsPage, detail: jobDetailPage,
   title: id => id === 'profile' ? '내 이력서' : id === 'mine' ? '지원 현황' : (jobData().posts.find(j => j.id === id) || {}).title };
+const UNDO_AREA = { name: '되돌리기', icon: 'undo', desc: '넣고 · 고치고 · 지운 것을 이전으로', stat: () => '최근 60일 바뀐 기록', render: undoPage };
 const SCHEDULE_AREA = { name: '일정·시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
@@ -7875,6 +7878,7 @@ const AREAS = {
         center: taskSub('members')
       } },
     musts: MUSTS_AREA,
+    undo: UNDO_AREA,
     messages: MESSAGES_AREA,
     schedule: SCHEDULE_AREA,
     library: LIBRARY_AREA,
@@ -7949,7 +7953,7 @@ function teacherMenus() {
   const out = { admin, members };
   if (can('staff') || can('hire')) out.teachers = { ...o.teachers, desc: [can('staff') && '우리 학원 강사', can('hire') && '강사 채용'].filter(Boolean).join(' · '),
     subs: { ...(can('staff') ? { staff: o.teachers.subs.staff } : {}), ...(can('hire') ? { hire: o.teachers.subs.hire } : {}) } };
-  return { ...out, musts: o.musts, schedule: t.schedule, messages: t.messages, library: t.library, approvals: t.approvals, learn: t.learn, mou: t.mou, promo: t.promo };
+  return { ...out, musts: o.musts, undo: UNDO_AREA, schedule: t.schedule, messages: t.messages, library: t.library, approvals: t.approvals, learn: t.learn, mou: t.mou, promo: t.promo };
 }
 // 예전 강사 주소(#attend · #students …)로 오면 새 주소로
 const TEACHER_OLD = { attend: 'admin/attend', students: 'members/students', leads: 'members/leads', todos: 'members/todos', reports: 'members/reports' };
@@ -8110,8 +8114,8 @@ function markSeen(path) {
 
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
-  owner: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 수납 · 시간표', ['musts', 'members', 'admin', 'schedule']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '센터 공지 · 제휴 · 홍보를 센터가 연결', ['cnews', 'mou', 'promo', 'center']]],
-  teacher: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 시간표 · 결재', ['musts', 'members', 'admin', 'schedule', 'approvals', 'teachers']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 센터 공지 · 제휴 · 홍보', ['learn', 'cnews', 'mou', 'promo', 'center']]],
+  owner: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 수납 · 시간표 · 되돌리기', ['musts', 'members', 'admin', 'schedule', 'undo']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '센터 공지 · 제휴 · 홍보를 센터가 연결', ['cnews', 'mou', 'promo', 'center']]],
+  teacher: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 시간표 · 결재 · 되돌리기', ['musts', 'members', 'admin', 'schedule', 'approvals', 'teachers', 'undo']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 센터 공지 · 제휴 · 홍보', ['learn', 'cnews', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 성적표 · 출결', ['todos', 'schedule', 'reports', 'records', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library']], ['유학 · 캠프', '학원이 안내하는 캠프 · 어학연수 · 유학', ['abroad', 'center']]],
   admin: [['센터', '센터 관리 · 채팅', ['center', 'messages']]]
@@ -8291,7 +8295,7 @@ function guidePage() {
     </section>`).join('') + (startSteps().length ? `<a class="hint" href="#home" data-act="showGuide">${ic('check')}<span>처음 시작 안내를 다시 보고 싶으면</span><b>홈에 다시 띄우기 →</b></a>` : '') + howtoAll();
 }
 // 위쪽 검색: 메뉴 이름 · 설명에서 찾아요
-const SEARCH_WORDS = { '초대 코드': '코드 초대 링크 가입 합류 들어가기 강사 학부모 학생', 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자' };
+const SEARCH_WORDS = { '초대 코드': '코드 초대 링크 가입 합류 들어가기 강사 학부모 학생', 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자', 되돌리기: '취소 실수 복구 이전 원래대로 되살리기 지운 것 기록 바뀐 기록' };
 function searchMenus(q) {
   q = q.trim(); if (!q) return [];
   const out = [], hit = (...t) => t.join(' ').includes(q);
@@ -8736,8 +8740,8 @@ function render() {
     i < r.crumbs.length - 1 ? `<a href="${h}" data-up>${esc(l)}</a><span>›</span>` : `<b>${esc(l)}</b>`).join('')}</nav></div>` : '';
   // 실제 데이터로 연결된 화면이 아니면 "예시"라고 알려 줘요
   const REAL_PAGES = {
-    owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services', 'musts'],
-    teacher: ['home', 'musts', 'admin', 'members', 'teachers', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'records', 'attend', 'news', 'library', 'abroad', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
+    owner: ['home', 'admin', 'teachers', 'members', 'messages', 'schedule', 'library', 'mou', 'promo', 'center', 'services', 'musts', 'undo'],
+    teacher: ['home', 'musts', 'undo', 'admin', 'members', 'teachers', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'records', 'attend', 'news', 'library', 'abroad', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
   };
   const path = parts.join('/') || 'home';
   const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
@@ -10545,7 +10549,122 @@ const mustHint = () => { if (!isStaff()) return ''; const n = mustLeft(); return
 
 // 전문 앱 바로가기 (학부모 · 학생 홈)
 const proHint = () => `<a class="hint" href="#${recBase()}" data-act="openProApp">${ic('star')}<span>${esc(PRO_APP.name)} · 시험 · 숙제 · 공부 기록이 "학습 기록 · 성적표"로 쌓여요${PRO_APP.url ? '' : ' (준비 중)'}</span><b>열기 →</b></a>`;
+/* ================= 되돌리기 (#undo, 원장 · 강사) =================
+   DB 트리거가 넣기 · 고치기 · 지우기를 change_logs에 남기고(한 번에 한 일 = batch), change_list · undo_change로 보고 되돌려요.
+   원장은 우리 학원 것 전부, 강사는 내가 한 것만. 되돌린 것도 기록이라 "다시 하기"(되돌린 것 되돌리기)가 돼요. 60일까지. */
+const UNDO = { list: null, loading: false, more: true, tbl: 'all' };
+const UNDO_TBL = {
+  students: ['원생', 'users'], attendance: ['출결', 'attend'], invoices: ['수납 · 청구', 'card'], expenses: ['나간 돈', 'chart'], incomes: ['들어온 돈', 'chart'],
+  paperwork: ['서류', 'doc'], payroll: ['원천세 계산', 'calc'], timetable: ['시간표', 'cal'], academy_events: ['일정', 'cal'], notices: ['공지', 'notice'],
+  library_items: ['자료실', 'doc'], library_folders: ['자료실 폴더', 'doc'], tuition_plans: ['정해 둔 수강료', 'card'], discount_presets: ['할인', 'card'],
+  fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'],
+  student_todos: ['오늘 할 일', 'check'], growth_reports: ['성장 리포트', 'doc'], fin_accounts: ['통장', 'card'], abroad_promos: ['유학 안내', 'globe'],
+  academy_titles: ['직책', 'shield'], app_records: ['학습 기록', 'chart'], job_posts: ['채용 공고', 'brief'], payee_accounts: ['받는 사람 계좌', 'card']
+};
+const UNDO_GROUPS = [['all', '전체'], ['people', '원생 · 상담', ['students', 'leads', 'lead_notes', 'student_todos', 'growth_reports', 'app_records']], ['money', '돈 · 수납', ['invoices', 'expenses', 'incomes', 'payroll', 'tuition_plans', 'discount_presets', 'fixed_costs', 'fin_accounts', 'payee_accounts']],
+  ['attend', '출결', ['attendance']], ['sched', '시간표 · 일정', ['timetable', 'academy_events']], ['etc', '공지 · 자료 · 그 밖', ['notices', 'library_items', 'library_folders', 'paperwork', 'supplies', 'abroad_promos', 'academy_titles', 'job_posts']]];
+const UNDO_ACT = { insert: '추가', update: '고침', delete: '지움' };
+const UNDO_FIELD = { name: '이름', title: '제목', amount: '금액', list_amount: '원가', class_name: '반', status: '상태', day: '날짜', memo: '메모', category: '항목', paid_at: '납부한 날',
+  phone: '연락처', parent_name: '학부모', parent_phone: '학부모 연락처', grade: '학년', start_time: '시작', end_time: '끝', weekday: '요일', teacher_name: '담당', room: '강의실', color: '색',
+  due: '마감', month: '달', body: '내용', content: '내용', subject: '과목', discount_note: '할인', method: '결제 방법', qty: '수', unit: '단위', place: '둔 곳', note: '메모', stage: '단계',
+  text: '내용', done: '했음', target_class: '받는 반', visibility: '공유 범위', price: '값', account: '계좌', bank: '은행', holder: '예금주', every_months: '주기', pay_day: '나가는 날',
+  week_of: '주', from_week: '시작 주', to_week: '끝 주', cancels: '휴강', skip_weeks: '빠지는 주', refund: '환불', left_on: '그만둔 날', joined_on: '들어온 날', score: '점수', fee: '수강료',
+  tuition_plan_id: '수강료', discount_id: '할인', folder_id: '폴더', account_id: '통장', student_id: '학생', reported_at: '입금 알림', reminded_at: '미납 안내', kind: '종류', detail: '세부', perms: '권한' };
+const UNDO_SKIP = /^(id|academy_id|academy_name|created_at|created_by.*|updated_.*|edited_.*|added_by.*|by_id|by_name|requested_by.*|student_name|class_name_snap|search|sort_order)$/;
+const undoTitle = r => { if (!r) return ''; const v = r.student_name && r.title ? `${r.student_name} ${r.title}` : r.name || r.title || r.student_name || r.item || r.category || r.class_name || r.subject || r.text || r.body || r.memo || ''; return String(v).replace(/\s+/g, ' ').slice(0, 30); };
+const undoVal = (k, v) => {
+  if (v === null || v === undefined || v === '') return '없음';
+  if (typeof v === 'boolean') return v ? '예' : '아니오';
+  if (typeof v === 'number') return /amount|price|fee|refund|cost|pay|tax/.test(k) ? won(v) : String(v);
+  if (typeof v === 'object') return Array.isArray(v) ? `${v.length}개` : '…';
+  const s = String(v); return /^\d{4}-\d{2}-\d{2}T/.test(s) ? s.slice(5, 16).replace('T', ' ') : s.length > 24 ? s.slice(0, 24) + '…' : s;
+};
+// 고친 칸: "금액 300,000원 → 270,000원"
+const undoDiff = it => it.action !== 'update' || !it.old || !it.new ? [] : Object.keys(it.new).filter(k => !UNDO_SKIP.test(k) && JSON.stringify(it.old[k]) !== JSON.stringify(it.new[k]))
+  .map(k => `${UNDO_FIELD[k] || k} ${esc(undoVal(k, it.old[k]))} → ${esc(undoVal(k, it.new[k]))}`);
+// 한 일 요약: 같은 표 · 같은 동작끼리 묶어서 "청구 12건 추가"
+function undoSummary(b) {
+  const g = {}; (b.items || []).forEach(it => { const k = `${it.tbl}|${it.action}`; (g[k] = g[k] || []).push(it); });
+  const keys = Object.keys(g), main = keys.sort((a, c) => g[c].length - g[a].length)[0] || '';
+  const [tbl, act] = main.split('|'), l = g[main] || [], name = (UNDO_TBL[tbl] || [tbl])[0];
+  const one = l.length === 1 ? undoTitle(l[0].new || l[0].old) : '';
+  const title = `${name} ${l.length > 1 ? `${b.n > (b.items || []).length && keys.length === 1 ? b.n : l.length}건 ` : ''}${UNDO_ACT[act] || ''}${one ? ` · ${one}` : ''}`;
+  const rest = keys.filter(k => k !== main).map(k => { const [t, a] = k.split('|'); return `${(UNDO_TBL[t] || [t])[0]} ${g[k].length > 1 ? `${g[k].length}건 ` : ''}${UNDO_ACT[a]}`; });
+  return { head: title, rest, icon: (UNDO_TBL[tbl] || [0, 'doc'])[1], act, tbl, names: l.length > 1 ? l.slice(0, 6).map(x => { const r = x.new || x.old || {}; return r.student_name || r.name || undoTitle(r); }).filter(Boolean) : [], diff: l.length === 1 ? undoDiff(l[0]) : [] };
+}
+const DEMO_UNDO = () => {
+  const t = m => new Date(Date.now() - m * 60e3).toISOString();
+  return [
+    { batch: 5, at: t(3), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'invoices', action: 'update', old: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: null }, new: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: TODAY } }] },
+    { batch: 4, at: t(25), by_name: '김민지', mine: false, can_undo: ROLE === 'owner', n: 1, items: [{ tbl: 'students', action: 'delete', old: { name: '이도윤', class_name: '중등 A반' } }] },
+    { batch: 3, at: t(80), by_name: ME.name, mine: true, can_undo: true, n: 12, items: Array.from({ length: 12 }, (_, i) => ({ tbl: 'invoices', action: 'insert', new: { student_name: ['김하늘', '박서준', '최지우', '정민준'][i % 4], title: '11월 수강료', amount: 280000 } })) },
+    { batch: 2, at: t(60 * 26), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'timetable', action: 'update', old: { class_name: '초등 B반', start_time: '16:00', end_time: '17:30', room: '1강의실' }, new: { class_name: '초등 B반', start_time: '17:00', end_time: '18:30', room: '1강의실' } }] },
+    { batch: 1, at: t(60 * 50), by_name: '자동 처리', mine: false, can_undo: ROLE === 'owner', n: 1, items: [{ tbl: 'expenses', action: 'insert', new: { category: '월세', amount: 1500000, memo: '매달 나가는 돈' } }] }
+  ].filter(b => ROLE === 'owner' || b.mine);
+};
+async function undoLoad(more) {
+  if (UNDO.loading) return;
+  if (!REAL) { UNDO.list = UNDO.list || DEMO_UNDO(); UNDO.more = false; return; }
+  UNDO.loading = true;
+  const before = more && UNDO.list && UNDO.list.length ? UNDO.list[UNDO.list.length - 1].batch : null;
+  const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_before: before, p_limit: 30 });
+  UNDO.loading = false;
+  if (error) { UNDO.list = UNDO.list || []; UNDO.err = dbErr(error); render(); return; }
+  UNDO.err = '';
+  UNDO.list = more ? [...(UNDO.list || []), ...(data || [])] : (data || []);
+  UNDO.more = (data || []).length >= 30;
+  render();
+}
+const undoWhen = iso => { const d = new Date(iso), m = Math.round((Date.now() - d) / 60e3); if (m < 1) return '방금'; if (m < 60) return `${m}분 전`; const k = new Date(d.getTime() + 9 * 3600e3).toISOString(); return `${k.slice(0, 10) === TODAY ? '오늘' : md(k.slice(0, 10))} ${k.slice(11, 16)}`; };
+function undoPage() {
+  try { const f = sessionStorage.getItem('asc-undo-flash'); if (f) { sessionStorage.removeItem('asc-undo-flash'); setTimeout(() => toast(f), 300); } } catch (e) { /* 그대로 */ }
+  if (!UNDO.list && !REAL) { UNDO.list = DEMO_UNDO(); UNDO.more = false; }
+  if (!UNDO.list) { undoLoad(); return head('되돌리기', '넣고 · 고치고 · 지운 것을 이전으로 돌려요.') + '<p class="muted">바뀐 기록을 불러오는 중이에요…</p>'; }
+  const grp = UNDO_GROUPS.find(g => g[0] === UNDO.tbl) || UNDO_GROUPS[0];
+  const list = UNDO.list.filter(b => !grp[2] || (b.items || []).some(it => grp[2].includes(it.tbl)));
+  const rows = list.map(b => {
+    const s = undoSummary(b), back = !!b.undo_of;
+    return `<div class="li undo-li ${b.undone_at ? 'undone' : ''}">
+      <span class="av undo-av">${ic(back ? 'undo' : s.icon)}</span>
+      <div><div class="t">${back ? '<span class="chip">되돌림</span> ' : ''}${esc(s.head)}${s.rest.length ? ` <span class="muted small">+ ${esc(s.rest.join(' · '))}</span>` : ''}</div>
+        ${s.diff.length ? `<div class="d undo-diff">${s.diff.slice(0, 4).join('<br>')}</div>` : ''}
+        ${s.names.length ? `<div class="d">${esc(s.names.join(' · '))}${b.n > s.names.length ? ' …' : ''}</div>` : ''}
+        <div class="d muted">${esc(undoWhen(b.at))} · ${esc(b.by_name || '알 수 없음')}${b.undone_at ? ` · <b>${esc(undoWhen(b.undone_at))} ${esc(b.undone_by_name || '')} 되돌림</b>` : ''}</div></div>
+      <div class="r">${b.undone_at ? '<span class="chip">되돌렸어요</span>' : b.can_undo ? `<button class="btn sm ${back ? '' : 'primary'}" data-undo="${b.batch}">${back ? '다시 하기' : '되돌리기'}</button>` : '<span class="muted small">원장님만</span>'}</div></div>`;
+  }).join('');
+  return head('되돌리기', `넣고 · 고치고 · 지운 것을 한 번에 이전으로 돌려요. ${ROLE === 'owner' ? '우리 학원에서 누가 한 것이든 보여요' : '내가 한 것만 보여요'} · 최근 60일.`,
+    `<button class="btn" data-act="undoReload">새로 보기</button>`) + `
+  <div class="seg undo-seg">${UNDO_GROUPS.map(([k, l]) => `<button class="${UNDO.tbl === k ? 'on' : ''}" data-undo-tbl="${k}">${l}</button>`).join('')}</div>
+  ${UNDO.err ? `<p class="muted">${esc(UNDO.err)}</p>` : ''}
+  <section class="card"><div class="list">${rows || `<p class="muted empty">${UNDO.tbl === 'all' ? '아직 바뀐 기록이 없어요. 이제부터 넣고 · 고치고 · 지우면 여기에 쌓여요.' : '이 묶음에는 바뀐 기록이 없어요.'}</p>`}</div>
+  ${UNDO.more ? '<div class="row-btns"><button class="btn sm" data-act="undoMore">더 보기</button></div>' : ''}</section>
+  <p class="muted small">되돌리면 그때 함께 바뀐 것(예: 상담을 "등록"으로 옮길 때 같이 생긴 원생)도 같이 돌아가요. 되돌린 것도 기록에 남아서 "다시 하기"로 되살릴 수 있어요. 휴대폰 알림 · 문자처럼 이미 보낸 것은 돌아오지 않아요.</p>`;
+}
+async function undoDo(batch) {
+  const b = (UNDO.list || []).find(x => String(x.batch) === String(batch)); if (!b) return;
+  const s = undoSummary(b);
+  if (!confirm(`"${s.head}"${b.undo_of ? '을(를) 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return;
+  if (!REAL) { b.undone_at = new Date().toISOString(); b.undone_by_name = ME.name; render(); return toast('되돌렸어요 · 예시 계정은 이 화면에서만 바뀌어요'); }
+  let { data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batch: b.batch, p_force: false });
+  if (!error && data && data.changed && !data.ok) {
+    if (!confirm(`그 뒤에 ${data.changed}건이 또 바뀌었어요. 그래도 되돌리면 그 뒤에 바뀐 것도 이때 모습으로 돌아가요. 되돌릴까요?`)) return;
+    ({ data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batch: b.batch, p_force: true }));
+  }
+  if (error) return toast(/undo_failed/.test(error.message || '') ? '되돌리지 못했어요 · 이어진 자료(학생 · 반 등)가 이미 지워졌을 수 있어요' : dbErr(error));
+  if (data && data.error === 'already') { UNDO.list = null; render(); return toast('이미 되돌린 일이에요'); }
+  // 다른 화면 자료도 바뀌었으니 새로 불러와요 (알림은 불러온 뒤에)
+  try { sessionStorage.setItem('asc-undo-flash', b.undo_of ? '다시 했어요' : '되돌렸어요'); } catch (e) { /* 알림만 빠져요 */ }
+  location.reload();
+}
+const undoHint = () => isStaff() ? `<div class="set-line"><div><b>되돌리기</b><small>넣고 · 고치고 · 지운 것을 이전으로 돌려요 (최근 60일)</small></div><a class="btn sm" href="#undo">${ic('undo')}바뀐 기록 보기</a></div>` : '';
+function bindUndo() {
+  on('[data-undo]', b => { b.disabled = true; undoDo(b.dataset.undo).finally(() => { b.disabled = false; }); });
+  on('[data-undo-tbl]', b => { UNDO.tbl = b.dataset.undoTbl; render(); });
+  on('[data-act="undoMore"]', () => undoLoad(true));
+  on('[data-act="undoReload"]', () => { UNDO.list = null; render(); });
+}
 function bindR18() {
+  bindUndo();
   on('[data-act="openProApp"]', (b, e) => { e.preventDefault(); openProApp(); });
   on('[data-ext-save]', b => extSave(b.dataset.extSave, false));
   on('[data-ext-ask]', b => extSave(b.dataset.extAsk, true));
