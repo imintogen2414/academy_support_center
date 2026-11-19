@@ -14,6 +14,8 @@ const CORS = {
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const env = (k: string) => Deno.env.get(k) || "";
+// 솔라피 키는 대시보드에 붙여 넣을 때 공백 · 줄바꿈 · 보이지 않는 글자가 섞이기 쉬워서, 영문 · 숫자 · 기호만 남겨요 (헤더에 다른 글자가 있으면 보내기가 통째로 실패해요)
+const sol = (k: string) => env(k).replace(/[^\x21-\x7E]/g, "");
 const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
 const digits = (s: unknown) => String(s || "").replace(/\D/g, "");
 
@@ -26,11 +28,13 @@ async function hmac(key: string, msg: string) {
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return reply({ error: "post_only" }, 405);
-  const ready = !!(env("SOLAPI_API_KEY") && env("SOLAPI_API_SECRET") && env("SOLAPI_SENDER"));
+  const ready = !!(env("SOLAPI_API_KEY") && sol("SOLAPI_API_SECRET") && env("SOLAPI_SENDER"));
   // deno-lint-ignore no-explicit-any
   let body: any;
   try { body = await req.json(); } catch { return reply({ error: "bad_json" }, 400); }
-  if (body && body.check) return reply({ ready, optout: !!env("SOLAPI_OPTOUT") });
+  // 키가 맞는 모양인지(길이만 · 값은 돌려주지 않아요): 솔라피 API Key는 16자, Secret은 32자
+  if (body && body.check) return reply({ ready, optout: !!env("SOLAPI_OPTOUT"),
+    shape: { key: sol("SOLAPI_API_KEY").length, key_raw: env("SOLAPI_API_KEY").length, secret: sol("SOLAPI_API_SECRET").length, secret_raw: env("SOLAPI_API_SECRET").length, sender: digits(env("SOLAPI_SENDER")).length } });
 
   const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: req.headers.get("Authorization") || "" } } });
   const { data: u } = await sb.auth.getUser();
@@ -60,11 +64,11 @@ Deno.serve(async req => {
   if (left !== null && left !== undefined && to.length > Number(left)) return reply({ error: "limit", left });
 
   const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
-  const sig = await hmac(env("SOLAPI_API_SECRET"), date + salt);
+  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
   const from = digits(env("SOLAPI_SENDER"));
   const r = await fetch("https://api.solapi.com/messages/v4/send-many/detail", {
     method: "POST",
-    headers: { Authorization: `HMAC-SHA256 apiKey=${env("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
+    headers: { Authorization: `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messages: to.map((x: { phone: string; name: string }) => ({ to: x.phone, from, text: text.replaceAll("{이름}", x.name || "") })) }),
   });
   // deno-lint-ignore no-explicit-any

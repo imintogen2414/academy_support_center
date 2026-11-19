@@ -18,6 +18,8 @@ const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 const env = (k: string) => Deno.env.get(k) || "";
+// 솔라피 키는 대시보드에 붙여 넣을 때 공백 · 줄바꿈 · 보이지 않는 글자가 섞이기 쉬워서, 영문 · 숫자 · 기호만 남겨요 (헤더에 다른 글자가 있으면 보내기가 통째로 실패해요)
+const sol = (k: string) => env(k).replace(/[^\x21-\x7E]/g, "");
 const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
 
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
@@ -32,7 +34,7 @@ function parseContact(raw: string): { kind: "phone" | "email"; value: string } |
 const maskId = (u: string) => u.length <= 3 ? u[0] + "*".repeat(u.length - 1) : u.slice(0, 2) + "*".repeat(u.length - 3) + u.slice(-1);
 const maskMail = (m: string) => { const [a, b] = m.split("@"); return `${a.slice(0, 2)}${"*".repeat(Math.max(1, a.length - 2))}@${b}`; };
 const maskPhone = (p: string) => `${p.slice(0, 3)}-****-${p.slice(-4)}`;
-const ready = { email: !!(env("RESEND_API_KEY") && env("MAIL_FROM")), phone: !!(env("SOLAPI_API_KEY") && env("SOLAPI_API_SECRET") && env("SOLAPI_SENDER")) };
+const ready = { email: !!(env("RESEND_API_KEY") && env("MAIL_FROM")), phone: !!(env("SOLAPI_API_KEY") && sol("SOLAPI_API_SECRET") && env("SOLAPI_SENDER")) };
 
 async function sha(s: string) {
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -54,13 +56,13 @@ async function sendEmail(to: string, subject: string, text: string) {
 }
 async function sendSms(to: string, text: string) {
   const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
-  const sig = await hmac(env("SOLAPI_API_SECRET"), date + salt);
+  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
   const r = await fetch("https://api.solapi.com/messages/v4/send", {
     method: "POST",
-    headers: { Authorization: `HMAC-SHA256 apiKey=${env("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
+    headers: { Authorization: `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
     body: JSON.stringify({ message: { to, from: digits(env("SOLAPI_SENDER")), text } }),
   });
-  if (!r.ok) throw new Error("sms_failed " + r.status);
+  if (!r.ok) { const t = await r.text().catch(() => ""); throw new Error("sms_failed " + r.status + " " + t.slice(0, 300)); }
 }
 
 // 아이디로 회원 찾기 (아이디 회원만 — 구글 회원은 비밀번호가 없어요)
