@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>결제 확인 중 · 학원지원센터</title>
+<meta name="robots" content="noindex">
+<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;color:#191f28}</style></head>
+<body><p>결제를 확인하는 중이에요…</p>
+<script>
+// 토스페이먼츠 결제창이 돌아오는 곳: 받은 값(paymentKey · orderId · amount 또는 code · message)을 # 뒤로 옮겨 앱으로 넘겨요
+// (주소 ?code= 는 구글 로그인과 겹쳐서 앱 주소로 바로 받지 않아요)
+location.replace('/app#toss/' + encodeURIComponent(location.search.slice(1)));
+</script></body></html>

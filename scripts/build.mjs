@@ -9,7 +9,7 @@ const out = 'dist';
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
 
-for (const f of ['index.html', 'app.html', 'login.html', 'service.html']) cpSync(f, `${out}/${f}`);
+for (const f of ['index.html', 'app.html', 'login.html', 'service.html', 'pay.html', 'sw.js', 'manifest.webmanifest']) cpSync(f, `${out}/${f}`);
 cpSync('assets', `${out}/assets`, { recursive: true });
 
 mkdirSync(`${out}/assets/vendor`, { recursive: true });
@@ -53,7 +53,9 @@ const env = {
   SUPABASE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',
   // 전문 앱: 앱이 나오면 Vercel 환경변수에 주소 · 이름을 넣어요 (비어 있으면 "준비 중")
   PRO_APP_URL: process.env.NEXT_PUBLIC_PRO_APP_URL || '',
-  PRO_APP_NAME: process.env.NEXT_PUBLIC_PRO_APP_NAME || ''
+  PRO_APP_NAME: process.env.NEXT_PUBLIC_PRO_APP_NAME || '',
+  // 토스페이먼츠 클라이언트 키(공개 키). 비면 문서의 공개 테스트 키로 테스트 결제만 돼요
+  TOSS_CLIENT_KEY: process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || ''
 };
 if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
   console.warn('[build] Supabase 환경변수가 없어요. 로그인·신청 저장 없이 데모로만 동작해요.');

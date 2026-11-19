@@ -1675,3 +1675,32 @@ body.sorting, body.sorting * { cursor: grabbing !important; user-select: none; }
 .inv-qr-box { display: grid; justify-items: center; gap: 4px; padding: 18px; background: #fff; color: #111; border-radius: 16px; margin: 12px 0; }
 .inv-qr-box svg { width: min(260px, 70vw); height: auto; }
 .inv-qr-box span { font-size: 13px; color: #555; }
+
+/* 휴대폰 알림 · 온라인 결제 · 대량이체 */
+.set-card .card-head h2 svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; color: var(--blue-600); }
+.hint.push-hint { position: relative; padding-right: 40px; }
+.hint.push-hint .x { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); font-size: 18px; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; }
+.hint.push-hint .x:hover { background: var(--line); }
+.ios-steps { margin: 4px 0 8px; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; line-height: 1.55; }
+.pay-online { display: grid; gap: 6px; justify-items: center; }
+.pay-online .btn.wide { width: 100%; justify-content: center; }
+.pay-online svg { width: 18px; height: 18px; }
+.pay-done { text-align: center; }
+.pay-done .pd-ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; margin: 4px auto 0; font-size: 26px; font-weight: 800; }
+.pay-done .pd-ic svg { width: 28px; height: 28px; }
+.pay-done .pd-ic.ok { background: var(--good-soft); color: var(--good); }
+.pay-done .pd-ic.bad { background: var(--crit-soft); color: var(--crit); }
+.pay-done .pay-sum { justify-content: center; gap: 12px; }
+.bulk-dlg { width: min(900px, calc(100vw - 32px)); }
+dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
+.bp-rows { display: grid; gap: 8px; }
+.bp-row { display: grid; grid-template-columns: 1.2fr 1fr 1.4fr 1fr 1.1fr 1.2fr auto; gap: 6px; align-items: center; }
+.bp-row input, .bp-row select { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.bp-row .won-wrap { min-width: 0; }
+@media (max-width: 760px) {
+  .bp-row { grid-template-columns: 1fr 1fr; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+  .bp-row [name=name] { grid-column: 1 / -1; }
+  .bp-row [data-bp-del] { grid-column: 1 / -1; justify-self: end; }
+}
+.dlg .or { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.dlg .or::before, .dlg .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
