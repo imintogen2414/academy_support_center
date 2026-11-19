@@ -18,6 +18,8 @@ const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
 const env = (k: string) => Deno.env.get(k) || "";
+// 솔라피 키는 대시보드에 붙여 넣을 때 공백 · 줄바꿈 · 보이지 않는 글자가 섞이기 쉬워서, 영문 · 숫자 · 기호만 남겨요 (헤더에 다른 글자가 있으면 보내기가 통째로 실패해요)
+const sol = (k: string) => env(k).replace(/[^\x21-\x7E]/g, "");
 const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
 
 const digits = (s: string) => String(s || "").replace(/\D/g, "");
@@ -32,7 +34,7 @@ function parseContact(raw: string): { kind: "phone" | "email"; value: string } |
 const maskId = (u: string) => u.length <= 3 ? u[0] + "*".repeat(u.length - 1) : u.slice(0, 2) + "*".repeat(u.length - 3) + u.slice(-1);
 const maskMail = (m: string) => { const [a, b] = m.split("@"); return `${a.slice(0, 2)}${"*".repeat(Math.max(1, a.length - 2))}@${b}`; };
 const maskPhone = (p: string) => `${p.slice(0, 3)}-****-${p.slice(-4)}`;
-const ready = { email: !!(env("RESEND_API_KEY") && env("MAIL_FROM")), phone: !!(env("SOLAPI_API_KEY") && env("SOLAPI_API_SECRET") && env("SOLAPI_SENDER")) };
+const ready = { email: !!(env("RESEND_API_KEY") && env("MAIL_FROM")), phone: !!(env("SOLAPI_API_KEY") && sol("SOLAPI_API_SECRET") && env("SOLAPI_SENDER")) };
 
 async function sha(s: string) {
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -44,6 +46,25 @@ async function hmac(key: string, msg: string) {
   return [...new Uint8Array(s)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
+// 솔라피로 보내기: IP가 고정인 데이터베이스 서버가 대신 보내요(public.solapi_relay). 함수는 서명만 만들어 넘기고 결과를 기다려요.
+async function solapi(path: string, payload: unknown) {
+  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
+  const sig = await hmac(sol("SOLAPI_API_SECRET"), date + salt);
+  const auth = `HMAC-SHA256 apiKey=${sol("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`;
+  const { data: id, error } = await admin.rpc("solapi_relay", { p_path: path, p_auth: auth, p_body: payload });
+  if (error || !id) throw new Error("relay " + (error ? error.message : "no_id"));
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 400));
+    const { data: res } = await admin.rpc("solapi_result", { p_id: id });
+    if (res) {
+      // deno-lint-ignore no-explicit-any
+      let body: any = null; try { body = JSON.parse(res.body || "null"); } catch { body = res.body; }
+      return { ok: res.status >= 200 && res.status < 300, status: res.status || 0, body, error: res.error };
+    }
+  }
+  throw new Error("relay_timeout");
+}
+
 async function sendEmail(to: string, subject: string, text: string) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -53,14 +74,8 @@ async function sendEmail(to: string, subject: string, text: string) {
   if (!r.ok) throw new Error("mail_failed " + r.status);
 }
 async function sendSms(to: string, text: string) {
-  const date = new Date().toISOString(), salt = crypto.randomUUID().replace(/-/g, "");
-  const sig = await hmac(env("SOLAPI_API_SECRET"), date + salt);
-  const r = await fetch("https://api.solapi.com/messages/v4/send", {
-    method: "POST",
-    headers: { Authorization: `HMAC-SHA256 apiKey=${env("SOLAPI_API_KEY")}, date=${date}, salt=${salt}, signature=${sig}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message: { to, from: digits(env("SOLAPI_SENDER")), text } }),
-  });
-  if (!r.ok) throw new Error("sms_failed " + r.status);
+  const r = await solapi("/messages/v4/send", { message: { to, from: digits(env("SOLAPI_SENDER")), text } });
+  if (!r.ok) throw new Error("sms_failed " + r.status + " " + JSON.stringify(r.body || r.error).slice(0, 300));
 }
 
 // 아이디로 회원 찾기 (아이디 회원만 — 구글 회원은 비밀번호가 없어요)
