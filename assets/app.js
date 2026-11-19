@@ -2662,7 +2662,7 @@ function payrollPage() {
   const m = MONTH, list = payOf(m), last = payOf(shiftMonth(m, -1));
   const t = { g: sum(list, x => x.gross), i: sum(list, x => x.income_tax), l: sum(list, x => x.local_tax) };
   const due = nextMonthDay(m, 10), filed = REAL.paperwork.find(p => p.auto_key === `wht:${m}`);
-  const acts = `${last.length && list.length < last.length ? `<button class="btn" data-act="payCopy">지난달 ${last.length}명 불러오기</button>` : ''}<button class="btn" data-act="payXlsx" ${list.length ? '' : 'disabled'}>${ic('download')}엑셀로 받기</button><button class="btn primary" data-act="payAdd">${ic('plus')}지급 넣기</button>`;
+  const acts = `${last.length && list.length < last.length ? `<button class="btn" data-act="payCopy">지난달 ${last.length}명 불러오기</button>` : ''}<button class="btn" data-act="payXlsx" ${list.length ? '' : 'disabled'}>${ic('download')}엑셀로 받기</button><button class="btn" data-act="bulkPay">${ic('sheet')}대량이체 파일</button><button class="btn primary" data-act="payAdd">${ic('plus')}지급 넣기</button>`;
   return head('원천세 계산', '강사마다 이번 달 지급액만 넣으면 세금이 저절로 계산돼요. 엑셀 계산표를 받아 다음 달 10일까지 홈택스에 신고해요.', acts) + `
   <div class="sec-row">${monthBar()}<span class="muted small">지급한 달을 골라요 · 신고 기한 ${md(due)} ${ddChip(due)}</span></div>
   <div class="stats">
@@ -4367,16 +4367,18 @@ function payDialog(b) {
   <form method="dialog" class="dlg" id="dlgForm" novalidate>
     <h2>수강료 내기</h2>
     <div class="pay-sum"><span>${esc(b.title)}</span><b class="num">${won(b.amount)}</b></div>
+    ${payMode() !== 'off' ? `<div class="pay-online"><button type="button" class="btn primary wide" id="payCard">${ic('card')}카드 · 간편결제로 내기</button>${payMode() === 'test' ? '<small class="chip warn">테스트 결제 · 실제 돈은 나가지 않아요</small>' : ''}</div><div class="or">또는 계좌로 보내기</div>` : ''}
     ${p.account ? `<div class="pay-acct"><span class="muted small">${DATA.academy.name} 입금 계좌</span><b>${payText(p)}</b><button type="button" class="btn sm" id="payCopy">계좌번호 복사</button>${p.note ? `<p class="muted small" style="margin:0">${esc(p.note)}</p>` : ''}</div>`
       : '<p class="muted">학원이 아직 입금 계좌를 넣지 않았어요. 학원에서 안내한 방법으로 내 주세요.</p>'}
     <label class="f">보낸 사람 · 메모<input name="note" maxlength="100" placeholder="예: 김은정 이름으로 보냈어요"></label>
-    <p class="muted small" style="margin:0">보낸 뒤 "보냈어요"를 누르면 원장님께 알림이 가요. 원장님이 입금을 확인하면 "납부 완료"로 바뀌어요. 카드 결제는 준비 중이에요.</p>
+    <p class="muted small" style="margin:0">보낸 뒤 "보냈어요"를 누르면 원장님께 알림이 가요. 원장님이 입금을 확인하면 "납부 완료"로 바뀌어요.${payMode() === 'off' ? ' 카드 결제는 학원이 켜면 여기에 생겨요.' : ''}</p>
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">보냈어요</button></div>
   </form>`;
   d.showModal();
   $('#dlgCancel').onclick = () => d.close();
   if ($('#payCopy')) $('#payCopy').onclick = () => navigator.clipboard.writeText(p.account).then(() => toast('계좌번호를 복사했어요'), () => toast(p.account));
+  if ($('#payCard')) $('#payCard').onclick = () => payOnline(b, $('#payCard'));
   $('#dlgForm').onsubmit = async e => {
     e.preventDefault();
     const note = e.target.elements.note.value.trim(), done = '학원에 알렸어요 · 원장님이 확인하면 납부 완료로 바뀌어요';
@@ -4449,7 +4451,8 @@ function settingsPage() {
     ${row('결제 내역', '<span class="muted">아직 없어요</span>')}
     ${row(`${famOn() ? '학부모 ' : ''}수강료 입금 계좌`, payText(payInfo()) || none)}
     <p class="muted small">센터 이용료는 견적이 정해지면 결제 수단과 내역이 여기에 보여요. 입금 계좌를 넣어 두면 학부모님이 수납 화면에서 "내기"를 눌러 바로 보고, 보낸 뒤 알려 줘요.</p>
-    <div class="row-btns"><button class="btn sm primary" data-act="editPayAcct">입금 계좌 ${payInfo() && payInfo().account ? '고치기' : '넣기'}</button><a class="btn sm" href="#admin/billing">수강료 수납 열기</a><a class="btn sm" href="#help">결제 문의하기</a></div>`);
+    <div class="row-btns"><button class="btn sm primary" data-act="editPayAcct">입금 계좌 ${payInfo() && payInfo().account ? '고치기' : '넣기'}</button><a class="btn sm" href="#admin/billing">수강료 수납 열기</a><a class="btn sm" href="#help">결제 문의하기</a></div>
+    ${onlinePayLine()}`);
   if (ROLE === 'parent') {
     const bills = REAL ? REAL.kidBills.filter(b => !b.paid_at) : DATA.child.bills.filter(b => !b.paid);
     const total = REAL ? sum(bills, b => b.amount) : sum(bills, b => b.amount * 1e4); // 예시 금액은 만 원 단위
@@ -4474,7 +4477,7 @@ function settingsPage() {
     ${USER && !CENTER ? `<div class="set-line"><div><b>센터 관리자 신청</b><small>학원지원센터 본부 직원만 신청해 주세요</small></div>${adminApplyLink(true)}</div>` : ''}
     <div class="set-line"><div><b>회원 탈퇴</b><small>${ROLE === 'owner' || ROLE === 'teacher' ? '학원 자료 정리가 필요해서 센터에 문의로 받아요' : '학원 원장님이나 센터에 말씀해 주세요'}</small></div>${ROLE === 'owner' || ROLE === 'teacher' ? '<a class="btn sm" href="#help">센터에 문의하기</a>' : ''}</div>`);
   return head('설정', '내 정보와 학원 · 이용 중인 지원 · 결제 정보를 보고, 화면과 계정 설정을 바꿔요.') +
-    `<div class="set-grid"><div>${me}${acad}</div><div>${svc}${pay}${app}${acct}</div></div>`;
+    `<div class="set-grid"><div>${me}${pushCard()}${acad}</div><div>${svc}${pay}${app}${acct}</div></div>`;
 }
 function pwDialog() {
   const d = dialogEl();
@@ -4562,7 +4565,8 @@ function moveAcademyDialog() {
     } });
 }
 // 아이디 회원이 이메일이 없으면 이메일도 (아이디 · 비밀번호 찾기에 써요)
-const phoneHint = () => {
+const phoneHint = () => pushHint() + phoneHint0();
+const phoneHint0 = () => {
   if (!USER || !PROFILE || ROLE === 'admin') return '';
   const miss = [ROLE !== 'student' && !PROFILE.phone && '휴대폰 번호', PROFILE.username && !PROFILE.email && '이메일'].filter(Boolean);
   if (ROLE === 'student' && (PROFILE.phone || PROFILE.email)) return '';
@@ -9702,6 +9706,8 @@ function onboarding(user) {
 let INVITE_ERR = '';
 async function boot() {
   // 초대 링크(/join/코드 → 첫 화면 → /app#join/코드)로 온 코드는 이 기기에 남겨 두고 주소는 홈으로
+  const tm = location.hash.match(/^#toss\/(.*)$/);
+  if (tm) { TOSS_BACK = new URLSearchParams(decodeURIComponent(tm[1])); history.replaceState(null, '', location.pathname + '#home'); }
   const jm = location.hash.match(/^#join\/([A-Za-z0-9-]+)/);
   if (jm) { saveInvite(jm[1]); history.replaceState(null, '', location.pathname + '#home'); }
   if (!DEMO) {
@@ -9738,7 +9744,7 @@ async function boot() {
     }
     const cur = pickAcademy(MEMS);
     if (cur && cur.suspended) { suspendedScreen(user, cur); return; }
-    const { data: mem } = cur ? await SB.from('academy_members').select('role, title, perms, academies(id, name, region, family, app_off, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed, subjects)')
+    const { data: mem } = cur ? await SB.from('academy_members').select('role, title, perms, academies(id, name, region, family, app_off, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed, subjects, online_pay)')
       .eq('user_id', user.id).eq('academy_id', cur.academy_id).limit(1) : { data: [] };
     if (!mem || !mem.length) {
       // 학원 코드를 아직 못 받은 강사는 채용 공고부터 볼 수 있어요
@@ -9791,6 +9797,8 @@ async function boot() {
     else if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   } else { await loadSeen(); if (!USER) { tailorMenus(); applyDemoAcad(); } }
   render();
+  if (TOSS_BACK) tossBack();
+  if (USER) swReady(); // 알림을 켠 기기는 서비스 워커가 늘 깨어 있게
   // 이미 학원이 있는데 초대 링크로 왔으면: 어느 학원인지 보여 주고 "들어가기" 한 번
   const inv = pendingInvite();
   if (inv && ROLE !== 'admin') { if (!USER) clearInvite(); joinAcademyDialog(inv); }
@@ -11090,11 +11098,289 @@ function bindTax() {
 
 function bindR19() {
   bindTax();
+  bindPushPay();
   on('[data-act="renameAcad"]', renameAcademyDialog);
   on('[data-act="switchAcad"]', acadSwitchDialog);
   on('[data-act="newAcad"]', newAcademyDialog);
   on('[data-act="joinAcad"]', joinAcademyDialog);
   on('[data-acad-stop]', (b, e) => { e.preventDefault(); acadStop(b.dataset.acadStop); });
+}
+
+/* ================= 휴대폰 알림(웹 푸시) · 학부모 온라인 결제(토스페이먼츠) · 대량이체 파일 =================
+   알림: 기기마다 push_subs(설정 "휴대폰 알림"에서 켜기 save_push_sub) → DB 트리거가 일이 생기면 private.push → push_outbox → Edge Function push-send가 보내요.
+   종류(kinds) chat 채팅 · notice 공지 · attend 아이 출석 · approval 결재 요청 · pay 입금 알림 · 온라인 결제. 아이폰은 홈 화면에 추가한 뒤에만 받아요(iOS 16.4+).
+   결제: 학원마다 academies.online_pay(off · test · live). 학부모 "내기" → pay-online prepare → 토스 결제창 → /pay.html → /app#toss/… → confirm.
+   테스트는 실제 돈이 나가지 않고 청구도 안 바뀌어요(pay_orders에만). 실제(live)는 학원마다 결제 회사 계약 뒤 센터가 열어요.
+   대량이체: 원천세 화면 "대량이체 파일" → 받는 사람 계좌(payee_accounts)를 기억해 두고 은행 기업뱅킹 "대량이체"에 올릴 엑셀. */
+const PUSH_PUBLIC_KEY = 'BO3ygZDdgvKhwaT5xoQbxZS8YdM0ALe0D4c7ps-BPLEHXuKj6-_cggT4GZf41xFDLn0Q9v89joDHYf6Ij1f6ntE'; // push-send 비밀 값 VAPID_PUBLIC_KEY와 같은 값 (공개 키라 코드에 둬요)
+const PUSH_KINDS = [['chat', '채팅', '새 메시지'], ['notice', '공지', '학원 공지'], ['attend', '아이 출석', '출석 · 지각 · 결석'], ['approval', '결재 요청', '강사님이 올린 결재'], ['pay', '수납', '입금 알림 · 온라인 결제']];
+const pushKindsFor = () => PUSH_KINDS.filter(([k]) => k === 'chat' || (k === 'notice' && ['parent', 'student'].includes(ROLE)) || (k === 'attend' && ROLE === 'parent') || (k === 'approval' && can('approvals')) || (k === 'pay' && can('billing')));
+const keyBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isAppMode = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const PUSH = { state: null, kinds: null, endpoint: null };
+let SWREG = null, INSTALL_EVT = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALL_EVT = e; if ($('#pushBody')) paintPush(); });
+async function swReady() {
+  if (!('serviceWorker' in navigator) || DEMO) return null;
+  try { return SWREG = SWREG || await navigator.serviceWorker.register('/sw.js'); } catch (e) { return null; }
+}
+const pushMine = () => { try { return USER && localStorage.getItem(`asc-push-${USER.id}`) === '1'; } catch (e) { return false; } };
+// 이 기기 알림 상태: on 켜짐 · off 꺼짐 · ios 홈 화면 추가 필요 · denied 막힘 · no 안 되는 브라우저
+async function pushCheck() {
+  let st;
+  if (DEMO) st = isIOS() && !isAppMode() ? 'ios' : 'off'; // 예시 계정은 켜는 모습만
+  else if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) st = isIOS() && !isAppMode() ? 'ios' : 'no';
+  else if (Notification.permission === 'denied') st = 'denied';
+  else {
+    const r = await swReady(), sub = r && await r.pushManager.getSubscription().catch(() => null);
+    st = 'off';
+    if (sub && USER) {
+      const { data } = await SB.from('push_subs').select('kinds').eq('endpoint', sub.endpoint).maybeSingle();
+      if (data) { st = 'on'; PUSH.kinds = data.kinds; }
+      else if (pushMine()) { await savePushSub(sub); st = 'on'; PUSH.kinds = null; } // 이 기기를 다른 계정이 쓰다 돌아왔을 때
+      PUSH.endpoint = sub.endpoint;
+    }
+  }
+  return PUSH.state = st;
+}
+async function savePushSub(sub) {
+  const j = sub.toJSON();
+  return SB.rpc('save_push_sub', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent.slice(0, 300), p_kinds: null });
+}
+async function pushOn() {
+  if (!USER) { toast('예시 계정에서는 알림을 켤 수 없어요 · 실제 계정에서 켜면 이 기기로 새 소식이 와요'); return; }
+  if (PUSH.state === 'ios') { iosInstallDialog(); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { toast(perm === 'denied' ? '알림이 막혀 있어요 · 브라우저(또는 휴대폰) 설정에서 이 사이트 알림을 허용으로 바꿔 주세요' : '알림을 켜지 않았어요'); await pushCheck(); paintPush(); return; }
+  const r = await swReady(); if (!r) { toast('이 브라우저에서는 알림을 켤 수 없어요'); return; }
+  await navigator.serviceWorker.ready;
+  let sub;
+  try { sub = (await r.pushManager.getSubscription()) || await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(PUSH_PUBLIC_KEY) }); }
+  catch (e) { toast('알림을 켜지 못했어요 · 잠시 후 다시 해 주세요'); return; }
+  const { error } = await savePushSub(sub);
+  if (error) { toast(dbErr(error, '알림을 켜지')); return; }
+  try { localStorage.setItem(`asc-push-${USER.id}`, '1'); } catch (e) { /* 이번만 */ }
+  await pushCheck(); paintPush(); paintPushHint();
+  toast('이 기기로 알림이 와요 · "시험 알림"으로 확인해 보세요');
+}
+async function pushOff() {
+  const r = await swReady(), sub = r && await r.pushManager.getSubscription().catch(() => null);
+  if (sub) { await SB.from('push_subs').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe().catch(() => null); }
+  try { localStorage.removeItem(`asc-push-${USER.id}`); } catch (e) { /* 괜찮아요 */ }
+  await pushCheck(); paintPush(); toast('이 기기 알림을 껐어요');
+}
+async function pushTest() {
+  const { error } = await SB.rpc('push_test');
+  toast(error ? (/no_device/.test(error.message || '') ? '먼저 이 기기 알림을 켜 주세요' : dbErr(error, '보내지')) : '시험 알림을 보냈어요 · 몇 초 안에 이 기기에 와요');
+}
+async function pushKind(k, on) {
+  const all = pushKindsFor().map(x => x[0]), cur = new Set(PUSH.kinds || PUSH_KINDS.map(x => x[0]));
+  if (on) cur.add(k); else cur.delete(k);
+  const kinds = [...cur].filter(x => PUSH_KINDS.some(p => p[0] === x) || x === 'test');
+  const { error } = await SB.from('push_subs').update({ kinds }).eq('endpoint', PUSH.endpoint);
+  if (error) { toast(dbErr(error)); return; }
+  PUSH.kinds = kinds; toast(`${PUSH_KINDS.find(x => x[0] === k)[1]} 알림을 ${on ? '켰어요' : '껐어요'}`); void all;
+}
+function iosInstallDialog() {
+  const d = dialogEl();
+  d.innerHTML = `<div class="dlg">
+    <h2>아이폰은 홈 화면에 추가한 뒤 알림을 켜요</h2>
+    <ol class="ios-steps">
+      <li><b>사파리</b>로 이 화면을 열어요 (카톡 · 네이버 앱 안에서 열었다면 "사파리로 열기")</li>
+      <li>아래쪽 <b>공유 버튼</b>(네모에 위 화살표)을 눌러요</li>
+      <li><b>"홈 화면에 추가"</b> → 오른쪽 위 "추가"</li>
+      <li>홈 화면에 생긴 <b>학원지원센터 아이콘</b>으로 열고 로그인해요</li>
+      <li>설정 → 휴대폰 알림 → <b>"이 기기로 알림 받기"</b></li>
+    </ol>
+    <p class="muted small">iOS 16.4 이상에서 돼요. 안드로이드 · PC는 바로 켤 수 있어요.</p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn primary" id="dlgCancel">알겠어요</button></div></div>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+}
+const pushCard = () => ROLE === 'partner' ? '' : `<section class="card set-card" id="pushCard"><div class="card-head"><h2>${ic('notice')}휴대폰 알림</h2></div><div id="pushBody"><p class="muted small">이 기기 알림 상태를 확인하는 중…</p></div></section>`;
+function paintPush() {
+  const box = $('#pushBody'); if (!box) return;
+  const st = PUSH.state, kinds = pushKindsFor(), on = new Set(PUSH.kinds || PUSH_KINDS.map(x => x[0]));
+  const what = kinds.map(x => x[1]).join(' · ');
+  const install = !isAppMode() && (INSTALL_EVT || isIOS()) ? `<div class="set-line"><div><b>홈 화면에 앱처럼 추가</b><small>앱 설치 없이 아이콘을 눌러 바로 열어요 · 주소창 없이 넓게 보여요</small></div><button class="btn sm" data-act="appInstall">추가하기</button></div>` : '';
+  box.innerHTML = (st === 'on' ? `
+    <div class="set-line"><div><b>이 기기로 알림이 와요 <span class="chip good">켜짐</span></b><small>앱을 닫아 두어도 새 소식이 휴대폰 · PC 알림으로 와요 · 알림을 누르면 그 화면이 열려요</small></div>
+      <span class="btns"><button class="btn sm primary" data-act="pushTest">시험 알림</button><button class="btn sm" data-act="pushOff">끄기</button></span></div>
+    ${kinds.map(([k, l, dsc]) => `<div class="set-line"><div><b>${l}</b><small>${dsc}</small></div><label class="switch"><input type="checkbox" data-push-kind="${k}" ${on.has(k) ? 'checked' : ''}><span></span></label></div>`).join('')}`
+    : st === 'off' ? `
+    <div class="set-line"><div><b>이 기기로 알림 받기 <span class="chip mute">꺼짐</span></b><small>${what} 소식이 오면 카톡처럼 휴대폰 알림이 와요 · 기기마다 한 번 켜요</small></div><button class="btn sm primary" data-act="pushOn">알림 켜기</button></div>`
+    : st === 'ios' ? `
+    <div class="set-line"><div><b>아이폰은 홈 화면에 추가하면 알림이 와요</b><small>사파리 공유 버튼 → "홈 화면에 추가" → 그 아이콘으로 열어 여기서 알림 켜기</small></div><button class="btn sm primary" data-act="iosHow">방법 보기</button></div>`
+    : st === 'denied' ? `<p class="msg" style="display:block">이 기기에서 알림이 막혀 있어요. 브라우저 주소창 왼쪽 자물쇠(또는 휴대폰 설정 → 앱 · 사이트 알림)에서 학원지원센터 알림을 <b>허용</b>으로 바꾼 뒤 새로고침해 주세요.</p>`
+    : `<p class="muted small">이 브라우저는 알림을 받을 수 없어요. 크롬 · 엣지 · 삼성 인터넷이나, 아이폰은 사파리에서 홈 화면에 추가해 주세요.</p>`) + install +
+    (DEMO ? '<p class="muted small">예시 계정에서는 켜지지 않아요. 실제 계정에서 켜 보세요.</p>' : '');
+  bindPushBtns();
+}
+// 홈 한 줄: 알림을 아직 안 켰으면 (숨기면 이 기기에서 다시 안 보여요)
+const pushHint = () => ROLE === 'admin' ? '' : '<div id="pushHintBox"></div>';
+const pushHintHidden = () => { try { return localStorage.getItem('asc-push-hint') === '0'; } catch (e) { return false; } };
+function paintPushHint() {
+  const box = $('#pushHintBox'); if (!box) return;
+  box.innerHTML = ['off', 'ios'].includes(PUSH.state) && !pushHintHidden() ? `<a class="hint push-hint" href="#settings">${ic('notice')}<span>휴대폰 알림을 켜면 ${pushKindsFor().map(x => x[1]).join(' · ')} 소식이 바로 와요${PUSH.state === 'ios' ? ' · 아이폰은 홈 화면에 추가한 뒤' : ''}</span><b>알림 켜기 →</b><button type="button" class="x" data-act="pushHintHide" aria-label="숨기기">×</button></a>` : '';
+  bindPushBtns();
+}
+
+/* ---------- 학부모 온라인 결제 (토스페이먼츠 결제창) ---------- */
+const TOSS_KEY = (window.ENV && window.ENV.TOSS_CLIENT_KEY) || 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq'; // 비면 토스페이먼츠 문서의 공개 테스트 키
+let TOSS_BACK = null;
+const demoPayMode = () => { try { return sessionStorage.getItem('asc-demo-onlinepay') || 'test'; } catch (e) { return 'test'; } };
+const payMode = () => REAL ? REAL.academy.online_pay || 'off' : demoPayMode();
+const PAY_ERR = { pay_off: '학원이 카드 결제를 꺼 두었어요', already_paid: '이미 낸 청구예요', no_invoice: '이 청구를 찾을 수 없어요', live_not_ready: '실제 카드 결제는 아직 준비 중이에요', amount_mismatch: '금액이 맞지 않아 결제를 멈췄어요', no_key: '결제 키가 아직 준비되지 않았어요 · 센터에 문의해 주세요', toss_fail: '카드사에서 결제를 승인하지 않았어요', no_order: '결제 기록을 찾을 수 없어요', not_signed_in: '다시 로그인해 주세요' };
+const fnErr = async e => { try { const j = await e.context.json(); return j.error === 'toss_fail' && j.message ? `toss:${j.message}` : j.error; } catch (x) { return 'network'; } };
+const payErrText = c => c && c.startsWith('toss:') ? `카드사에서 승인하지 않았어요 · ${c.slice(5)}` : PAY_ERR[c] || '결제를 하지 못했어요 · 잠시 후 다시 해 주세요';
+const loadToss = () => window.TossPayments ? Promise.resolve() : new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://js.tosspayments.com/v2/standard'; sc.onload = ok; sc.onerror = () => no(new Error('load')); document.head.appendChild(sc); });
+async function payOnline(b, btn) {
+  if (!REAL) { const d = $('#dlg'); if (d && d.open) d.close(); payResultDialog(true, { test: true, amount: b.amount || 0, demo: true }); return; }
+  const old = btn.innerHTML; btn.disabled = true; btn.textContent = '결제 창 여는 중…';
+  const back = () => { btn.disabled = false; btn.innerHTML = old; };
+  const { data, error } = await SB.functions.invoke('pay-online', { body: { action: 'prepare', invoice: b.id } });
+  if (error || !data || !data.orderId) { back(); toast(payErrText(error ? await fnErr(error) : '')); return; }
+  try { await loadToss(); } catch (e) { back(); toast('결제 창을 불러오지 못했어요 · 인터넷 연결을 확인해 주세요'); return; }
+  try {
+    await window.TossPayments(TOSS_KEY).payment({ customerKey: window.TossPayments.ANONYMOUS }).requestPayment({
+      method: 'CARD', amount: { currency: 'KRW', value: data.amount }, orderId: data.orderId, orderName: data.orderName,
+      customerName: data.customerName || undefined, successUrl: `${location.origin}/pay.html?r=ok`, failUrl: `${location.origin}/pay.html?r=fail`
+    });
+  } catch (e) { // PC에서 창을 닫으면 여기로 와요
+    back(); SB.functions.invoke('pay-online', { body: { action: 'fail', orderId: data.orderId, message: e && (e.code || e.message) } }).catch(() => null);
+    toast(e && e.code === 'USER_CANCEL' ? '결제를 그만뒀어요' : `결제하지 못했어요${e && e.message ? ` · ${e.message}` : ''}`);
+  }
+}
+async function tossBack() {
+  const q = TOSS_BACK; TOSS_BACK = null;
+  if (!q || !USER) return;
+  if (q.get('r') === 'ok') {
+    toast('결제를 확인하는 중이에요…');
+    const { data, error } = await SB.functions.invoke('pay-online', { body: { action: 'confirm', paymentKey: q.get('paymentKey'), orderId: q.get('orderId'), amount: Number(q.get('amount')) } });
+    if (error) payResultDialog(false, payErrText(await fnErr(error)));
+    else { if (ROLE === 'parent') await loadFamily(); payResultDialog(true, data); }
+  } else {
+    if (q.get('orderId')) SB.functions.invoke('pay-online', { body: { action: 'fail', orderId: q.get('orderId'), message: q.get('code') } }).catch(() => null);
+    payResultDialog(false, q.get('code') === 'PAY_PROCESS_CANCELED' ? '결제를 그만뒀어요' : q.get('message') || '결제하지 못했어요');
+  }
+  location.hash = ROLE === 'parent' ? '#kid/bills' : ROLE === 'owner' ? '#settings' : '#home';
+}
+function payResultDialog(ok, r) {
+  const d = dialogEl();
+  d.innerHTML = `<div class="dlg pay-done">
+    <span class="pd-ic ${ok ? 'ok' : 'bad'}">${ok ? ic('check') : '!'}</span>
+    <h2>${ok ? (r.test ? '테스트 결제가 끝났어요' : '결제가 끝났어요') : '결제하지 못했어요'}</h2>
+    ${ok ? `<p class="pay-sum"><span>${esc(r.method || '카드')}</span><b class="num">${won(r.amount || 0)}</b></p>
+      <p class="muted small">${r.test ? '토스페이먼츠 <b>테스트</b>라 실제 돈은 나가지 않았고, 납부 확인도 바뀌지 않아요. 원장님께 "온라인 결제" 알림이 가요.' : '원장님께 알림이 가고, 수납 내역이 "납부 완료"로 바뀌었어요.'}${r.demo ? ' (예시 계정 화면이에요)' : ''}</p>`
+      : `<p class="muted">${esc(r)}</p>`}
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn primary" id="dlgCancel">확인</button></div></div>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+}
+// 원장 설정 → 결제 정보: 학부모 카드 결제 켜기 (지금은 테스트)
+const onlinePayLine = () => {
+  const m = payMode(), chip = { off: '<span class="chip mute">꺼짐</span>', test: '<span class="chip warn">테스트 중</span>', live: '<span class="chip good">켜짐</span>' }[m];
+  return `<div class="set-line"><div><b>학부모 카드 · 간편결제 ${chip}</b><small>${m === 'test' ? '학부모 수납 "내기"에 카드 결제가 보여요. 토스페이먼츠 테스트라 실제 돈은 나가지 않고 납부 확인도 바뀌지 않아요 · 원장님께 결제 알림이 와요'
+    : m === 'live' ? '결제가 끝나면 저절로 납부 확인돼요' : '켜면 학부모님이 수납 화면에서 카드 · 간편결제로 내요. 먼저 테스트로 흐름을 볼 수 있어요 · 실제 결제는 결제 회사(PG) 계약 뒤 센터가 열어 드려요'}</small></div>
+    <span class="btns">${m === 'off' ? '<button class="btn sm primary" data-online-pay="test">테스트로 켜기</button>' : `${m === 'test' ? '<button class="btn sm" data-act="payTestMe">직접 테스트 결제</button>' : ''}<button class="btn sm" data-online-pay="off">끄기</button>`}<button class="btn sm" data-act="payOrders">결제 기록</button></span></div>`;
+};
+async function setOnlinePay(mode) {
+  if (!REAL) { try { sessionStorage.setItem('asc-demo-onlinepay', mode); } catch (e) { /* 이번만 */ } render(); toast(mode === 'off' ? '카드 결제를 껐어요 (예시)' : '테스트 카드 결제를 켰어요 · 학부모 예시 수납 "내기"에서 보여요'); return; }
+  const { error } = await SB.rpc('set_online_pay', { p_academy: REAL.academy.id, p_mode: mode });
+  if (error) { toast(dbErr(error, '바꾸지')); return; }
+  REAL.academy.online_pay = mode; render();
+  toast(mode === 'off' ? '카드 결제를 껐어요' : '테스트 카드 결제를 켰어요 · 학부모님 수납 "내기"에 보여요');
+}
+const PO_ST = { ready: ['mute', '결제 전'], done: ['good', '결제 완료'], fail: ['crit', '실패 · 그만둠'], cancel: ['mute', '취소'] };
+async function payOrdersDialog() {
+  const rows = REAL ? ((await SB.from('pay_orders').select('*').eq('academy_id', REAL.academy.id).order('created_at', { ascending: false }).limit(30)).data || [])
+    : [{ created_at: new Date().toISOString(), payer_name: '김은정', title: `${DATA.academy.name} 김하늘 수강료`, amount: 270000, status: 'done', test: true, method: '카드' }];
+  const d = dialogEl();
+  d.innerHTML = `<div class="dlg"><h2>온라인 결제 기록</h2>
+    <p class="muted small" style="margin:-6px 0 0">학부모님이 카드 · 간편결제로 낸 기록이에요. 최근 30건.</p>
+    ${rows.length ? `<div class="list stack">${rows.map(o => `<div class="li"><div><div class="t">${esc(o.payer_name || '이름 없음')} <span class="chip ${PO_ST[o.status][0]}">${PO_ST[o.status][1]}</span>${o.test ? ' <span class="chip warn">테스트</span>' : ''}</div>
+      <div class="d">${esc(o.title || '')} · ${o.created_at.slice(5, 16).replace('T', ' ').replace('-', '/')}${o.method ? ` · ${esc(o.method)}` : ''}${o.fail_msg ? ` · ${esc(o.fail_msg)}` : ''}</div></div><div class="r"><b class="num">${won(o.amount)}</b></div></div>`).join('')}</div>` : '<p class="muted">아직 기록이 없어요.</p>'}
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+}
+// 원장님이 직접 해 보기: 이번 달 미납 청구 하나로 테스트 결제
+function payTestMe() {
+  const inv = REAL ? REAL.invoices.find(i => !i.paid_at && i.amount >= 100) : { amount: 270000 };
+  if (!inv) { toast('미납 청구가 하나 있어야 테스트할 수 있어요 · 수납에서 청구를 하나 만들어 주세요'); return; }
+  const btn = document.querySelector('[data-act="payTestMe"]');
+  payOnline(inv, btn);
+}
+
+/* ---------- 대량이체 파일: 강사 급여 · 월세처럼 여러 곳에 한 번에 보낼 때 ---------- */
+const BANKS = ['KB국민', '신한', '우리', '하나', 'NH농협', 'IBK기업', '카카오뱅크', '토스뱅크', '케이뱅크', 'SC제일', '한국씨티', 'iM뱅크(대구)', '부산', '경남', '광주', '전북', '제주', '새마을금고', '신협', '우체국', '수협', 'KDB산업'];
+async function bulkPayDialog() {
+  const m = MONTH, short = unHtml(DATA.academy.name).replace(/\s/g, '').slice(0, 6);
+  let saved = [];
+  if (REAL) { const { data } = await SB.from('payee_accounts').select('name, bank, account, holder').eq('academy_id', REAL.academy.id); saved = data || []; }
+  const acc = n => saved.find(a => a.name === n) || {};
+  let rows = REAL ? payOf(m).map(x => ({ name: x.person_name, amount: x.gross - x.income_tax - x.local_tax, ...acc(x.person_name), memo: `${short}${+m.slice(5)}월급여` }))
+    : [{ name: '김민지', bank: '신한', account: '110000000000', holder: '김민지', amount: 1740600, memo: `${short}${+m.slice(5)}월급여` }, { name: '이준호', bank: 'KB국민', account: '00000000000000', holder: '이준호', amount: 1257300, memo: `${short}${+m.slice(5)}월급여` }];
+  if (!rows.length) rows = [{ name: '', amount: '', memo: '' }];
+  const d = dialogEl();
+  const paint = () => {
+    d.innerHTML = `<form method="dialog" class="dlg bulk-dlg" id="bpForm" novalidate>
+      <h2>${monthLabel(m)} 대량이체 파일</h2>
+      <p class="muted small" style="margin:-6px 0 0">은행 기업 · 개인 인터넷뱅킹의 <b>"대량이체(다건이체)"</b>에 올릴 엑셀이에요. 원천세 계산의 실지급액이 채워져 있고, 계좌는 한 번 넣으면 다음 달에도 기억해요. 은행마다 양식 칸 순서가 조금 다르면 은행 양식에 붙여 넣어 주세요.</p>
+      <div class="bp-rows">${rows.map((r, i) => `<div class="bp-row" data-i="${i}">
+        <input name="name" value="${esc(r.name || '')}" maxlength="50" placeholder="받는 사람 (예: 김민지 · 건물주)">
+        <select name="bank"><option value="">은행</option>${BANKS.map(b => `<option ${r.bank === b ? 'selected' : ''}>${b}</option>`).join('')}${r.bank && !BANKS.includes(r.bank) ? `<option selected>${esc(r.bank)}</option>` : ''}</select>
+        <input name="account" value="${esc(r.account || '')}" maxlength="40" inputmode="numeric" placeholder="계좌번호">
+        <input name="holder" value="${esc(r.holder || '')}" maxlength="50" placeholder="예금주">
+        <span class="won-wrap"><input name="amount" class="won-in" inputmode="numeric" value="${r.amount ? comma(r.amount) : ''}" placeholder="금액"><i>원</i></span>
+        <input name="memo" value="${esc(r.memo || '')}" maxlength="20" placeholder="받는 분 통장 표시">
+        <button type="button" class="btn sm ghost" data-bp-del="${i}" aria-label="빼기">×</button></div>`).join('')}</div>
+      <div class="row-btns"><button type="button" class="btn sm" id="bpAdd">${ic('plus')}받는 사람 더하기</button>${fixedData().length ? '<button type="button" class="btn sm" id="bpFixed">매달 나가는 돈(월세 등) 넣기</button>' : ''}<span style="flex:1"></span><b id="bpSum" class="num"></b></div>
+      <label class="f">보내는 분 통장 표시 <span class="muted small">내 통장에 찍히는 이름</span><input name="from" maxlength="20" value="${esc(`${short}${+m.slice(5)}월`)}"></label>
+      <p class="msg" id="dlgMsg" hidden></p>
+      <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">${ic('download')}이체 파일 받기</button></div></form>`;
+    const read = () => { rows = [...d.querySelectorAll('.bp-row')].map(el => ({ name: el.querySelector('[name=name]').value.trim(), bank: el.querySelector('[name=bank]').value, account: el.querySelector('[name=account]').value.trim(), holder: el.querySelector('[name=holder]').value.trim(), amount: numOf(el.querySelector('[name=amount]').value), memo: el.querySelector('[name=memo]').value.trim() })); };
+    const total = () => { read(); $('#bpSum').textContent = `합계 ${won(sum(rows, r => r.amount || 0))} · ${rows.filter(r => r.amount).length}건`; };
+    d.addEventListener('input', total); total();
+    $('#bpAdd').onclick = () => { read(); rows.push({ name: '', amount: '', memo: '' }); paint(); };
+    if ($('#bpFixed')) $('#bpFixed').onclick = () => { read(); fixedData().filter(f => f.active !== false && !rows.some(r => r.name === f.name)).forEach(f => rows.push({ name: f.name, amount: f.amount, ...acc(f.name), memo: `${short}${f.name}`.slice(0, 20) })); paint(); };
+    d.querySelectorAll('[data-bp-del]').forEach(b => b.onclick = () => { read(); rows.splice(+b.dataset.bpDel, 1); if (!rows.length) rows.push({ name: '', amount: '', memo: '' }); paint(); });
+    $('#dlgCancel').onclick = () => d.close();
+    $('#bpForm').onsubmit = async e => {
+      e.preventDefault(); read();
+      const list = rows.filter(r => r.name || r.amount), msg = $('#dlgMsg'), fail = t => { msg.textContent = t; msg.hidden = false; };
+      const bad = list.find(r => !r.amount || !r.bank || !r.account.replace(/\D/g, ''));
+      if (!list.length) return fail('보낼 곳을 하나 이상 넣어 주세요.');
+      if (bad) return fail(`${bad.name || '이름 없는 줄'}: 은행 · 계좌번호 · 금액을 모두 넣어 주세요.`);
+      const from = e.target.elements.from.value.trim();
+      if (REAL) {
+        const up = list.filter(r => r.name).map(r => ({ academy_id: REAL.academy.id, name: r.name, bank: r.bank, account: r.account, holder: r.holder || r.name, updated_at: new Date().toISOString() }));
+        if (up.length) { const { error } = await SB.from('payee_accounts').upsert(up, { onConflict: 'academy_id,name' }); if (error) toast(dbErr(error, '계좌를 기억하지')); }
+      }
+      const head = ['입금은행', '입금계좌번호', '예금주', '이체금액(원)', '받는분 통장 표시', '보내는분 통장 표시', '메모(받는 사람)'];
+      const body = list.map(r => [r.bank, r.account.replace(/\D/g, ''), r.holder || r.name, String(r.amount), r.memo, from, r.name]);
+      const guide = [['대량이체 파일 쓰는 법'], [], ['1', '은행 인터넷뱅킹(기업뱅킹) → 이체 → "대량이체" 또는 "다건이체"'], ['2', '은행 화면의 "엑셀 양식 받기"로 받은 양식과 칸 순서를 비교해요'], ['3', '칸 순서가 같으면 이 파일을 바로 올리고, 다르면 첫 시트의 줄을 은행 양식에 붙여 넣어요'], ['4', '계좌번호는 숫자만 넣었어요 · 합계 금액을 꼭 한 번 더 확인해요'], [], ['합계', '', '', won(sum(list, r => r.amount)), `${list.length}건`]];
+      downloadXlsx(`bulk_transfer_${m}.xlsx`, [head, ...body], [12, 18, 12, 14, 18, 18, 16], { sheet: '대량이체', more: [['쓰는 법', guide, [6, 70, 6, 16, 10]]] });
+      d.close(); toast(`대량이체 파일을 받았어요 · ${list.length}건 ${won(sum(list, r => r.amount))}`);
+    };
+  };
+  paint(); d.showModal();
+}
+
+function bindPushPay() {
+  if ($('#pushBody') || $('#pushHintBox')) (PUSH.state ? Promise.resolve() : pushCheck()).then(() => { paintPush(); paintPushHint(); });
+  on('[data-online-pay]', b => setOnlinePay(b.dataset.onlinePay));
+  on('[data-act="payOrders"]', payOrdersDialog);
+  on('[data-act="payTestMe"]', payTestMe);
+  on('[data-act="bulkPay"]', bulkPayDialog);
+}
+// 알림 칸은 상태를 확인한 뒤 늦게 그려져서, 그릴 때마다 버튼을 다시 이어요
+function bindPushBtns() {
+  on('[data-act="pushOn"]', pushOn);
+  on('[data-act="pushOff"]', pushOff);
+  on('[data-act="pushTest"]', pushTest);
+  on('[data-act="iosHow"]', iosInstallDialog);
+  on('[data-push-kind]', b => pushKind(b.dataset.pushKind, b.checked));
+  on('[data-act="pushHintHide"]', (b, e) => { e.preventDefault(); e.stopPropagation(); try { localStorage.setItem('asc-push-hint', '0'); } catch (x) { /* 이번만 */ } paintPushHint(); });
+  on('[data-act="appInstall"]', async () => { if (INSTALL_EVT) { INSTALL_EVT.prompt(); const r = await INSTALL_EVT.userChoice.catch(() => null); INSTALL_EVT = null; if (r && r.outcome === 'accepted') toast('홈 화면에 추가했어요'); paintPush(); } else iosInstallDialog(); });
 }
 
 boot();
