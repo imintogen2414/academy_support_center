@@ -1714,3 +1714,9 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .todo-more summary::-webkit-details-marker { display: none; }
 .todo-more[open] summary { display: none; }
 @media (max-width: 520px) { .tiles.mini { grid-template-columns: repeat(3, 1fr); } }
+
+/* 되돌리기 (#undo) */
+.undo-seg { margin: 0 0 14px; flex-wrap: wrap; border-radius: 16px; }
+.li .av.undo-av { background: var(--sunk); color: var(--r-owner); }
+.undo-li.undone .t, .undo-li.undone .undo-diff { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.undo-diff { line-height: 1.6; color: var(--ink); }
