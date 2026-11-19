@@ -58,6 +58,9 @@
       <div class="row"><a class="btn primary sm" href="/app">프로그램 열기</a><button class="btn sm" type="button" id="signOut">로그아웃</button></div>
     </div>
 
+    <!-- 초대 링크(/join/코드)로 왔을 때: 어느 학원에서 초대했는지 -->
+    <div class="inv-banner" id="invBanner" hidden></div>
+
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="login">로그인</button>
       <button role="tab" aria-selected="false" data-tab="signup">회원가입</button>
@@ -68,9 +71,10 @@
       <p>학원지원센터는 <b>초대 코드</b>로 우리 학원 사람끼리만 연결돼요. 어떤 코드로 들어왔는지에 따라 역할이 정해져요.</p>
       <ul>
         <li><b>원장님</b> · 코드 없이 가입한 뒤 "학원 만들기"를 누르세요. 강사용 · 학부모·학생용 코드가 바로 생겨요.</li>
-        <li><b>강사님</b> · 원장님께 받은 <em>강사용 코드</em>를 가입 후 첫 화면에 넣어요. 코드가 없어도 채용 공고를 보고 지원할 수 있어요.</li>
+        <li><b>강사님</b> · 원장님께 받은 <em>강사용 코드</em>를 가입할 때 "초대 코드" 칸에 넣어요. 코드가 없어도 채용 공고를 보고 지원할 수 있어요.</li>
         <li><b>학부모님 · 학생</b> · 학원에서 받은 <em>학부모·학생용 코드</em>를 넣으면, 원장님이 아이와 연결해 출결 · 수납 · 공지를 보여 드려요.</li>
       </ul>
+      <p><b>초대 링크</b>를 받았다면 링크만 누르세요. 코드가 저절로 채워져서 가입 · 로그인만 하면 바로 연결돼요. 이미 가입했다면 로그인한 뒤 프로그램 왼쪽 메뉴 아래 <b>"초대 코드 넣기"</b>에서 넣어요.</p>
     </details>
 
     <div id="savedAcc" hidden>
@@ -101,9 +105,10 @@
       <div class="field" id="emField"><label for="sem">이메일 <small id="emNote">아이디 · 비밀번호를 잊었을 때 확인해요</small></label><input id="sem" name="email" type="email" inputmode="email" maxlength="200" placeholder="예: name@gmail.com" autocomplete="email" autocapitalize="none"></div>
       <div class="field"><label for="sid">아이디 <small>영어 소문자·숫자·_ 4~20자</small></label><input id="sid" name="uid" placeholder="예: haneul_owner" autocomplete="username" autocapitalize="none"></div>
       <div class="field"><label for="spw">비밀번호 <small>8자 이상</small></label><input id="spw" name="pw" type="password" placeholder="8자 이상으로 정해 주세요" autocomplete="new-password"></div>
+      <div class="field" id="codeField"><label for="scode">초대 코드 <small id="codeNote">학원에서 받았으면 넣어 주세요 · 없으면 비워 두세요</small></label><input id="scode" name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700"><p class="code-peek" id="codePeek" hidden></p></div>
       <div class="field" id="acField"><label for="ac">학원 이름</label><input id="ac" name="academy" placeholder="예: 하늘영어학원"></div>
       <p class="hint-line" id="ownerHint">원장님은 가입 후 <b>학원 만들기</b>를 누르면 강사용 · 학부모·학생용 <b>초대 코드</b>가 생겨요. 그 코드를 보내 학원 사람들을 초대하세요.</p>
-      <p class="hint-line" id="codeHint" hidden>가입한 다음 화면에서 학원에서 받은 <b>초대 코드</b>(8자리, 예: K7P2QX9M)를 넣으면 우리 학원에 연결돼요. 아직 코드가 없으면 학원에 요청해 주세요.</p>
+      <p class="hint-line" id="codeHint" hidden>위 칸에 학원에서 받은 <b>초대 코드</b>(8자리)를 넣으면 가입하자마자 우리 학원에 연결돼요. 지금 없으면 비워 두고, 나중에 프로그램 왼쪽 메뉴 아래 <b>"초대 코드 넣기"</b>에서 넣어도 돼요.</p>
       <p class="hint-line" id="seekHint" hidden>아직 학원이 없어도 괜찮아요. 가입하면 <b>채용 공고</b>를 보고, <b>이력서</b>를 써서 바로 지원할 수 있어요.</p>
       <p class="msg" id="signupMsg" hidden></p>
       <button class="btn primary wide">가입하고 시작하기</button>
@@ -759,6 +764,8 @@ window.addEventListener('scroll', topShade, { passive: true }); topShade();
 function renderPanel() {
   const [hv0, hid] = location.hash.slice(1).split('/');
   const hv = VIEWS.includes(hv0) ? hv0 : '';
+  const jn = location.pathname.match(/^\/join\/([A-Za-z0-9-]+)/);
+  if (jn) { openInvite(normCode(jn[1])); return; }
   const pm = location.pathname.match(/^\/area\/([a-z]+)/), jobs = /^\/jobs\/?$/.test(location.pathname);
   const [view, id] = hv ? [hv, hid] : pm ? ['area', pm[1]] : jobs ? ['jobs'] : [''];
   const area = SITE_AREAS.find(a => a.id === id);
@@ -1016,7 +1023,13 @@ signupForm.onsubmit = e => {
   if (pw.length < 8) return showMsg(signupMsg, '비밀번호는 8자 이상으로 정해 주세요.');
   if (!SB) return showMsg(signupMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
   setKeepLogin(true);
+  const code = normCode(el.code.value);
   busy(f.querySelector('button'), '가입하는 중…', async () => {
+    if (code) {
+      const p = await peekCode(code);
+      if (!p) { el.code.classList.add('bad'); el.code.focus(); return showMsg(signupMsg, '초대 코드로 찾은 학원이 없어요. 코드를 다시 확인하거나, 비워 두고 가입한 뒤 나중에 넣어 주세요.'); }
+      saveInvite(code);
+    }
     const { data: taken } = await SB.rpc('check_profile_taken', { p_username: id, p_name: name, p_phone: phone || null, p_email: email || null });
     if (taken && taken.length) { markTaken(taken); return showMsg(signupMsg, takenMsg(taken)); }
     const { data, error } = await SB.auth.signUp({
@@ -1036,6 +1049,7 @@ signupForm.querySelectorAll('[name=role]').forEach(r => r.onchange = () => {
   document.getElementById('codeHint').hidden = owner;
   document.getElementById('seekHint').hidden = signupForm.elements.role.value !== 'teacher';
   document.getElementById('ownerHint').hidden = !owner;
+  document.getElementById('codeNote').textContent = owner ? '다른 원장님이 이미 만든 학원에 들어갈 때만 · 새로 만들면 비워 두세요' : '학원에서 받았으면 넣어 주세요 · 없으면 비워 두세요';
   // 학생은 휴대폰이 없을 수 있어서 전화번호를 꼭 받지 않아요 (부모님 번호는 부모님 계정이 써요)
   document.getElementById('phNote').textContent = signupForm.elements.role.value === 'student' ? '없으면 비워 두세요 · 부모님 번호는 넣지 말아 주세요' : '아이디 · 비밀번호를 잊었을 때 확인해요';
   document.getElementById('emNote').textContent = signupForm.elements.role.value === 'student' ? '휴대폰이 없으면 이메일은 꼭 적어 주세요' : '아이디 · 비밀번호를 잊었을 때 확인해요';
@@ -1043,6 +1057,7 @@ signupForm.querySelectorAll('[name=role]').forEach(r => r.onchange = () => {
 
 document.getElementById('googleBtn').onclick = async () => {
   if (!SB) return showMsg(loginMsg, '지금은 예시 계정으로만 둘러볼 수 있어요.');
+  { const c = normCode(signupForm.elements.code.value); if (c) saveInvite(c); } // 구글로 가입해도 적어 둔 코드로 들어가요
   // 구글 로그인이 꺼져 있으면 하얀 오류 화면 대신 안내 문구를 보여 줘요
   const s = await fetch(`${ENV.SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: ENV.SUPABASE_KEY } }).then(r => r.json()).catch(() => null);
   if (s && s.external && !s.external.google) { setTab('login'); return showMsg(loginMsg, '구글 로그인이 아직 준비 중이에요.'); }
@@ -1052,6 +1067,47 @@ document.getElementById('googleBtn').onclick = async () => {
   const { error } = await SB.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/app.html' } });
   if (error) { setTab('login'); showMsg(loginMsg, authErrorText(error)); }
 };
+
+/* ---------- 초대 코드 · 초대 링크 (/join/코드) ----------
+   링크로 오면 이 기기(localStorage asc-invite, 7일)에 코드를 남기고 가입 탭을 열어요. 이미 로그인돼 있으면 바로 /app#join/코드 → 앱이 "들어가기" 창.
+   가입 · 로그인 뒤 앱이 열리면 남겨 둔 코드로 저절로 학원에 들어가요(app.js boot). */
+const normCode = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function saveInvite(code) { try { localStorage.setItem('asc-invite', JSON.stringify({ code: normCode(code), at: Date.now() })); } catch (e) { /* 이번만 */ } }
+const KIND_TEXT = { owner: '원장용', teacher: '강사용', family: '학부모·학생용' };
+const KIND_WHO = { owner: '원장님', teacher: '강사님', family: '학부모님 · 학생' };
+async function peekCode(code) {
+  if (!SB || normCode(code).length < 6) return null;
+  const { data } = await SB.rpc('peek_invite_code', { p_code: code });
+  return data && data[0] || null;
+}
+// 코드 칸: 어느 학원 코드인지 바로 보여 주고, 코드 종류에 맞춰 역할도 골라 둬요
+let peekSeq = 0, peekTimer = 0;
+async function checkSignupCode() {
+  const inp = signupForm.elements.code, out = document.getElementById('codePeek'), c = normCode(inp.value), my = ++peekSeq;
+  inp.classList.remove('bad');
+  if (c.length < 6) { out.hidden = true; return; }
+  out.hidden = false; out.className = 'code-peek'; out.textContent = '어느 학원 코드인지 확인하는 중…';
+  const p = await peekCode(c); if (my !== peekSeq) return;
+  if (!p) { out.className = 'code-peek bad'; out.textContent = SB ? '이 코드로 찾은 학원이 없어요. 글자를 다시 확인해 주세요 (0과 O, 1과 I를 헷갈리기 쉬워요).' : '지금은 예시 계정으로만 둘러볼 수 있어요.'; return; }
+  const kind = p.kind === 'family' && !p.family ? '수강생용' : KIND_TEXT[p.kind];
+  out.className = 'code-peek ok'; out.innerHTML = `✓ <b>${esc(p.academy_name)}</b>${p.region ? ` · ${esc(p.region)}` : ''} · ${kind} 코드예요`;
+  const r = signupForm.elements.role, want = p.kind === 'family' ? (['parent', 'student'].includes(r.value) ? r.value : 'parent') : p.kind;
+  if (r.value !== want) { r.value = want; signupForm.querySelector(`[name=role][value=${want}]`).dispatchEvent(new Event('change')); }
+  return p;
+}
+signupForm.elements.code.addEventListener('input', () => { clearTimeout(peekTimer); peekTimer = setTimeout(checkSignupCode, 250); });
+async function openInvite(code) {
+  saveInvite(code);
+  if (SB) { const { data } = await SB.auth.getSession(); if (data.session) { location.replace('/app#join/' + code); return; } }
+  showAuth(true); setTab('signup');
+  signupForm.elements.code.value = code;
+  const p = await checkSignupCode(), b = document.getElementById('invBanner');
+  b.hidden = false;
+  b.innerHTML = p ? `<b>${esc(p.academy_name)}</b>에서 ${KIND_WHO[p.kind]}을 초대했어요.<br><small>가입하면 바로 우리 학원에 연결돼요. 이미 가입했다면 "로그인"을 눌러 로그인만 하세요.</small>`
+    : `초대 코드 <b>${esc(code)}</b>로 오셨어요.<br><small>코드를 찾지 못했어요. 학원에 코드를 다시 확인해 주세요.</small>`;
+  setMeta('초대받았어요', '', '/');
+  window.scrollTo(0, 0);
+}
 
 // 이미 로그인돼 있으면 위에 안내
 if (SB) SB.auth.getSession().then(({ data }) => {

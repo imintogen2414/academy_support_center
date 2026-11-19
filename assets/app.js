@@ -4435,7 +4435,7 @@ function settingsPage() {
       ${fam ? row(ROLE === 'parent' ? '연결된 아이' : '내 원생 정보', kids || '<span class="muted">원장님이 연결하면 보여요</span>') : ''}
       ${ROLE === 'owner' ? `${famSwitch()}${appSwitch()}
         <div class="row-btns"><a class="btn sm" href="#members/invite">초대 코드 보기</a></div>` : ''}
-      <div class="set-line"><div><b>다른 학원으로 옮기기</b><small>새 학원 코드를 넣으면 그 학원으로 옮기고, 같은 역할로 있던 예전 학원에서는 나가요${ROLE === 'owner' ? ' · 원장 자리는 그대로 남아요' : ''} · 그대로 두고 하나 더 하려면 위 "코드로 더하기"</small></div><button class="btn sm" data-act="moveAcad">코드 넣기</button></div>
+      <div class="set-line"><div><b>다른 학원으로 옮기기</b><small>새 학원 코드를 넣으면 그 학원으로 옮기고, 같은 역할로 있던 예전 학원에서는 나가요${ROLE === 'owner' ? ' · 원장 자리는 그대로 남아요' : ''} · 그대로 두고 하나 더 하려면 위 "초대 코드 넣기"</small></div><button class="btn sm" data-act="moveAcad">코드 넣기</button></div>
       <div class="set-line"><div><b>학원에서 나가기</b><small>${ROLE === 'owner' ? '다른 원장님이 있을 때만 나갈 수 있어요' : '나가면 이 학원 자료 · 채팅을 더 볼 수 없어요 · 다시 들어오려면 초대 코드가 필요해요'}</small></div><button class="btn sm danger" data-act="leaveAcad">나가기</button></div>`);
   }
   const svc = ROLE === 'owner' || ROLE === 'teacher' ? card('이용 중인 센터 지원', `
@@ -5715,18 +5715,39 @@ const CODE_INFO = {
   family: ['학부모·학생용', '학부모님과 학생이 가입할 때 넣는 코드예요. 공지에 함께 보내면 편해요.'],
   adult: ['수강생용', '수강생이 앱으로 출결 · 할 일 · 공지를 보고 싶을 때 가입하며 넣는 코드예요. 안 써도 괜찮아요.']
 };
+const INV_WHO = { owner: '원장님', teacher: '강사님', family: '학부모님 · 학생', adult: '수강생' };
+const inviteText = (code, k) => `[${unHtml(DATA.academy.name)}] ${INV_WHO[k] || ''} 초대 링크예요.\n아래 링크를 누르고 가입(또는 로그인)하면 우리 학원에 바로 연결돼요.\n${inviteUrl(code)}\n(초대 코드: ${code})`;
+const unHtml = h => String(h).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+async function sendInvite(code, k) {
+  const text = inviteText(code, k);
+  if (navigator.share) { try { await navigator.share({ title: `${unHtml(DATA.academy.name)} 초대`, text }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  copyText(text, '초대 글을 복사했어요 · 카톡 · 문자에 붙여 넣어 보내 주세요');
+}
+function inviteQrDialog(code, k) {
+  const d = dialogEl();
+  d.innerHTML = `<div class="dlg inv-qr">
+    <h2>${CODE_INFO[k][0]} 초대 QR</h2>
+    <p class="muted small" style="margin:-6px 0 0">휴대폰 카메라로 찍으면 가입 화면이 열리고 코드가 저절로 들어가요. 학원 안내문 · 상담 자리에 두면 편해요.</p>
+    <div class="inv-qr-box">${qrSvg(inviteUrl(code))}<b>${DATA.academy.name}</b><span>${CODE_INFO[k][0]} · ${esc(code)}</span></div>
+    <div class="acts"><button type="button" class="btn" id="iqPrint">${ic('download')}인쇄</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
+  d.showModal();
+  $('#dlgCancel').onclick = () => d.close();
+  $('#iqPrint').onclick = () => { const w = open('', '_blank'); if (!w) return toast('팝업이 막혀 있어요'); w.document.write(`<title>초대 QR</title><body style="font-family:sans-serif;text-align:center;padding:40px">${d.querySelector('.inv-qr-box').innerHTML.replace('<svg', '<svg width="320" height="320"')}<p>휴대폰 카메라로 찍어 가입해 주세요</p></body>`); w.document.close(); w.print(); };
+}
 function invitePage() {
   const codes = REAL ? REAL.codes : [{ kind: 'owner', code: 'DEMO0WNR' }, { kind: 'teacher', code: 'DEMOTCHR' }, { kind: 'family', code: 'DEMOFAMY' }];
   const people = REAL ? REAL.members : [{ name: ME.name, role: 'owner' }, { name: '김민지', role: 'teacher' }, { name: '김은정', role: 'parent' }];
-  return head('초대 코드', '사이트에서 가입할 때 이 코드를 넣으면 우리 학원에 합류해요. 어떤 코드로 들어오는지에 따라 역할이 정해져요.') + `
-  <div class="codes">${codes.map(c => `
+  return head('초대 코드', '초대 링크를 카톡 · 문자로 보내면, 받은 사람은 링크를 눌러 가입만 하면 우리 학원에 바로 연결돼요. 코드를 따로 찾아 넣을 필요가 없어요.') + `
+  <div class="inv-steps"><span><b>1</b>보낼 사람 코드에서 "링크 보내기"</span><span><b>2</b>받은 사람이 링크를 눌러 가입 · 로그인</span><span><b>3</b>우리 학원에 저절로 연결</span></div>
+  <div class="codes">${codes.map(c => { const k = c.kind === 'family' && !famOn() ? 'adult' : c.kind; return `
     <div class="code-card">
-      <span class="who">${CODE_INFO[c.kind === 'family' && !famOn() ? 'adult' : c.kind][0]}</span>
+      <span class="who">${CODE_INFO[k][0]}</span>
       <b class="num">${esc(c.code)}</b>
-      <p>${CODE_INFO[c.kind === 'family' && !famOn() ? 'adult' : c.kind][1]}</p>
-      <button class="btn sm" data-copy="${esc(c.code)}">코드 복사</button>
-    </div>`).join('')}
+      <p>${CODE_INFO[k][1]}</p>
+      <div class="code-btns"><button class="btn sm primary" data-inv-send="${esc(c.code)}" data-kind="${k}">${ic('chat')}링크 보내기</button><button class="btn sm" data-inv-link="${esc(c.code)}">${ic('copy')}링크 복사</button><button class="btn sm" data-copy="${esc(c.code)}">코드만 복사</button><button class="btn sm" data-inv-qr="${esc(c.code)}" data-kind="${k}">QR</button></div>
+    </div>`; }).join('')}
   </div>
+  <p class="muted small">링크 모양: ${esc(inviteUrl(codes[0] ? codes[0].code : 'K7P2QX9M'))} · 이미 가입한 사람도 링크를 누르면 로그인한 뒤 "들어가기" 한 번이면 돼요.</p>
   <section class="card" style="margin-top:16px">
     <div class="card-head"><h2>우리 학원 사람들</h2><span class="sub">${people.length}명</span></div>
     <div class="list">${people.map(p => `
@@ -8102,7 +8123,7 @@ function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
   const set = `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
-    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `<button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
+    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `${can('invite') && MY && MY.members ? `<a class="nav-item" href="#members/invite">${ic('users')}<span>초대하기 (코드 · 링크)</span></a>` : ''}<button type="button" class="nav-item" data-act="joinAcad">${ic('plus')}<span>초대 코드 넣기</span></button><button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
   if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   // 센터 관리자(학원 없이): 센터 관리 세부 메뉴를 종류별 묶음으로 바로
   if (ROLE === 'admin' && CENTER && !CENTER.partner) {
@@ -8259,7 +8280,7 @@ function guidePage() {
     </section>`).join('') + (startSteps().length ? `<a class="hint" href="#home" data-act="showGuide">${ic('check')}<span>처음 시작 안내를 다시 보고 싶으면</span><b>홈에 다시 띄우기 →</b></a>` : '') + howtoAll();
 }
 // 위쪽 검색: 메뉴 이름 · 설명에서 찾아요
-const SEARCH_WORDS = { 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자' };
+const SEARCH_WORDS = { '초대 코드': '코드 초대 링크 가입 합류 들어가기 강사 학부모 학생', 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자' };
 function searchMenus(q) {
   q = q.trim(); if (!q) return [];
   const out = [], hit = (...t) => t.join(' ').includes(q);
@@ -8717,6 +8738,9 @@ function bind() {
   on('[data-act="addStudent"]', () => REAL ? studentDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
   on('[data-edit-student]', b => studentDialog(REAL.allStudents.find(s => s.id === b.dataset.editStudent)));
   on('[data-copy]', b => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('복사했어요'), () => toast(b.dataset.copy)));
+  on('[data-inv-link]', b => copyText(inviteUrl(b.dataset.invLink), '초대 링크를 복사했어요'));
+  on('[data-inv-send]', b => sendInvite(b.dataset.invSend, b.dataset.kind));
+  on('[data-inv-qr]', b => inviteQrDialog(b.dataset.invQr, b.dataset.kind));
   // 행정 지원 (실제 데이터)
   on('[data-month]', b => { const n = +b.dataset.month; MONTH = n ? shiftMonth(MONTH, n) : TODAY.slice(0, 7); render(); });
   const goDay = async d => { if (!d) return; await loadAttendance(d); render(); };
@@ -9635,7 +9659,8 @@ function onboarding(user) {
     <p class="muted">학원에서 받은 <b>${PROFILE.role === 'teacher' ? '강사용' : '학부모·학생용'} 초대 코드</b>를 넣어 주세요.</p>
     <p class="muted small">초대 코드는 영어·숫자 8자리예요. 원장님 화면 "학생·학부모 관리 → 초대 코드"에 있으니, 코드가 없으면 학원에 요청해 주세요.${PROFILE.role === 'teacher' ? '' : ' 합류한 뒤 원장님이 아이와 연결해 주면 출결 · 수납 · 공지가 보여요.'}</p>`}
     <form class="f-stack" id="joinForm" novalidate>
-      <label class="f">초대 코드<input name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" style="text-transform:uppercase"></label>
+      ${INVITE_ERR ? `<p class="msg" style="display:block">초대 링크의 코드로 들어가지 못했어요 — ${esc(INVITE_ERR)}</p>` : ''}
+      ${codeInput(pendingInvite() || '')}
       ${FAMILY_ROLE_PICK(famDefault())}
       <p class="msg" id="joinMsg" hidden></p>
       <button class="btn ${owner ? '' : 'primary'}">코드로 합류하기</button>
@@ -9656,14 +9681,15 @@ function onboarding(user) {
     if (error) return fail('#makeMsg', joinError(error));
     location.reload();
   };
+  bindCodeField($('#joinForm'));
   $('#joinForm').onsubmit = async e => {
     e.preventDefault();
-    const code = e.target.elements.code.value.trim();
+    const code = normCode(e.target.elements.code.value);
     if (!code) return fail('#joinMsg', '초대 코드를 적어 주세요.');
     const fa = e.target.elements.fam_as;
     const { error } = await SB.rpc('join_academy', { p_code: code, p_as: fa ? fa.value : null });
     if (error) return fail('#joinMsg', joinError(error));
-    location.reload();
+    clearInvite(); location.reload();
   };
   if ($('#obNew')) $('#obNew').onclick = e => { e.preventDefault(); newAcademyDialog(); };
   $('#reRole').onclick = async e => { e.preventDefault(); await SB.from('profiles').update({ role: null }).eq('id', user.id); location.reload(); };
@@ -9673,7 +9699,11 @@ function onboarding(user) {
   if ($('#seeJobs')) $('#seeJobs').onclick = e => { e.preventDefault(); location.hash = '#jobs'; location.reload(); };
 }
 
+let INVITE_ERR = '';
 async function boot() {
+  // 초대 링크(/join/코드 → 첫 화면 → /app#join/코드)로 온 코드는 이 기기에 남겨 두고 주소는 홈으로
+  const jm = location.hash.match(/^#join\/([A-Za-z0-9-]+)/);
+  if (jm) { saveInvite(jm[1]); history.replaceState(null, '', location.pathname + '#home'); }
   if (!DEMO) {
     if (!SB) { location.replace('/'); return; }
     const { data } = await SB.auth.getSession(); // 구글 로그인으로 돌아온 경우 ?code= 를 여기서 세션으로 바꿔요
@@ -9699,6 +9729,13 @@ async function boot() {
     // 소속 학원: 여러 곳이면 이 기기에서 마지막으로 연 곳(`asc-acad-회원`), 역할은 그 학원에서의 역할
     const { data: ml } = await SB.rpc('my_academies');
     MEMS = ml || [];
+    // 초대받은 코드가 있고 아직 학원이 없으면 바로 들어가요 (안 되면 학원 연결 화면에 이유와 함께 코드가 채워져 있어요)
+    const inv = pendingInvite();
+    if (inv && !MEMS.length) {
+      const { error } = await SB.rpc('join_academy', { p_code: inv, p_as: ['parent', 'student'].includes(PROFILE.role) ? PROFILE.role : null });
+      if (!error) { clearInvite(); toast('초대받은 학원에 들어갔어요'); const { data: ml2 } = await SB.rpc('my_academies'); MEMS = ml2 || []; }
+      else INVITE_ERR = joinError(error);
+    }
     const cur = pickAcademy(MEMS);
     if (cur && cur.suspended) { suspendedScreen(user, cur); return; }
     const { data: mem } = cur ? await SB.from('academy_members').select('role, title, perms, academies(id, name, region, family, app_off, auto, pay_bank, pay_account, pay_holder, pay_note, intro, field, homepage, listed, subjects)')
@@ -9754,6 +9791,9 @@ async function boot() {
     else if (CENTER) MY = { ...MY, center: CENTER_AREA }; // 센터 관리자이면서 원장·강사인 분은 메뉴에 "센터 관리"가 더 생겨요
   } else { await loadSeen(); if (!USER) { tailorMenus(); applyDemoAcad(); } }
   render();
+  // 이미 학원이 있는데 초대 링크로 왔으면: 어느 학원인지 보여 주고 "들어가기" 한 번
+  const inv = pendingInvite();
+  if (inv && ROLE !== 'admin') { if (!USER) clearInvite(); joinAcademyDialog(inv); }
 }
 /* ================= 18라운드: 결제 · 통장 · 전문 앱 연결 준비 =================
    학원마다 카드 결제(단말기 · 결제 키오스크 · 온라인 결제) · 통장(계좌 조회) · 전문 앱을 하나씩 이어요(ext_links).
@@ -10570,8 +10610,8 @@ function acadSwitchDialog() {
     <p class="muted small" style="margin:-6px 0 0">한 아이디로 여러 학원을 쓸 수 있어요. 학원마다 역할이 따로예요(예: A학원 원장 · B학원 원장 · C학원 학부모). 누르면 그 학원 화면으로 바로 바뀌어요.${USER ? '' : ' <b>예시 계정: 눌러서 바꿔 보세요(이 창에서만).</b>'}</p>
     <div class="acc-list">${list.map(m => memRow(m, m.academy_id === curAcadId() && !m.suspended)).join('')}</div>
     <div class="ms-add">
-      <button type="button" class="btn" data-act="newAcad">${ic('plus')}새 학원 열기</button>
-      <button type="button" class="btn" data-act="joinAcad">${ic('ext')}초대 코드로 다른 학원 들어가기</button>
+      <button type="button" class="btn primary" data-act="joinAcad">${ic('plus')}초대 코드 넣기</button>
+      <button type="button" class="btn" data-act="newAcad">${ic('home')}새 학원 열기</button>
     </div>
     <p class="muted small">수강료 · 통장 · 카드 결제 연결 · 단체 문자 한도 · 센터 이용료는 모두 <b>학원마다 따로</b>예요. 화면 왼쪽 위 학원 이름을 보면 지금 어느 학원인지 알 수 있어요. 통장은 학원마다 따로 연결하는 것을 권해요.</p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></div>`;
@@ -10581,7 +10621,43 @@ function acadSwitchDialog() {
   d.querySelector('[data-act="newAcad"]').onclick = newAcademyDialog;
   d.querySelector('[data-act="joinAcad"]').onclick = joinAcademyDialog;
 }
-const FAMILY_ROLE_PICK = def => `<div class="f">학부모·학생용 코드라면 <span class="muted small">원장용 · 강사용 코드는 코드대로 정해져요</span>
+/* ---------- 초대 코드 쉽게 넣기 ----------
+   초대 링크 /join/코드(첫 화면이 받아서 가입 · 로그인) → 이 기기 localStorage `asc-invite`(7일)에 남겨 두면 앱이 열릴 때 저절로 들어가요.
+   코드 칸은 대소문자 · 띄어쓰기 · 하이픈을 가리지 않고, 8자리가 되면 peek_invite_code로 어느 학원 · 어떤 역할 코드인지 먼저 보여 줘요. */
+const normCode = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const KIND_TEXT = { owner: '원장용', teacher: '강사용', family: '학부모·학생용' };
+const KIND_ROLE = { owner: '원장으로', teacher: '강사로', family: '학부모 · 학생으로' };
+const inviteUrl = code => `${/\.vercel\.app$/.test(location.hostname) || DEMO ? SITE_URL : location.origin}/join/${code}`;
+const INV_KEY = 'asc-invite';
+function pendingInvite() { try { const v = JSON.parse(localStorage.getItem(INV_KEY) || 'null'); return v && v.code && Date.now() - v.at < 7 * 864e5 ? v.code : null; } catch (e) { return null; } }
+function saveInvite(code) { try { localStorage.setItem(INV_KEY, JSON.stringify({ code: normCode(code), at: Date.now() })); } catch (e) { /* 이번만 */ } }
+function clearInvite() { try { localStorage.removeItem(INV_KEY); } catch (e) { /* 없어도 돼요 */ } }
+const DEMO_CODES = { DEMO0WNR: 'owner', DEMOTCHR: 'teacher', DEMOFAMY: 'family' };
+async function peekCode(code) {
+  if (!SB || !USER) return DEMO_CODES[code] ? { academy_name: DEMO_ACAD0.name, region: DEMO_ACAD0.area, kind: DEMO_CODES[code], family: true } : null;
+  const { data } = await SB.rpc('peek_invite_code', { p_code: code });
+  return data && data[0] || null;
+}
+// 코드 칸: 치는 동안 대문자로, 6자리가 넘으면 어느 학원 코드인지 바로 아래에. 학부모·학생용일 때만 역할 고르기를 보여요
+function bindCodeField(form) {
+  const inp = form.querySelector('[name=code]'), out = form.querySelector('.code-peek'), pick = form.querySelector('.fam-pick');
+  let timer = 0, seq = 0;
+  const check = async () => {
+    const c = normCode(inp.value), my = ++seq;
+    if (c.length < 6) { out.hidden = true; return; }
+    out.hidden = false; out.className = 'code-peek'; out.textContent = '어느 학원 코드인지 확인하는 중…';
+    const p = await peekCode(c); if (my !== seq) return;
+    if (!p) { out.className = 'code-peek bad'; out.textContent = '이 코드로 찾은 학원이 없어요. 글자를 다시 확인해 주세요 (0과 O, 1과 I를 헷갈리기 쉬워요).'; return; }
+    out.className = 'code-peek ok';
+    out.innerHTML = `${ic('check')}<span><b>${esc(p.academy_name)}</b>${p.region ? ` · ${esc(p.region)}` : ''}<br>${p.kind === 'family' && !p.family ? '수강생용' : KIND_TEXT[p.kind]} 코드예요 · ${p.kind === 'family' ? '아래에서 학부모 · 학생을 골라 주세요' : `${KIND_ROLE[p.kind]} 들어가요`}</span>`;
+    if (pick) pick.hidden = p.kind !== 'family';
+  };
+  inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(check, 250); });
+  if (inp.value) check();
+}
+const codeInput = (code = '') => `<label class="f">초대 코드 <span class="muted small">학원에서 받은 영어 · 숫자 8자리 · 링크로 왔으면 저절로 채워져요</span><input name="code" maxlength="20" value="${esc(code)}" placeholder="예: K7P2QX9M" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700"></label>
+  <p class="code-peek" hidden></p>`;
+const FAMILY_ROLE_PICK = def => `<div class="f fam-pick">학부모·학생용 코드라면 <span class="muted small">원장용 · 강사용 코드는 코드대로 정해져요</span>
   <span class="role-pick">${[['parent', '학부모로'], ['student', '학생(본인)으로']].map(([v, l]) => `<label><input type="radio" name="fam_as" value="${v}" ${v === def ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`;
 const famDefault = () => ['parent', 'student'].includes(PROFILE && PROFILE.role) ? PROFILE.role : 'parent';
 function newAcademyDialog() {
@@ -10616,25 +10692,27 @@ function newAcademyDialog() {
     toast('새 학원을 만들었어요 · 그 학원으로 여는 중…'); goAcademy(data);
   };
 }
-function joinAcademyDialog() {
-  if (!USER) { toast('예시 계정에서는 코드를 넣을 수 없어요 · 실제 계정에서 받은 초대 코드를 넣으면 그 학원이 목록에 더해져요'); return; }
-  const d = dialogEl();
+function joinAcademyDialog(code) {
+  code = typeof code === 'string' ? code : '';
+  const d = dialogEl(), fromLink = !!code;
   d.innerHTML = `<form method="dialog" class="dlg" id="jaForm" novalidate>
-    <h2>초대 코드로 다른 학원 들어가기</h2>
-    <p class="muted small" style="margin:-6px 0 0">지금 학원은 그대로 두고 학원을 하나 더 더해요. 원장용 코드면 원장, 강사용이면 강사, 학부모·학생용이면 아래에서 고른 역할로 들어가요. (예: 내 학원 원장이면서 아이 학원에는 학부모로)</p>
-    <label class="f">초대 코드<input name="code" maxlength="20" placeholder="예: K7P2QX9M" autocapitalize="characters" style="text-transform:uppercase"></label>
+    <h2>${fromLink ? '초대받은 학원에 들어가기' : '초대 코드 넣기'}</h2>
+    <p class="muted small" style="margin:-6px 0 0">${fromLink ? '초대 링크로 오셨어요. 아래 학원이 맞으면 "들어가기"를 눌러 주세요. ' : ''}지금 학원은 그대로 두고 학원을 하나 더 더해요. 원장용 코드면 원장, 강사용이면 강사, 학부모·학생용이면 고른 역할로 들어가요. (예: 내 학원 원장이면서 아이 학원에는 학부모로)</p>
+    ${codeInput(code)}
     ${FAMILY_ROLE_PICK(famDefault())}
+    ${USER ? '' : '<p class="muted small"><b>예시 계정:</b> 원장 예시 "초대 코드" 화면의 예시 코드(DEMOTCHR 등)를 넣으면 어느 학원 코드인지 보여요. 실제로 들어가지는 않아요.</p>'}
     <p class="msg" id="jaMsg" hidden></p>
-    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="jaCancel">취소</button><button class="btn primary">들어가기</button></div></form>`;
-  d.showModal();
-  $('#jaCancel').onclick = () => d.close();
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="jaCancel">${fromLink ? '나중에' : '취소'}</button><button class="btn primary">들어가기</button></div></form>`;
+  d.showModal(); bindCodeField($('#jaForm'));
+  $('#jaCancel').onclick = () => { if (fromLink) clearInvite(); d.close(); };
   $('#jaForm').onsubmit = async e => {
     e.preventDefault();
-    const el = e.target.elements, code = el.code.value.trim(), m = $('#jaMsg'), fail = t => { m.textContent = t; m.hidden = false; };
-    if (!code) return fail('초대 코드를 적어 주세요.');
-    const { data, error } = await SB.rpc('join_academy', { p_code: code, p_as: el.fam_as.value });
+    const el = e.target.elements, c = normCode(el.code.value), m = $('#jaMsg'), fail = t => { m.textContent = t; m.hidden = false; };
+    if (!c) return fail('초대 코드를 적어 주세요.');
+    if (!USER) return fail(DEMO_CODES[c] ? '예시 계정이라 실제로 들어가지는 않아요 · 실제 계정에서는 이대로 누르면 그 학원이 목록에 더해져요.' : '예시 계정에서는 예시 코드만 확인해 볼 수 있어요.');
+    const { data, error } = await SB.rpc('join_academy', { p_code: c, p_as: el.fam_as.value });
     if (error) return fail(joinError(error));
-    toast('학원에 들어갔어요 · 그 학원으로 여는 중…'); goAcademy(data);
+    clearInvite(); toast('학원에 들어갔어요 · 그 학원으로 여는 중…'); goAcademy(data);
   };
 }
 // 센터가 이용을 멈춘 학원: 자료는 그대로 두고 안내만 (다른 학원으로 바꾸기 · 센터에 문의 · 로그아웃)
@@ -10672,7 +10750,7 @@ function suspendedScreen(user, cur) {
 function memsSetLine() {
   const list = memsList();
   return `<div class="set-line ms-line"><div><b>내 학원 · 역할 ${list.length}곳</b><small>${list.map(m => `${esc(m.name)} ${MEM_ROLE_NAME[m.role] || ''}${m.suspended ? '(멈춤)' : ''}`).join(' · ')}</small></div>
-    <span class="btns"><button class="btn sm primary" data-act="switchAcad">바꾸기</button><button class="btn sm" data-act="newAcad">새 학원 열기</button><button class="btn sm" data-act="joinAcad">코드로 더하기</button></span></div>`;
+    <span class="btns"><button class="btn sm primary" data-act="switchAcad">바꾸기</button><button class="btn sm" data-act="newAcad">새 학원 열기</button><button class="btn sm" data-act="joinAcad">초대 코드 넣기</button></span></div>`;
 }
 // 센터 관리: 학원 하나만 이용 멈추기 · 다시 열기 (같은 원장의 다른 학원은 그대로)
 async function acadStop(id) {

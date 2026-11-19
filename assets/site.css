@@ -677,3 +677,11 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 @media (max-width: 560px) { .rt small { display: none; } .rt { padding: 12px; grid-template-columns: auto 1fr; } .rt-av { width: 30px; height: 30px; font-size: 13px; } .rt b { font-size: 14.5px; } .tap-hint { font-size: 14px; padding: 10px 12px; } }
 .mob > *, .mob-text > * { min-width: 0; }
 .d-dev { max-width: 100%; min-width: 0; overflow: hidden; border-radius: 28px; }
+
+/* 초대 링크(/join/코드)로 왔을 때 · 가입 창 코드 확인 줄 */
+.inv-banner { margin: 0 0 16px; padding: 14px 16px; border-radius: 14px; background: var(--good-soft, #e2f6ee); color: var(--ink); font-size: 15px; line-height: 1.55; border: 1px solid rgba(23,160,107,.25); }
+.inv-banner small { color: var(--sub); font-size: 13px; }
+.code-peek { margin: 6px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; color: var(--sub); }
+.code-peek.ok { background: var(--good-soft, #e2f6ee); color: var(--good, #17a06b); }
+.code-peek.ok b { color: var(--ink); }
+.code-peek.bad { background: var(--crit-soft, #fde8e5); color: var(--crit, #e0493a); }
