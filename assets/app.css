@@ -1704,3 +1704,13 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 }
 .dlg .or { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); }
 .dlg .or::before, .dlg .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+/* 간단히 보기: 전체 메뉴는 아이콘 + 이름만, 오늘 챙길 일 더 보기 */
+.tiles.mini { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+.tiles.mini .tile { padding: 16px 8px; align-items: center; text-align: center; gap: 2px; }
+.tiles.mini .tile-ic { margin: 0 0 6px; }
+.tiles.mini .tile b { font-size: 14.5px; }
+.todo-more summary { cursor: pointer; padding: 10px 4px 2px; font-size: 13.5px; font-weight: 700; color: var(--blue-600); list-style: none; }
+.todo-more summary::-webkit-details-marker { display: none; }
+.todo-more[open] summary { display: none; }
+@media (max-width: 520px) { .tiles.mini { grid-template-columns: repeat(3, 1fr); } }

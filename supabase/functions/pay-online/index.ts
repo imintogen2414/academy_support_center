@@ -3,7 +3,7 @@
 //   { action: "prepare", invoice }                   → 주문 번호 · 금액 (pay_orders에 ready)
 //   { action: "confirm", paymentKey, orderId, amount } → 토스에 승인 요청 → done (실제 결제면 청구를 납부 확인)
 //   { action: "fail", orderId, message }               → fail
-// 비밀 값: TOSS_TEST_SECRET_KEY(테스트 · 실제 돈이 나가지 않아요). 실제 결제(live)는 학원마다 결제 회사와 계약한 뒤 그 학원 키로 이어요 — 아직 막아 둠.
+// 키: 비밀 값 TOSS_TEST_SECRET_KEY, 없으면 DB vault toss_test_secret(서비스 키 전용 RPC pay_keys) — 테스트 키라 실제 돈이 나가지 않아요. 실제 결제(live)는 학원마다 결제 회사와 계약한 뒤 그 학원 키로 이어요 — 아직 막아 둠.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -59,7 +59,8 @@ Deno.serve(async req => {
   if (b.action !== "confirm") return reply({ error: "bad_action" }, 400);
   if (o.status === "done") return reply({ ok: true, already: true, test: o.test });
   if (Number(b.amount) !== o.amount) return reply({ error: "amount_mismatch" }, 400); // 금액을 바꿔 치는 것을 막아요
-  const secret = o.test ? env("TOSS_TEST_SECRET_KEY") : "";
+  const { data: pk } = await admin.rpc("pay_keys");
+  const secret = o.test ? env("TOSS_TEST_SECRET_KEY") || pk?.test || "" : "";
   if (!secret) return reply({ error: "no_key" }, 500);
   const r = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
     method: "POST",
