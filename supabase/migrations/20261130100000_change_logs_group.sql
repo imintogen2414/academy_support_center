@@ -155,3 +155,41 @@ begin
 end $$;
 revoke all on function public.undo_change(uuid, bigint, boolean) from public, anon;
 grant execute on function public.undo_change(uuid, bigint, boolean) to authenticated;
+
+-- 화면마다 그 화면 표만(p_tables) · 내가 한 것만(p_mine)
+drop function if exists public.change_list(uuid, bigint, int);
+create or replace function public.change_list(p_academy uuid, p_before bigint default null, p_limit int default 30, p_tables text[] default null, p_mine boolean default false)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare r text := private.academy_role(p_academy); me uuid := auth.uid();
+begin
+  if me is null or r is null or r not in ('owner', 'teacher') then raise exception 'not_allowed'; end if;
+  return coalesce((
+    with gr as (select * from private.change_groups(p_academy, case when p_mine then 'teacher' else r end, me)),
+    pick as (select gr.g from gr
+             where p_tables is null or exists (select 1 from public.change_logs x where x.academy_id = p_academy and x.batch = gr.batch and x.tbl = any (p_tables))
+             group by gr.g having p_before is null or min(gr.batch) < p_before
+             order by min(gr.batch) desc limit least(greatest(p_limit, 1), 100)),
+    s as (
+      select gr.g, array_agg(distinct l.batch) batches, min(l.batch) first_batch, max(l.id) last_id, min(l.created_at) at,
+        (array_agg(l.by_id order by l.id))[1] by_id, bool_and(l.by_id is not distinct from me) mine,
+        bool_and(l.undone_at is not null) all_undone, bool_or(l.undone_at is not null) any_undone,
+        max(l.undone_at) undone_at, (array_agg(l.undone_by order by l.undone_at desc nulls last))[1] undone_by,
+        (array_agg(l.undo_of) filter (where l.undo_of is not null))[1] undo_of, count(*) n,
+        jsonb_agg(jsonb_build_object('tbl', l.tbl, 'action', l.action, 'old', l.old_row, 'new', l.new_row) order by l.id) items
+      from gr join public.change_logs l on l.batch = gr.batch and l.academy_id = p_academy and (r = 'owner' or l.by_id = me)
+      where gr.g in (select g from pick)
+      group by gr.g
+    )
+    select jsonb_agg(jsonb_build_object(
+      'batch', s.first_batch, 'batches', s.batches, 'at', s.at,
+      'by_name', coalesce((select coalesce(p.name, p.username) from public.profiles p where p.id = s.by_id), case when s.by_id is null then '자동 처리' end),
+      'mine', s.mine, 'undone_at', case when s.all_undone then s.undone_at end,
+      'undone_by_name', case when s.all_undone then (select coalesce(p.name, p.username) from public.profiles p where p.id = s.undone_by) end,
+      'undo_of', s.undo_of, 'n', s.n,
+      'can_undo', not s.any_undone and (r = 'owner' or s.mine),
+      'items', (select jsonb_agg(e) from (select e from jsonb_array_elements(s.items) e limit 40) z)
+    ) order by s.last_id desc) from s
+  ), '[]'::jsonb);
+end $$;
+revoke all on function public.change_list(uuid, bigint, int, text[], boolean) from public, anon;
+grant execute on function public.change_list(uuid, bigint, int, text[], boolean) to authenticated;

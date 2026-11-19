@@ -1720,3 +1720,4 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .li .av.undo-av { background: var(--sunk); color: var(--r-owner); }
 .undo-li.undone .t, .undo-li.undone .undo-diff { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .undo-diff { line-height: 1.6; color: var(--ink); }
+.undo-dlg .list { max-height: 60vh; overflow-y: auto; margin: 10px 0 14px; }
