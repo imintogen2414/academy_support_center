@@ -104,6 +104,7 @@ const can = p => ROLE === 'owner' || (ROLE === 'teacher' && PERMS.has(p));
 if (MY_TITLE) ME = { ...ME, label: MY_TITLE };
 
 function toast(msg) {
+  try { if (undoToastOk(String(msg))) return toastAct(msg, '되돌리기', undoLast); } catch (e) { /* 처음 불러오는 중이면 그냥 알림 */ }
   const t = $('#toast');
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2200);
@@ -7834,7 +7835,7 @@ const REPORT_AREA = { name: '성장 리포트', icon: 'doc', desc: '학생기록
 // 채용 공고 게시판: 학원에 아직 연결 안 된 강사(구직 중)만 봐요. 학원 강사 메뉴에는 없고, 공고 · 지원자 관리는 원장 "강사 채용"
 const JOBS_AREA = { name: '채용 공고', icon: 'brief', desc: '센터 가입 학원들의 강사 채용', stat: () => `공고 ${jobData().posts.length}건`, render: jobsPage, detail: jobDetailPage,
   title: id => id === 'profile' ? '내 이력서' : id === 'mine' ? '지원 현황' : (jobData().posts.find(j => j.id === id) || {}).title };
-const UNDO_AREA = { name: '되돌리기', icon: 'undo', desc: '넣고 · 고치고 · 지운 것을 이전으로', stat: () => '최근 60일 바뀐 기록', render: undoPage };
+const UNDO_AREA = { hidden: true, name: '되돌리기', icon: 'undo', desc: '넣고 · 고치고 · 지운 것을 이전으로', stat: () => '최근 60일 바뀐 기록', render: undoPage };
 const SCHEDULE_AREA = { name: '일정·시간표', icon: 'cal', desc: '주간 시간표와 시험 · 행사 · 휴원 일정', stat: () => { const n = schData().ev.filter(e => e.day >= TODAY && dday(e.day) <= 7).length; return n ? `이번 주 일정 ${n}개` : `수업 ${schData().tt.length}개`; }, render: schedulePage };
 const AREAS = {
   owner: {
@@ -8114,15 +8115,15 @@ function markSeen(path) {
 
 /* ---------- 메뉴 묶음: 왼쪽 메뉴 · 홈 타일 · 전체 메뉴 안내가 같은 묶음을 써요 ---------- */
 const NAV_GROUPS = {
-  owner: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 수납 · 시간표 · 되돌리기', ['musts', 'members', 'admin', 'schedule', 'undo']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '센터 공지 · 제휴 · 홍보를 센터가 연결', ['cnews', 'mou', 'promo', 'center']]],
-  teacher: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 시간표 · 결재 · 되돌리기', ['musts', 'members', 'admin', 'schedule', 'approvals', 'teachers', 'undo']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 센터 공지 · 제휴 · 홍보', ['learn', 'cnews', 'mou', 'promo', 'center']]],
+  owner: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 수납 · 시간표', ['musts', 'members', 'admin', 'schedule']], ['강사 · 소통', '강사 · 채팅 · 자료실', ['teachers', 'messages', 'library']], ['센터 지원', '센터 공지 · 제휴 · 홍보를 센터가 연결', ['cnews', 'mou', 'promo', 'center']]],
+  teacher: [['학원 운영', '꼭 할 일 · 학생 · 출결 · 시간표 · 결재', ['musts', 'members', 'admin', 'schedule', 'approvals', 'teachers']], ['소통 · 자료', '채팅 · 자료실', ['messages', 'library']], ['나의 성장 · 지원', '교육 · 센터 공지 · 제휴 · 홍보', ['learn', 'cnews', 'mou', 'promo', 'center']]],
   parent: [['우리 아이', '할 일 · 출결 · 수납 · 일정 · 소식', ['kid', 'schedule', 'news']], ['소통 · 자료', '선생님과 이야기 · 학원 자료', ['messages', 'library']], ['유학', '학원이 안내하는 유학 · 캠프', ['abroad', 'center']]],
   student: [['공부', '할 일 · 시간표 · 리포트 · 성적표 · 출결', ['todos', 'schedule', 'reports', 'records', 'attend']], ['소통 · 자료', '공지 · 채팅 · 자료실', ['news', 'messages', 'library']], ['유학 · 캠프', '학원이 안내하는 캠프 · 어학연수 · 유학', ['abroad', 'center']]],
   admin: [['센터', '센터 관리 · 채팅', ['center', 'messages']]]
 };
 // 지금 메뉴(MY)에 있는 것만, 어느 묶음에도 없는 메뉴는 마지막 묶음 뒤에
 function navGroups() {
-  const ids = Object.keys(MY || {}), used = new Set();
+  const ids = Object.keys(MY || {}).filter(id => !MY[id].hidden), used = new Set();
   const gs = (NAV_GROUPS[ROLE] || []).map(([label, desc, list]) => [label, desc, list.filter(id => ids.includes(id) && !used.has(id) && used.add(id))]).filter(g => g[2].length);
   const rest = ids.filter(id => !used.has(id));
   if (rest.length) { if (gs.length) gs[gs.length - 1][2].push(...rest); else gs.push(['메뉴', '', rest]); }
@@ -8357,7 +8358,7 @@ const tile = (id, a) => `
 // 홈 타일도 왼쪽 메뉴와 같은 묶음으로 (메뉴가 적으면 한 줄로)
 function tiles() {
   const gs = navGroups();
-  if (SEEKER || Object.keys(MY).length <= 4 || gs.length < 2) return `<div class="tiles">${Object.entries(MY).map(([id, a]) => tile(id, a)).join('')}</div>`;
+  if (SEEKER || Object.keys(MY).length <= 4 || gs.length < 2) return `<div class="tiles">${Object.entries(MY).filter(([, a]) => !a.hidden).map(([id, a]) => tile(id, a)).join('')}</div>`;
   return gs.map(([label, desc, ids]) => `<div class="tile-group"><h3>${label}<span>${desc}</span></h3><div class="tiles">${ids.map(id => tile(id, MY[id])).join('')}</div></div>`).join('');
 }
 
@@ -8749,6 +8750,7 @@ function render() {
     ? '이 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
   $('#view').innerHTML = note + crumbs + r.html;
+  addUndoBtn();
   addHowto(parts);
   bind();
   $('#side').classList.remove('open');
@@ -10616,13 +10618,7 @@ async function undoLoad(more) {
   render();
 }
 const undoWhen = iso => { const d = new Date(iso), m = Math.round((Date.now() - d) / 60e3); if (m < 1) return '방금'; if (m < 60) return `${m}분 전`; const k = new Date(d.getTime() + 9 * 3600e3).toISOString(); return `${k.slice(0, 10) === TODAY ? '오늘' : md(k.slice(0, 10))} ${k.slice(11, 16)}`; };
-function undoPage() {
-  try { const f = sessionStorage.getItem('asc-undo-flash'); if (f) { sessionStorage.removeItem('asc-undo-flash'); setTimeout(() => toast(f), 300); } } catch (e) { /* 그대로 */ }
-  if (!UNDO.list && !REAL) { UNDO.list = DEMO_UNDO(); UNDO.more = false; }
-  if (!UNDO.list) { undoLoad(); return head('되돌리기', '넣고 · 고치고 · 지운 것을 이전으로 돌려요.') + '<p class="muted">바뀐 기록을 불러오는 중이에요…</p>'; }
-  const grp = UNDO_GROUPS.find(g => g[0] === UNDO.tbl) || UNDO_GROUPS[0];
-  const list = UNDO.list.filter(b => !grp[2] || (b.items || []).some(it => grp[2].includes(it.tbl)));
-  const rows = list.map(b => {
+const undoRows = list => list.map(b => {
     const s = undoSummary(b), back = !!b.undo_of;
     return `<div class="li undo-li ${b.undone_at ? 'undone' : ''}">
       <span class="av undo-av">${ic(back ? 'undo' : s.icon)}</span>
@@ -10632,6 +10628,12 @@ function undoPage() {
         <div class="d muted">${esc(undoWhen(b.at))} · ${esc(b.by_name || '알 수 없음')}${b.undone_at ? ` · <b>${esc(undoWhen(b.undone_at))} ${esc(b.undone_by_name || '')} 되돌림</b>` : ''}</div></div>
       <div class="r">${b.undone_at ? '<span class="chip">되돌렸어요</span>' : b.can_undo ? `<button class="btn sm ${back ? '' : 'primary'}" data-undo="${b.batch}">${back ? '다시 하기' : '되돌리기'}</button>` : '<span class="muted small">원장님만</span>'}</div></div>`;
   }).join('');
+function undoPage() {
+  if (!UNDO.list && !REAL) { UNDO.list = DEMO_UNDO(); UNDO.more = false; }
+  if (!UNDO.list) { undoLoad(); return head('되돌리기', '넣고 · 고치고 · 지운 것을 이전으로 돌려요.') + '<p class="muted">바뀐 기록을 불러오는 중이에요…</p>'; }
+  const grp = UNDO_GROUPS.find(g => g[0] === UNDO.tbl) || UNDO_GROUPS[0];
+  const list = UNDO.list.filter(b => !grp[2] || (b.items || []).some(it => grp[2].includes(it.tbl)));
+  const rows = undoRows(list);
   return head('되돌리기', `넣고 · 고치고 · 지운 것을 한 번에 이전으로 돌려요. ${ROLE === 'owner' ? '우리 학원에서 누가 한 것이든 보여요' : '내가 한 것만 보여요'} · 최근 60일.`,
     `<button class="btn" data-act="undoReload">새로 보기</button>`) + `
   <div class="seg undo-seg">${UNDO_GROUPS.map(([k, l]) => `<button class="${UNDO.tbl === k ? 'on' : ''}" data-undo-tbl="${k}">${l}</button>`).join('')}</div>
@@ -10640,21 +10642,78 @@ function undoPage() {
   ${UNDO.more ? '<div class="row-btns"><button class="btn sm" data-act="undoMore">더 보기</button></div>' : ''}</section>
   <p class="muted small">되돌리면 그때 함께 바뀐 것(예: 상담을 "등록"으로 옮길 때 같이 생긴 원생)도 같이 돌아가요. 되돌린 것도 기록에 남아서 "다시 하기"로 되살릴 수 있어요. 휴대폰 알림 · 문자처럼 이미 보낸 것은 돌아오지 않아요.</p>`;
 }
-async function undoDo(batch) {
-  const b = (UNDO.list || []).find(x => String(x.batch) === String(batch)); if (!b) return;
+async function undoDo(batch, from) {
+  const b = (from || UNDO.list || []).find(x => String(x.batch) === String(batch)); if (!b) return false;
   const s = undoSummary(b);
-  if (!confirm(`"${s.head}"${b.undo_of ? '을(를) 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return;
-  if (!REAL) { b.undone_at = new Date().toISOString(); b.undone_by_name = ME.name; render(); return toast('되돌렸어요 · 예시 계정은 이 화면에서만 바뀌어요'); }
+  if (!confirm(`"${s.head}"${b.undo_of ? '을(를) 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return false;
+  if (!REAL) { b.undone_at = new Date().toISOString(); b.undone_by_name = ME.name; if (!from) render(); undoFlashNow('되돌렸어요 · 예시 계정은 기록만 바뀌어요'); return true; }
   let { data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batches: b.batches || [b.batch], p_force: false });
   if (!error && data && data.changed && !data.ok) {
-    if (!confirm(`그 뒤에 ${data.changed}건이 또 바뀌었어요. 그래도 되돌리면 그 뒤에 바뀐 것도 이때 모습으로 돌아가요. 되돌릴까요?`)) return;
+    if (!confirm(`그 뒤에 ${data.changed}건이 또 바뀌었어요. 그래도 되돌리면 그 뒤에 바뀐 것도 이때 모습으로 돌아가요. 되돌릴까요?`)) return false;
     ({ data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batches: b.batches || [b.batch], p_force: true }));
   }
-  if (error) return toast(/undo_failed/.test(error.message || '') ? '되돌리지 못했어요 · 이어진 자료(학생 · 반 등)가 이미 지워졌을 수 있어요' : dbErr(error));
-  if (data && data.error === 'already') { UNDO.list = null; render(); return toast('이미 되돌린 일이에요'); }
+  if (error) return void undoFlashNow(/undo_failed/.test(error.message || '') ? '되돌리지 못했어요 · 이어진 자료(학생 · 반 등)가 이미 지워졌을 수 있어요' : dbErr(error));
+  if (data && data.error === 'already') { UNDO.list = null; if (!from) render(); undoFlashNow('이미 되돌린 일이에요'); return false; }
   // 다른 화면 자료도 바뀌었으니 새로 불러와요 (알림은 불러온 뒤에)
   try { sessionStorage.setItem('asc-undo-flash', b.undo_of ? '다시 했어요' : '되돌렸어요'); } catch (e) { /* 알림만 빠져요 */ }
   location.reload();
+}
+// 화면마다 되돌리기: 그 화면이 쓰는 표 (주소 앞부분 → 표)
+const PAGE_UNDO = [
+  ['admin/attend', ['attendance']], ['admin/billing', ['invoices', 'tuition_plans', 'discount_presets']],
+  ['admin/finance', ['expenses', 'incomes', 'fixed_costs', 'fin_accounts', 'invoices']], ['admin/paper', ['paperwork']], ['admin/tax', ['paperwork', 'payroll']],
+  ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['expenses']],
+  ['members/students', ['students', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
+  ['members/todos', ['student_todos']], ['members/reports', ['growth_reports']], ['members/records', ['app_records']], ['members/notices', ['notices']],
+  ['schedule', ['timetable', 'academy_events']], ['library', ['library_items', 'library_folders']],
+  ['teachers/hire', ['job_posts']], ['teachers/roles', ['academy_titles']], ['mou/abroad', ['abroad_promos']]];
+const undoTables = () => {
+  if (!isStaff() || SEEKER) return null;
+  const p = (location.hash || '#home').slice(1), m = PAGE_UNDO.find(([k]) => p === k || p.startsWith(`${k}/`));
+  return m ? m[1] : null;
+};
+const undoFlashNow = msg => toast(msg);
+// 화면 위쪽 버튼 줄에 "되돌리기"를 붙여요 (render가 불러요)
+function addUndoBtn() {
+  try { const f = sessionStorage.getItem('asc-undo-flash'); if (f) { sessionStorage.removeItem('asc-undo-flash'); setTimeout(() => toast(f), 300); } } catch (e) { /* 그대로 */ }
+  if (!undoTables()) return;
+  const h = $('#view .page-head'); if (!h) return;
+  let a = h.querySelector(':scope > .acts'); if (!a) { a = document.createElement('div'); a.className = 'acts'; h.appendChild(a); }
+  a.insertAdjacentHTML('beforeend', `<button class="btn" type="button" data-act="undoHere">${ic('undo')}되돌리기</button>`);
+}
+// 이 화면에서 바뀐 것만 모아 보는 창
+async function undoHereDialog() {
+  const tables = undoTables(); if (!tables) return;
+  const d = dialogEl(); let list = null;
+  const paint = () => {
+    d.innerHTML = `<div class="dlg undo-dlg"><h2>${ic('undo')} 되돌리기</h2>
+      <p class="muted small">이 화면에서 넣고 · 고치고 · 지운 것이에요${ROLE === 'owner' ? '' : ' (내가 한 것만)'} · 최근 것부터 · 누르면 그 일이 통째로 이전으로 돌아가요.</p>
+      <div class="list">${list === null ? '<p class="muted">불러오는 중…</p>' : undoRows(list) || '<p class="muted">아직 바뀐 기록이 없어요. 이제부터 넣고 · 고치고 · 지우면 여기에 쌓여요.</p>'}</div>
+      <div class="acts"><a class="btn sm" href="#undo" id="undoAll">모든 화면 기록</a><span style="flex:1"></span><button type="button" class="btn primary" id="dlgCancel">닫기</button></div></div>`;
+    $('#dlgCancel').onclick = () => d.close();
+    $('#undoAll').onclick = () => d.close();
+    d.querySelectorAll('[data-undo]').forEach(b => b.onclick = async () => { b.disabled = true; const ok = await undoDo(b.dataset.undo, list); b.disabled = false; if (ok && !REAL) paint(); });
+  };
+  paint(); if (!d.open) d.showModal();
+  if (!REAL) list = DEMO_UNDO().filter(b => b.items.some(it => tables.includes(it.tbl)));
+  else {
+    const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_limit: 20, p_tables: tables });
+    list = error ? [] : data || [];
+    if (error) toast(dbErr(error, '불러오지'));
+  }
+  if (d.open) paint();
+}
+// 저장 · 지우기 알림에 "되돌리기" 버튼: 방금 내가 이 화면에서 한 일을 되돌려요
+const UNDO_TOAST_OK = /(저장|넣었|추가했|지웠|삭제했|고쳤|바꿨|옮겼|만들었|붙였|남겼|확인했|뺐|이어|휴강|보강|빼|등록)/;
+const UNDO_TOAST_NO = /(되돌|다시 했|복사|못 |못했|않|실패|없어요|예시|권한|확인해 주세요|넣어 주세요|골라 주세요)/;
+const undoToastOk = msg => !!REAL && !!undoTables() && UNDO_TOAST_OK.test(msg) && !UNDO_TOAST_NO.test(msg);
+async function undoLast() {
+  const tables = undoTables(); if (!tables) return;
+  const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_limit: 1, p_tables: tables, p_mine: true });
+  if (error) return toast(dbErr(error, '불러오지'));
+  const b = (data || [])[0];
+  if (!b || !b.can_undo || Date.now() - new Date(b.at) > 10 * 60e3) return undoHereDialog();
+  await undoDo(b.batch, data);
 }
 const undoHint = () => isStaff() ? `<div class="set-line"><div><b>되돌리기</b><small>넣고 · 고치고 · 지운 것을 이전으로 돌려요 (최근 60일)</small></div><a class="btn sm" href="#undo">${ic('undo')}바뀐 기록 보기</a></div>` : '';
 function bindUndo() {
@@ -10662,6 +10721,7 @@ function bindUndo() {
   on('[data-undo-tbl]', b => { UNDO.tbl = b.dataset.undoTbl; render(); });
   on('[data-act="undoMore"]', () => undoLoad(true));
   on('[data-act="undoReload"]', () => { UNDO.list = null; render(); });
+  on('[data-act="undoHere"]', undoHereDialog);
 }
 function bindR18() {
   bindUndo();
