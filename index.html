@@ -10,14 +10,14 @@
 <meta property="og:title" content="학원지원센터 — 학원 운영은 프로그램 하나로, 나머지는 센터가 연결해 드려요">
 <meta property="og:description" content="출결·수납·재정·교육청 서류 자동화와 학생·학부모 관리를 원장·강사·학부모·학생이 함께 쓰는 운영 프로그램은 무료로 시작해요. 홍보 대행·유학 캠프 제휴·강사 구하기는 필요할 때만 상담 후 진행해요.">
 <meta property="og:url" content="https://academysupportcenter.vercel.app/">
-<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=4">
+<meta property="og:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=5">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="학원지원센터 — 학원 운영은 프로그램 하나로, 나머지는 센터가 연결해 드려요">
 <meta name="twitter:description" content="출결·수납·재정·교육청 서류 자동화와 학생·학부모 관리를 원장·강사·학부모·학생이 함께 쓰는 운영 프로그램은 무료로 시작해요. 홍보 대행·유학 캠프 제휴·강사 구하기는 필요할 때만 상담 후 진행해요.">
-<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=4">
+<meta name="twitter:image" content="https://academysupportcenter.vercel.app/assets/og.png?v=5">
 <meta name="theme-color" content="#ffffff" data-light="#ffffff" data-dark="#0a0d2a">
 <script>try{var t=localStorage.getItem('asc-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="canonical" href="https://academysupportcenter.vercel.app/">
@@ -37,7 +37,7 @@
 <!-- 위쪽 머리글: 로고 · 메뉴 · 로그인 / 무료로 시작하기 (내리면 아래 선이 생겨요) -->
 <header class="site-top" id="siteTop">
   <div class="wrap top-in">
-    <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</a>
+    <a href="/" class="logo"><span class="logo-mark"><svg viewBox="0 0 120 120" aria-hidden="true"><g fill="#3B46EE"><rect x="55.5" y="18" width="9" height="84"/><rect x="18" y="55.5" width="84" height="9"/><rect x="35" y="35" width="50" height="50" rx="15"/><circle cx="60" cy="15" r="11.5"/></g><circle cx="105" cy="60" r="11.5" fill="#13926B"/><circle cx="60" cy="105" r="11.5" fill="#D97613"/><circle cx="15" cy="60" r="11.5" fill="#C1388C"/><g fill="#fff"><rect x="56.5" y="46" width="7" height="28" rx="3.5"/><rect x="46" y="56.5" width="28" height="7" rx="3.5"/></g></svg></span>학원지원센터</a>
     <nav class="top-nav" aria-label="첫 화면 메뉴"><a href="/#program-sec">운영 프로그램</a><a href="/#mobile-sec">휴대폰에서</a><a href="/#service-sec">추가 서비스</a><a href="/#story-sec">이용 사례</a><a href="/jobs">강사 채용</a></nav>
     <span class="top-r"><button type="button" class="theme-btn" data-theme-toggle aria-label="화면 밝기 바꾸기"></button><a class="btn ghost sm" href="#login" id="topLogin">로그인</a><a class="btn primary sm top-start" href="#signup"><span><span class="xs-hide">무료로 </span>시작하기</span></a></span>
   </div>
@@ -945,7 +945,7 @@ function renderPanel() {
 const footCol = (t, links) => `<div><b>${t}</b>${links.map(([h, x, ext]) => `<a href="${h}"${ext ? ' target="_blank" rel="noopener"' : ''}>${x}</a>`).join('')}</div>`;
 document.getElementById('siteFoot').innerHTML = `<div class="wrap">
   <div class="foot-top">
-    <div class="foot-brand"><span class="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9l8-5 8 5v10"/><path d="M9 19v-5h6v5"/></svg></span>학원지원센터</span><p>고객센터 <b>${SITE_ORG.tel}</b><br>${SITE_ORG.hours} · ${SITE_ORG.mail}</p></div>
+    <div class="foot-brand"><span class="logo"><span class="logo-mark"><svg viewBox="0 0 120 120" aria-hidden="true"><g fill="#3B46EE"><rect x="55.5" y="18" width="9" height="84"/><rect x="18" y="55.5" width="84" height="9"/><rect x="35" y="35" width="50" height="50" rx="15"/><circle cx="60" cy="15" r="11.5"/></g><circle cx="105" cy="60" r="11.5" fill="#13926B"/><circle cx="60" cy="105" r="11.5" fill="#D97613"/><circle cx="15" cy="60" r="11.5" fill="#C1388C"/><g fill="#fff"><rect x="56.5" y="46" width="7" height="28" rx="3.5"/><rect x="46" y="56.5" width="28" height="7" rx="3.5"/></g></svg></span>학원지원센터</span><p>고객센터 <b>${SITE_ORG.tel}</b><br>${SITE_ORG.hours} · ${SITE_ORG.mail}</p></div>
     ${footCol('운영 프로그램', PROGRAM_AREAS.map(a => [`/area/${a.id}`, a.name]))}
     ${footCol('추가 서비스', SERVICE_AREAS.map(a => [`/area/${a.id}`, a.name]))}
     ${footCol('도움', [['#faq', '자주 묻는 질문 · 비용'], ['#ask', '가입 전 문의'], ['#check', '진행 상황 보기'], ['/jobs', '강사 채용']])}

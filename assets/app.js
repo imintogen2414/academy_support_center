@@ -50,6 +50,8 @@ const ICON = {
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
 };
+// 학원지원센터 로고(심볼마크): 가운데 + (지원) · 네 점은 원장 파랑 · 강사 초록 · 학부모 주황 · 학생 분홍
+const LOGO_MARK = '<svg viewBox="0 0 120 120" aria-hidden="true"><g fill="#3B46EE"><rect x="55.5" y="18" width="9" height="84"/><rect x="18" y="55.5" width="84" height="9"/><rect x="35" y="35" width="50" height="50" rx="15"/><circle cx="60" cy="15" r="11.5"/></g><circle cx="105" cy="60" r="11.5" fill="#13926B"/><circle cx="60" cy="105" r="11.5" fill="#D97613"/><circle cx="15" cy="60" r="11.5" fill="#C1388C"/><g fill="#fff"><rect x="56.5" y="46" width="7" height="28" rx="3.5"/><rect x="46" y="56.5" width="28" height="7" rx="3.5"/></g></svg>';
 const ic = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
 
 const params = new URLSearchParams(location.search);
@@ -9384,7 +9386,7 @@ async function adminApplyScreen(user) {
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><div class="card">
-    <span class="logo"><span class="logo-mark">${ic('shield')}</span>학원지원센터 · 센터 관리자 신청</span>
+    <span class="logo"><span class="logo-mark">${LOGO_MARK}</span>학원지원센터 · 센터 관리자 신청</span>
     ${last && last.status === 'pending' ? `
     <h1>신청을 받았어요</h1>
     <p class="muted">${md(last.created_at.slice(0, 10))}에 신청했어요. 지금 센터 관리자가 확인하고 수락하면, 이 화면에서 "다시 확인"을 누르거나 다시 로그인하면 센터 관리 화면이 열려요.</p>
@@ -9423,7 +9425,7 @@ function rolePicker(user, nameOnly = false) {
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><form class="card" id="pickForm" novalidate>
-    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <span class="logo"><span class="logo-mark">${LOGO_MARK}</span>학원지원센터</span>
     <h1>${nameOnly ? '이름을 정해 주세요' : '반가워요! 한 가지만 알려 주세요'}</h1>
     <p class="muted">${nameOnly ? '구글 계정 이름이 다른 회원과 같아요. 이름은 다른 회원과 겹칠 수 없어서, 구별되는 이름으로 정해 주세요. (예: 홍길동2, 홍길동 하늘영어)' : '역할에 맞는 화면으로 안내해 드려요. 나중에 바꿀 수 있어요.'}</p>
     ${nameOnly ? '' : `<label class="f">어떤 분이세요?
@@ -9682,7 +9684,7 @@ function onboarding(user) {
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><div class="card">
-    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <span class="logo"><span class="logo-mark">${LOGO_MARK}</span>학원지원센터</span>
     <h1>${esc(PROFILE.name || '')} ${who}, 학원을 연결해 주세요</h1>
     ${owner ? `
     <form class="f-stack" id="makeForm" novalidate>
@@ -11065,7 +11067,7 @@ function suspendedScreen(user, cur) {
   $('.layout').style.display = 'block';
   $('.layout').innerHTML = `
   <div class="picker"><div class="card">
-    <span class="logo"><span class="logo-mark">${ic('home')}</span>학원지원센터</span>
+    <span class="logo"><span class="logo-mark">${LOGO_MARK}</span>학원지원센터</span>
     <h1>${esc(cur.name)} 이용이 잠시 멈춰 있어요</h1>
     <p class="muted">${staff ? '센터와의 이용 계약이 아직이거나 끝나서 이 학원 화면을 잠시 닫아 두었어요. 원생 · 출결 · 수납 같은 자료는 지우지 않고 그대로 있어서, 센터가 다시 열면 그대로 이어서 쓸 수 있어요.' : '학원에서 이 프로그램 이용을 잠시 멈췄어요. 출결 · 수납 · 공지는 학원에 직접 문의해 주세요.'}</p>
     ${cur.suspend_note ? `<p class="msg" style="display:block">센터 안내: ${esc(cur.suspend_note)}</p>` : ''}

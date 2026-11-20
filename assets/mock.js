@@ -178,7 +178,7 @@ const LAP_SCREENS = {
 const laptopMock = (role = 'owner') => { const L = LAP_SCREENS[role]; return fitBox(LAP_W, LAP_H, `
   <div class="m-laptop r-${role}">
     <div class="m-lid"><div class="m-win">
-      <aside class="m-side"><b class="m-logo"><i></i>학원지원센터</b>${L.menu.map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('')}</aside>
+      <aside class="m-side"><b class="m-logo"><i><svg viewBox="0 0 120 120" aria-hidden="true"><g fill="#3B46EE"><rect x="55.5" y="18" width="9" height="84"/><rect x="18" y="55.5" width="84" height="9"/><rect x="35" y="35" width="50" height="50" rx="15"/><circle cx="60" cy="15" r="11.5"/></g><circle cx="105" cy="60" r="11.5" fill="#13926B"/><circle cx="60" cy="105" r="11.5" fill="#D97613"/><circle cx="15" cy="60" r="11.5" fill="#C1388C"/><g fill="#fff"><rect x="56.5" y="46" width="7" height="28" rx="3.5"/><rect x="46" y="56.5" width="28" height="7" rx="3.5"/></g></svg></i>학원지원센터</b>${L.menu.map((t, i) => `<span class="${i ? '' : 'on'}">${t}</span>`).join('')}</aside>
       <main class="m-main">
         <div class="m-head"><div><small>10월 26일 월요일</small><b>${L.hello}</b></div><span class="m-search">${role === 'owner' || role === 'teacher' ? '학생 · 반 · 메뉴 찾기' : '메뉴 찾기'}</span></div>
         <div class="m-stats">${L.stats.map(([k, v, u, n, up]) => `<div><small>${k}</small><b>${v}<em>${u}</em></b><i class="${up ? 'up' : ''}">${n}</i></div>`).join('')}</div>
