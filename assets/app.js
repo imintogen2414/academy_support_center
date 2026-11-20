@@ -5377,7 +5377,7 @@ function studentsPage() {
   <section class="card"><div class="table">
     <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>${ROLE === 'teacher' ? '' : '10월 수납'}</span></div>
     ${list.map(s => `
-      <div class="tr"><span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${s.name}</b></a> <span class="muted small">${s.grade}</span></span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${telLink(s.phone)}</span></span><span class="num">${s.attend}%</span><span>${ROLE === 'teacher' ? '' : s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
+      <div class="tr"><span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${s.name}</b></a> <span class="muted small">${s.grade}</span>${noteChip(s.id)}</span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${telLink(s.phone)}</span></span><span class="num">${s.attend}%</span><span>${ROLE === 'teacher' ? '' : s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
   </div></section>`;
 }
 
@@ -5580,7 +5580,7 @@ function realStudentsPage() {
     <div class="tr th sv"><span>${famOn() ? '학생' : '수강생'}</span><span>반</span><span>${famOn() ? '학부모' : '연락처'}</span><span>${bill ? `수강료 · ${+TODAY.slice(5, 7)}월` : '메모'}</span><span></span></div>
     ${list.map(s => `
       <div class="tr sv ${(s.status || 'active') === 'left' ? 'gone' : ''}">
-        <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${stuStChip(s)}${canEdit ? by(s) : ''}</span>
+        <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${stuStChip(s)}${noteChip(s.id)}${canEdit ? by(s) : ''}</span>
         <span>${esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
         <span>${famOn() ? `${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>` : telLink(s.phone || s.parent_phone) || '-'}${canEdit && appOn() ? appLinked(s.id) : ''}</span>
         ${bill ? feeCell(s) : `<span class="muted small">${esc(s.memo || '')}</span>`}
@@ -5684,7 +5684,7 @@ function studentDetail(id) {
   const info = card('기본 정보', `${v.info.map(([k, val]) => `<div class="set-row"><span>${k}</span><b>${val}</b></div>`).join('')}${v.memo ? `<p class="d pre" style="margin:8px 0 0">${esc(v.memo)}</p>` : ''}`);
   const acts = REAL ? `<button class="btn" data-edit-student="${id}">${ic('pen')}정보 고치기</button>` : '';
   return head(esc(v.name), [v.grade, v.cls].filter(Boolean).map(esc).join(' · ') + (v.parent && famOn() ? ` · 학부모 ${esc(v.parent)}` : ''), acts) + `
-  <div class="stu-grid">${contact}${attend}${bills}${leads}${todos}${reps}${recStuCard(id)}${info}</div>`;
+  <div class="stu-grid">${contact}${stuNotesCard(id, v.leads)}${attend}${bills}${leads}${todos}${reps}${recStuCard(id)}${info}</div>`;
 }
 
 // 원생과 이어진 학부모·학생 계정
@@ -8296,7 +8296,7 @@ function guidePage() {
     </section>`).join('') + (startSteps().length ? `<a class="hint" href="#home" data-act="showGuide">${ic('check')}<span>처음 시작 안내를 다시 보고 싶으면</span><b>홈에 다시 띄우기 →</b></a>` : '') + howtoAll();
 }
 // 위쪽 검색: 메뉴 이름 · 설명에서 찾아요
-const SEARCH_WORDS = { '초대 코드': '코드 초대 링크 가입 합류 들어가기 강사 학부모 학생', 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자', 되돌리기: '취소 실수 복구 이전 원래대로 되살리기 지운 것 기록 바뀐 기록' };
+const SEARCH_WORDS = { '초대 코드': '코드 초대 링크 가입 합류 들어가기 강사 학부모 학생', 수납: '청구 납부 미납 수강료 돈', 재정: '매출 지출 순이익 돈 수입', 출결: '출석 결석 지각', 시간표: '일정 수업 달력 시험 휴원', 채팅: '메신저 대화 친구 그룹 카톡 메시지', 원생: '학생 명단 등록', 서류: '교육청 세금 원천세 신고', 세금: '종합소득세 사업장현황신고 홈택스 위택스 지급명세서 중간예납 세무사 부가세 소득세', 자료실: '파일 서식 자료', 결재: '물품 비용 승인', 공지: '알림 안내 소식', '꼭 할 일': '체크리스트 해야 할 일 자동', '결제 · 통장 · 앱 연결': '카드 단말기 키오스크 결제 연동 통장 계좌 오픈뱅킹 전문 앱', '학습 기록 · 성적표': '성적 시험 점수 전문 앱 퀴즈 숙제', '상담·등록': '상담 일지 단체 문자 문자', '원생 명단': '특이사항 상담 기록 학생 기록 메모 알레르기', 되돌리기: '취소 실수 복구 이전 원래대로 되살리기 지운 것 기록 바뀐 기록' };
 function searchMenus(q) {
   q = q.trim(); if (!q) return [];
   const out = [], hit = (...t) => t.join(' ').includes(q);
@@ -8764,6 +8764,9 @@ function bind() {
   // 원생 명단 · 초대 코드 (실제 데이터)
   on('[data-act="roster"]', rosterDialog);
   on('[data-stu-st]', b => { STU_ST = b.dataset.stuSt; render(); });
+  on('[data-sn-add]', b => stuNoteDialog(b.dataset.snAdd));
+  on('[data-sn-all]', b => { STU_NOTE_F = 'all'; stuNoteDialog(b.dataset.snAll); });
+  on('#view [data-sn-edit]', b => stuNoteDialog(b.dataset.snStu, b.dataset.snEdit));
   on('[data-act="addStudent"]', () => REAL ? studentDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
   on('[data-edit-student]', b => studentDialog(REAL.allStudents.find(s => s.id === b.dataset.editStudent)));
   on('[data-copy]', b => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('복사했어요'), () => toast(b.dataset.copy)));
@@ -9803,7 +9806,7 @@ async function boot() {
       approvals: [], reports: [], library: [], libFolders: [], library_folders: [], payroll: [], autoLogs: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set(), cnews: [], cnewsRead: new Set() };
     useAcademy();
     await loadServices();
-    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies(), loadLeadNotes(), loadExt()]);
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies(), loadLeadNotes(), loadStuNotes(), loadExt()]);
     if (ROLE === 'owner') await Promise.all([loadTaxProfiles(), loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadFixed(), loadAccounts(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks(), loadPayroll(), loadAutoLogs(), loadStaffPerms(), loadCnews()]);
     // 강사: 기본 + 원장님이 켜 준 권한의 자료만 (권한이 없으면 DB도 돌려주지 않아요)
@@ -10335,6 +10338,100 @@ function yearReport(y) {
   toast(`${y}년 결산서를 만들었어요`);
 }
 
+/* ---------- 원생 기록 (student_notes): 학생마다 특이사항 · 상담 기록이 날짜별로 쌓여요 (원장 · 강사만) ----------
+   특이사항(pinned)은 학생 한 명 보기 맨 위와 원생 명단 이름 옆에 늘 보여요. 등록 전 상담 일지(lead_notes)도 같은 줄에 이어 보여요. */
+const STU_NOTE_KIND = { consult: ['학생 상담', 'chat'], parent: ['학부모 상담', 'phone'], study: ['학습', 'pen'], life: ['생활 · 태도', 'users'], health: ['건강 · 안전', 'shield'], memo: ['메모', 'doc'] };
+let DEMO_STU_NOTES = null, STU_NOTE_F = 'all';
+function demoStuNotes() {
+  if (DEMO_STU_NOTES) return DEMO_STU_NOTES;
+  const st = DATA.students.slice(0, 6), o = DATA.users.owner.name, t = DATA.users.teacher.name;
+  const rows = [];
+  if (st[0]) rows.push([st[0], 'health', '땅콩 알레르기 · 간식 나눠 줄 때 꼭 확인', true, 30, o], [st[0], 'parent', '어머님 통화 · 리딩 숙제가 많다고 하심. 주 2회로 줄이고 단어 시험은 그대로', false, 9, o], [st[0], 'study', '단어 시험 3주 연속 90점 이상 · 다음 달 B반 올려 보기', false, 2, t]);
+  if (st[1]) rows.push([st[1], 'life', '하원은 할머니가 오셔요 · 수요일만 혼자 가요', true, 40, o], [st[1], 'consult', '쉬는 시간에 친구와 다툼 · 따로 이야기 나눔, 다음 주 다시 보기', false, 5, t]);
+  if (st[2]) rows.push([st[2], 'study', '문법 기초가 약해요 · 보충 자료 주기', false, 12, t], [st[2], 'parent', '아버님 방문 상담 · 방학 특강 문의, 12월 안내 드리기로', false, 3, o]);
+  if (st[3]) rows.push([st[3], 'memo', '형제(동생 초등 A반)와 같이 다녀요 · 형제 할인', true, 50, o]);
+  DEMO_STU_NOTES = rows.map(([x, kind, body, pinned, ago, by], i) => ({ id: `sn${i}`, student_id: x.id, kind, body, pinned, day: addDays(TODAY, -ago), by_name: by, by_id: null, created_at: addDays(TODAY, -ago) }));
+  return DEMO_STU_NOTES;
+}
+const noteSort = (a, b) => String(b.day).localeCompare(String(a.day)) || String(b.created_at || '').localeCompare(String(a.created_at || ''));
+const stuNotes = sid => (REAL ? REAL.stuNotes || [] : demoStuNotes()).filter(n => n.student_id === sid).sort(noteSort);
+async function loadStuNotes() {
+  const { data } = await SB.from('student_notes').select('*').eq('academy_id', REAL.academy.id).order('day', { ascending: false }).order('created_at', { ascending: false }).limit(5000);
+  REAL.stuNotes = data || [];
+}
+// 원생 명단 이름 옆: 특이사항이 있으면 노란 칩, 기록만 있으면 수
+const noteChip = sid => {
+  const l = stuNotes(sid), pin = l.filter(n => n.pinned);
+  if (pin.length) return ` <span class="chip warn" title="${esc(pin.map(n => n.body).join(' / '))}">${ic('shield')}특이사항</span>`;
+  return l.length ? ` <span class="chip mute">기록 ${l.length}</span>` : '';
+};
+const canNoteEdit = n => !REAL || ROLE === 'owner' || n.by_id === USER.id;
+// 기록 한 줄 (등록 전 상담 일지도 같은 모양)
+const noteLine = n => {
+  const lead = n._lead, k = lead ? (NOTE_KIND[n.kind] || NOTE_KIND.memo) : (STU_NOTE_KIND[n.kind] || STU_NOTE_KIND.memo);
+  return `<li class="${n.pinned ? 'pin' : ''}"><span class="note-ic">${ic(k[1])}</span><div><b>${md(n.day)} ${lead ? `등록 전 · ${k[0]}` : k[0]}</b>${n.pinned ? ' <span class="chip warn">특이사항</span>' : ''} <span class="muted small">${esc(n.by_name || '')}${n.updated_by_name ? ` · ${esc(n.updated_by_name)} 고침` : ''}</span>
+    ${!lead && canNoteEdit(n) ? `<button type="button" class="link-btn" data-sn-edit="${n.id}" data-sn-stu="${n.student_id}">고치기</button>` : ''}<p>${esc(n.body)}</p></div></li>`;
+};
+const stuTimeline = (sid, leads) => [...stuNotes(sid), ...(leads || []).flatMap(l => leadNotes(l.id).map(n => ({ ...n, _lead: true })))].sort(noteSort);
+// 학생 한 명 보기 카드
+function stuNotesCard(sid, leads) {
+  const all = stuTimeline(sid, leads), pin = all.filter(n => n.pinned), rest = all.filter(n => !n.pinned);
+  return `<section class="card stu-notes"><div class="card-head"><h2>특이사항 · 상담 기록 <span class="muted small">${all.length}개</span></h2><span class="btns"><button class="btn sm primary" data-sn-add="${sid}">${ic('plus')}기록 남기기</button></span></div>
+    ${pin.length ? `<div class="sn-pins">${pin.map(n => `<div><b>${ic((STU_NOTE_KIND[n.kind] || STU_NOTE_KIND.memo)[1])}${esc(n.body)}</b><span class="muted small">${md(n.day)} · ${esc(n.by_name || '')}${canNoteEdit(n) ? ` · <button type="button" class="link-btn" data-sn-edit="${n.id}" data-sn-stu="${sid}">고치기</button>` : ''}</span></div>`).join('')}</div>` : ''}
+    ${rest.length ? `<ol class="note-list sn-list">${rest.slice(0, 5).map(noteLine).join('')}</ol>${rest.length > 5 ? `<button class="link-btn" data-sn-all="${sid}">기록 ${rest.length}개 모두 보기</button>` : ''}`
+      : pin.length ? '' : '<p class="muted" style="margin:0">아직 기록이 없어요. 상담 · 학부모 통화 · 학습 · 생활에서 있었던 일을 한 줄씩 남겨 두면 날짜별로 쌓여요. 알레르기 · 하원 방법처럼 늘 봐야 하는 건 "특이사항"으로 위에 고정해요.</p>'}
+  </section>`;
+}
+// 기록 남기기 · 고치기 · 모두 보기 창
+function stuNoteDialog(sid, editId) {
+  const x = stuById(sid); if (!x) return;
+  const d = dialogEl(), leads = REAL ? DATA.leads.filter(l => l.raw && l.raw.student_id === sid).map(l => l.raw) : [];
+  const ed = editId ? stuNotes(sid).find(n => n.id === editId) : null;
+  const all = stuTimeline(sid, leads).filter(n => STU_NOTE_F === 'all' || (STU_NOTE_F === 'pin' ? n.pinned : !n._lead && n.kind === STU_NOTE_F));
+  const kind = ed ? ed.kind : 'consult';
+  d.innerHTML = `<form method="dialog" class="dlg wide" id="snForm" novalidate>
+    <h2>${esc(x.name)} · ${ed ? '기록 고치기' : '특이사항 · 상담 기록'}</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc([x.class_name || x.cls, x.grade].filter(Boolean).join(' · '))} · 원장님 · 선생님만 봐요 (학부모 · 학생에게는 안 보여요)</p>
+    <div class="note-add">
+      <div class="pick-chips">${Object.entries(STU_NOTE_KIND).map(([k, [t]]) => `<label><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
+      <div class="grid2 even"><label class="f">날짜<input type="date" name="day" value="${ed ? ed.day : TODAY}" max="${TODAY}"></label>
+        <label class="f sn-pin"><span><input type="checkbox" name="pinned" ${ed && ed.pinned ? 'checked' : ''}> 특이사항으로 위에 고정</span><small class="muted">알레르기 · 하원 방법 · 주의할 점처럼 늘 봐야 하는 것</small></label></div>
+      <label class="f">내용<textarea name="body" rows="3" maxlength="2000" placeholder="예: 어머님 통화 · 숙제 양이 많다고 하심, 주 2회로 줄이기로">${ed ? esc(ed.body) : ''}</textarea></label>
+    </div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts">${ed ? '<button type="button" class="btn danger" id="snDel">지우기</button><button type="button" class="btn" id="snBack">‹ 목록</button>' : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">${ed ? '고친 것 저장' : `${ic('plus')}기록 남기기`}</button></div>
+    ${ed ? '' : `<div class="note-filt pick-chips">${[['all', '전체'], ['pin', '특이사항'], ...Object.entries(STU_NOTE_KIND).map(([k, [t]]) => [k, t])].map(([k, t]) => `<button type="button" class="${STU_NOTE_F === k ? 'on' : ''}" data-sn-f="${k}">${t}</button>`).join('')}</div>
+    <h3 class="note-h">쌓인 기록 ${all.length}개</h3>
+    ${all.length ? `<ol class="note-list">${all.map(noteLine).join('')}</ol>` : '<p class="muted small">이 묶음에는 아직 기록이 없어요.</p>'}`}
+  </form>`;
+  if (!d.open) d.showModal();
+  const reopen = id => stuNoteDialog(sid, id);
+  $('#dlgCancel').onclick = () => d.close();
+  d.querySelectorAll('[data-sn-f]').forEach(b => b.onclick = () => { STU_NOTE_F = b.dataset.snF; reopen(); });
+  d.querySelectorAll('[data-sn-edit]').forEach(b => b.onclick = () => reopen(b.dataset.snEdit));
+  if ($('#snBack')) $('#snBack').onclick = () => reopen();
+  if ($('#snDel')) $('#snDel').onclick = async () => {
+    if (!confirm('이 기록을 지울까요? (지워도 화면 위 "되돌리기"로 살릴 수 있어요)')) return;
+    if (!REAL) { DEMO_STU_NOTES = demoStuNotes().filter(n => n.id !== ed.id); reopen(); render(); return toast('지웠어요 (예시)'); }
+    const { error } = await SB.from('student_notes').delete().eq('id', ed.id);
+    if (error) return toast(dbErr(error));
+    await loadStuNotes(); reopen(); render(); toast('기록을 지웠어요');
+  };
+  $('#snForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, body = el.body.value.trim(), fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+    if (!body) return fail('내용을 적어 주세요.');
+    const row = { kind: el.kind.value, day: el.day.value || TODAY, body, pinned: el.pinned.checked };
+    if (!REAL) {
+      if (ed) Object.assign(ed, row, { updated_by_name: ME.name }); else demoStuNotes().unshift({ ...row, id: `sn${Date.now()}`, student_id: sid, by_name: ME.name, created_at: new Date().toISOString() });
+      reopen(); render(); return toast(`${ed ? '고쳤어요' : '남겼어요'} (예시라서 새로 고치면 사라져요)`);
+    }
+    const { error } = await (ed ? SB.from('student_notes').update(row).eq('id', ed.id) : SB.from('student_notes').insert({ ...row, student_id: sid, academy_id: REAL.academy.id }));
+    if (error) return fail(dbErr(error));
+    await loadStuNotes(); reopen(); render(); toast(ed ? '기록을 고쳤어요' : '기록을 남겼어요');
+  };
+}
+
 /* ---------- 상담 일지 (lead_notes): 등록했든 안 했든 상담마다 전화 · 방문 · 레벨테스트 · 체험 기록이 날짜별로 쌓여요 ---------- */
 const NOTE_KIND = { call: ['전화', 'phone'], visit: ['방문 상담', 'users'], msg: ['문자 · 카톡', 'chat'], test: ['레벨테스트', 'pen'], trial: ['체험수업', 'grad'], memo: ['메모', 'doc'] };
 let LEAD_VIEW = 'board', LEAD_ST = 'all';
@@ -10559,11 +10656,11 @@ const UNDO_TBL = {
   students: ['원생', 'users'], attendance: ['출결', 'attend'], invoices: ['수납 · 청구', 'card'], expenses: ['나간 돈', 'chart'], incomes: ['들어온 돈', 'chart'],
   paperwork: ['서류', 'doc'], payroll: ['원천세 계산', 'calc'], timetable: ['시간표', 'cal'], academy_events: ['일정', 'cal'], notices: ['공지', 'notice'],
   library_items: ['자료실', 'doc'], library_folders: ['자료실 폴더', 'doc'], tuition_plans: ['정해 둔 수강료', 'card'], discount_presets: ['할인', 'card'],
-  fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'],
+  fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'], student_notes: ['원생 기록', 'doc'],
   student_todos: ['오늘 할 일', 'check'], growth_reports: ['성장 리포트', 'doc'], fin_accounts: ['통장', 'card'], abroad_promos: ['유학 안내', 'globe'],
   academy_titles: ['직책', 'shield'], app_records: ['학습 기록', 'chart'], job_posts: ['채용 공고', 'brief'], payee_accounts: ['받는 사람 계좌', 'card']
 };
-const UNDO_GROUPS = [['all', '전체'], ['people', '원생 · 상담', ['students', 'leads', 'lead_notes', 'student_todos', 'growth_reports', 'app_records']], ['money', '돈 · 수납', ['invoices', 'expenses', 'incomes', 'payroll', 'tuition_plans', 'discount_presets', 'fixed_costs', 'fin_accounts', 'payee_accounts']],
+const UNDO_GROUPS = [['all', '전체'], ['people', '원생 · 상담', ['students', 'student_notes', 'leads', 'lead_notes', 'student_todos', 'growth_reports', 'app_records']], ['money', '돈 · 수납', ['invoices', 'expenses', 'incomes', 'payroll', 'tuition_plans', 'discount_presets', 'fixed_costs', 'fin_accounts', 'payee_accounts']],
   ['attend', '출결', ['attendance']], ['sched', '시간표 · 일정', ['timetable', 'academy_events']], ['etc', '공지 · 자료 · 그 밖', ['notices', 'library_items', 'library_folders', 'paperwork', 'supplies', 'abroad_promos', 'academy_titles', 'job_posts']]];
 const UNDO_ACT = { insert: '추가', update: '고침', delete: '지움' };
 const UNDO_FIELD = { name: '이름', title: '제목', amount: '금액', list_amount: '원가', class_name: '반', status: '상태', day: '날짜', memo: '메모', category: '항목', paid_at: '납부한 날',
@@ -10571,7 +10668,7 @@ const UNDO_FIELD = { name: '이름', title: '제목', amount: '금액', list_amo
   due: '마감', month: '달', body: '내용', content: '내용', subject: '과목', discount_note: '할인', method: '결제 방법', qty: '수', unit: '단위', place: '둔 곳', note: '메모', stage: '단계',
   text: '내용', done: '했음', target_class: '받는 반', visibility: '공유 범위', price: '값', account: '계좌', bank: '은행', holder: '예금주', every_months: '주기', pay_day: '나가는 날',
   week_of: '주', from_week: '시작 주', to_week: '끝 주', cancels: '휴강', skip_weeks: '빠지는 주', refund: '환불', left_on: '그만둔 날', joined_on: '들어온 날', score: '점수', fee: '수강료',
-  tuition_plan_id: '수강료', discount_id: '할인', folder_id: '폴더', account_id: '통장', student_id: '학생', reported_at: '입금 알림', reminded_at: '미납 안내', kind: '종류', detail: '세부', perms: '권한' };
+  tuition_plan_id: '수강료', discount_id: '할인', folder_id: '폴더', account_id: '통장', student_id: '학생', reported_at: '입금 알림', reminded_at: '미납 안내', kind: '종류', detail: '세부', perms: '권한', pinned: '특이사항' };
 const UNDO_SKIP = /^(id|academy_id|academy_name|created_at|created_by.*|updated_.*|edited_.*|added_by.*|by_id|by_name|requested_by.*|student_name|class_name_snap|search|sort_order)$/;
 const undoTitle = r => { if (!r) return ''; const v = r.student_name && r.title ? `${r.student_name} ${r.title}` : r.name || r.title || r.student_name || r.item || r.category || r.class_name || r.subject || r.text || r.body || r.memo || ''; return String(v).replace(/\s+/g, ' ').slice(0, 30); };
 const undoVal = (k, v) => {
@@ -10663,7 +10760,7 @@ const PAGE_UNDO = [
   ['admin/attend', ['attendance']], ['admin/billing', ['invoices', 'tuition_plans', 'discount_presets']],
   ['admin/finance', ['expenses', 'incomes', 'fixed_costs', 'fin_accounts', 'invoices']], ['admin/paper', ['paperwork']], ['admin/tax', ['paperwork', 'payroll']],
   ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['expenses']],
-  ['members/students', ['students', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
+  ['members/students', ['students', 'student_notes', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
   ['members/todos', ['student_todos']], ['members/reports', ['growth_reports']], ['members/records', ['app_records']], ['members/notices', ['notices']],
   ['schedule', ['timetable', 'academy_events']], ['library', ['library_items', 'library_folders']],
   ['teachers/hire', ['job_posts']], ['teachers/roles', ['academy_titles']], ['mou/abroad', ['abroad_promos']]];
