@@ -1749,3 +1749,24 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .nav-foot a:hover, .nav-foot button:hover, .nav-foot a.on { background: rgba(255,255,255,.08); color: #fff; }
 .nav-foot .icon { width: 18px; height: 18px; }
 .nav-foot span { white-space: nowrap; }
+
+/* 되돌리기(파랑) · 다시 하기(초록) — 화면 위 동그라미 두 개 · 기록 줄 버튼 */
+.ud-pair { display: inline-flex; align-items: center; gap: 6px; padding: 4px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.ud-c { width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff; transition: transform .12s, filter .12s; }
+.ud-c .icon { width: 18px; height: 18px; }
+.ud-c.back { background: var(--r-owner); }
+.ud-c.fwd { background: var(--good); }
+.ud-c:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.ud-c:disabled { opacity: .5; cursor: progress; }
+.ud-c:focus-visible, .ud-btn:focus-visible, .ud-more:focus-visible { outline: 3px solid var(--blue-200, #bcd); outline-offset: 2px; }
+.ud-more { border: 0; background: none; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 0 10px 0 4px; cursor: pointer; }
+.ud-more:hover { color: var(--ink); }
+.ud-btn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 6px 12px 6px 8px; font: inherit; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; white-space: nowrap; }
+.ud-btn .icon { width: 16px; height: 16px; background: rgba(255,255,255,.22); border-radius: 50%; padding: 3px; box-sizing: content-box; }
+.ud-btn.back { background: var(--r-owner); }
+.ud-btn.fwd { background: var(--good); }
+.ud-btn:disabled { opacity: .5; }
+.ud-k { font-weight: 700; }
+.ud-k.back { color: var(--r-owner); }
+.ud-k.fwd { color: var(--good); }
+.undo-dlg h2 .icon { width: 20px; height: 20px; vertical-align: -3px; }

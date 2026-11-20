@@ -5,6 +5,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 
 const ICON = {
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -10726,16 +10727,27 @@ async function undoLoad(more) {
   render();
 }
 const undoWhen = iso => { const d = new Date(iso), m = Math.round((Date.now() - d) / 60e3); if (m < 1) return '방금'; if (m < 60) return `${m}분 전`; const k = new Date(d.getTime() + 9 * 3600e3).toISOString(); return `${k.slice(0, 10) === TODAY ? '오늘' : md(k.slice(0, 10))} ${k.slice(11, 16)}`; };
-const undoRows = list => list.map(b => {
-    const s = undoSummary(b), back = !!b.undo_of;
+// 되돌리기 사슬: 처음 한 일 0 → 되돌림 1 → 다시 함 2 → 또 되돌림 3 … 홀수면 "다시 하기"로 되살릴 수 있는 되돌림
+const undoDepth = (g, list, n = 0) => {
+  if (!g || !g.undo_of || !g.undo_of.length || n > 20) return 0;
+  const t = list.find(x => (x.batches || [x.batch]).some(b => g.undo_of.includes(b)));
+  return 1 + (t ? undoDepth(t, list, n + 1) : 0);
+};
+const isRedoable = (g, list) => undoDepth(g, list) % 2 === 1;
+const udBtn = (fwd, batch, label = true) => `<button type="button" class="ud-btn ${fwd ? 'fwd' : 'back'}" data-undo="${batch}" title="${fwd ? '다시 하기 (되돌린 것을 다시)' : '되돌리기 (이전으로)'}">${ic(fwd ? 'redo' : 'undo')}${label ? `<span>${fwd ? '다시 하기' : '되돌리기'}</span>` : ''}</button>`;
+// 같은 일에서 이어진 되돌리기 · 다시 하기 줄은 가장 최근 줄에만 버튼
+const undoRoot = (g, list, n = 0) => { if (!g || !g.undo_of || !g.undo_of.length || n > 20) return g && g.batch; const t = list.find(x => (x.batches || [x.batch]).some(b => g.undo_of.includes(b))); return t ? undoRoot(t, list, n + 1) : g.undo_of[0]; };
+const undoRows = list => { const seen = new Set(); return list.map(b => {
+    const s = undoSummary(b), back = isRedoable(b, list), root = undoRoot(b, list), later = !b.undone_at && seen.has(root);
+    if (!b.undone_at) seen.add(root);
     return `<div class="li undo-li ${b.undone_at ? 'undone' : ''}">
       <span class="av undo-av">${ic(back ? 'undo' : s.icon)}</span>
       <div><div class="t">${back ? '<span class="chip">되돌림</span> ' : ''}${esc(s.head)}${s.rest.length ? ` <span class="muted small">+ ${esc(s.rest.join(' · '))}</span>` : ''}</div>
         ${s.diff.length ? `<div class="d undo-diff">${s.diff.slice(0, 4).join('<br>')}</div>` : ''}
         ${s.names.length ? `<div class="d">${esc(s.names.join(' · '))}${b.n > s.names.length ? ' …' : ''}</div>` : ''}
         <div class="d muted">${esc(undoWhen(b.at))} · ${esc(b.by_name || '알 수 없음')}${b.undone_at ? ` · <b>${esc(undoWhen(b.undone_at))} ${esc(b.undone_by_name || '')} 되돌림</b>` : ''}</div></div>
-      <div class="r">${b.undone_at ? '<span class="chip">되돌렸어요</span>' : b.can_undo ? `<button class="btn sm ${back ? '' : 'primary'}" data-undo="${b.batch}">${back ? '다시 하기' : '되돌리기'}</button>` : '<span class="muted small">원장님만</span>'}</div></div>`;
-  }).join('');
+      <div class="r">${b.undone_at ? '<span class="chip">되돌렸어요</span>' : later ? '<span class="muted small">위 줄에서 이어져요</span>' : b.can_undo ? udBtn(back, b.batch) : '<span class="muted small">원장님만</span>'}</div></div>`;
+  }).join(''); };
 function undoPage() {
   if (!UNDO.list && !REAL) { UNDO.list = DEMO_UNDO(); UNDO.more = false; }
   if (!UNDO.list) { undoLoad(); return head('되돌리기', '넣고 · 고치고 · 지운 것을 이전으로 돌려요.') + '<p class="muted">바뀐 기록을 불러오는 중이에요…</p>'; }
@@ -10751,10 +10763,16 @@ function undoPage() {
   <p class="muted small">되돌리면 그때 함께 바뀐 것(예: 상담을 "등록"으로 옮길 때 같이 생긴 원생)도 같이 돌아가요. 되돌린 것도 기록에 남아서 "다시 하기"로 되살릴 수 있어요. 휴대폰 알림 · 문자처럼 이미 보낸 것은 돌아오지 않아요.</p>`;
 }
 async function undoDo(batch, from) {
-  const b = (from || UNDO.list || []).find(x => String(x.batch) === String(batch)); if (!b) return false;
-  const s = undoSummary(b);
-  if (!confirm(`"${s.head}"${b.undo_of ? '을(를) 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return false;
-  if (!REAL) { b.undone_at = new Date().toISOString(); b.undone_by_name = ME.name; if (!from) render(); undoFlashNow('되돌렸어요 · 예시 계정은 기록만 바뀌어요'); return true; }
+  const all = from || UNDO.list || [], b = all.find(x => String(x.batch) === String(batch)); if (!b) return false;
+  const s = undoSummary(b), fwd = isRedoable(b, all);
+  if (!confirm(`"${s.head}"${fwd ? ' — 되돌린 것을 다시 할까요?' : '을(를) 이전으로 되돌릴까요?'}`)) return false;
+  if (!REAL) {
+    const now = new Date().toISOString();
+    b.undone_at = now; b.undone_by_name = ME.name;
+    (b.undo_of || []).forEach(t => all.forEach(x => { if (x.batch === t) { x.undone_at = null; (x.undo_of || []).forEach(t2 => all.forEach(y => { if (y.batch === t2) y.undone_at = now; })); } }));
+    all.unshift({ batch: Date.now() + Math.random(), at: now, by_name: ME.name, mine: true, can_undo: true, n: b.n, items: b.items, undo_of: [b.batch] });
+    if (!from) render(); undoFlashNow(`${fwd ? '다시 했어요' : '되돌렸어요'} · 예시 계정은 기록만 바뀌어요`); return true;
+  }
   let { data, error } = await SB.rpc('undo_change', { p_academy: REAL.academy.id, p_batches: b.batches || [b.batch], p_force: false });
   if (!error && data && data.changed && !data.ok) {
     if (!confirm(`그 뒤에 ${data.changed}건이 또 바뀌었어요. 그래도 되돌리면 그 뒤에 바뀐 것도 이때 모습으로 돌아가요. 되돌릴까요?`)) return false;
@@ -10763,7 +10781,7 @@ async function undoDo(batch, from) {
   if (error) return void undoFlashNow(/undo_failed/.test(error.message || '') ? '되돌리지 못했어요 · 이어진 자료(학생 · 반 등)가 이미 지워졌을 수 있어요' : dbErr(error));
   if (data && data.error === 'already') { UNDO.list = null; if (!from) render(); undoFlashNow('이미 되돌린 일이에요'); return false; }
   // 다른 화면 자료도 바뀌었으니 새로 불러와요 (알림은 불러온 뒤에)
-  try { sessionStorage.setItem('asc-undo-flash', b.undo_of ? '다시 했어요' : '되돌렸어요'); } catch (e) { /* 알림만 빠져요 */ }
+  try { sessionStorage.setItem('asc-undo-flash', fwd ? '다시 했어요' : '되돌렸어요'); } catch (e) { /* 알림만 빠져요 */ }
   location.reload();
 }
 // 화면마다 되돌리기: 그 화면이 쓰는 표 (주소 앞부분 → 표)
@@ -10787,23 +10805,24 @@ function addUndoBtn() {
   if (!undoTables()) return;
   const h = $('#view .page-head'); if (!h) return;
   let a = h.querySelector(':scope > .acts'); if (!a) { a = document.createElement('div'); a.className = 'acts'; h.appendChild(a); }
-  a.insertAdjacentHTML('beforeend', `<button class="btn" type="button" data-act="undoHere">${ic('undo')}되돌리기</button>`);
+  a.insertAdjacentHTML('beforeend', `<span class="ud-pair" role="group" aria-label="되돌리기 · 다시 하기"><button type="button" class="ud-c back" data-act="undoBack" title="되돌리기 · 방금 한 것을 이전으로" aria-label="되돌리기">${ic('undo')}</button><button type="button" class="ud-c fwd" data-act="undoFwd" title="다시 하기 · 되돌린 것을 다시" aria-label="다시 하기">${ic('redo')}</button><button type="button" class="ud-more" data-act="undoHere" title="이 화면 바뀐 기록 모두 보기">기록</button></span>`);
 }
 // 이 화면에서 바뀐 것만 모아 보는 창
 async function undoHereDialog() {
   const tables = undoTables(); if (!tables) return;
   const d = dialogEl(); let list = null;
   const paint = () => {
-    d.innerHTML = `<div class="dlg undo-dlg"><h2>${ic('undo')} 되돌리기</h2>
-      <p class="muted small">이 화면에서 넣고 · 고치고 · 지운 것이에요${ROLE === 'owner' ? '' : ' (내가 한 것만)'} · 최근 것부터 · 누르면 그 일이 통째로 이전으로 돌아가요.</p>
-      <div class="list">${list === null ? '<p class="muted">불러오는 중…</p>' : undoRows(list) || '<p class="muted">아직 바뀐 기록이 없어요. 이제부터 넣고 · 고치고 · 지우면 여기에 쌓여요.</p>'}</div>
+    const shown = list && !REAL ? list.filter(g => (ROLE === 'owner' || g.mine) && g.items.some(it => tables.includes(it.tbl))) : list;
+    d.innerHTML = `<div class="dlg undo-dlg"><h2>${ic('undo')} 되돌리기 · ${ic('redo')} 다시 하기</h2>
+      <p class="muted small">이 화면에서 넣고 · 고치고 · 지운 것이에요${ROLE === 'owner' ? '' : ' (내가 한 것만)'} · 최근 것부터. <b class="ud-k back">되돌리기</b>는 그 일을 통째로 이전으로, <b class="ud-k fwd">다시 하기</b>는 되돌린 것을 다시 살려요.</p>
+      <div class="list">${list === null ? '<p class="muted">불러오는 중…</p>' : undoRows(shown) || '<p class="muted">아직 바뀐 기록이 없어요. 이제부터 넣고 · 고치고 · 지우면 여기에 쌓여요.</p>'}</div>
       <div class="acts"><a class="btn sm" href="#undo" id="undoAll">모든 화면 기록</a><span style="flex:1"></span><button type="button" class="btn primary" id="dlgCancel">닫기</button></div></div>`;
     $('#dlgCancel').onclick = () => d.close();
     $('#undoAll').onclick = () => d.close();
     d.querySelectorAll('[data-undo]').forEach(b => b.onclick = async () => { b.disabled = true; const ok = await undoDo(b.dataset.undo, list); b.disabled = false; if (ok && !REAL) paint(); });
   };
   paint(); if (!d.open) d.showModal();
-  if (!REAL) list = DEMO_UNDO().filter(b => b.items.some(it => tables.includes(it.tbl)));
+  if (!REAL) { UNDO.list = UNDO.list || DEMO_UNDO(); list = UNDO.list; }
   else {
     const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_limit: 20, p_tables: tables });
     list = error ? [] : data || [];
@@ -10815,14 +10834,22 @@ async function undoHereDialog() {
 const UNDO_TOAST_OK = /(저장|넣었|추가했|지웠|삭제했|고쳤|바꿨|옮겼|만들었|붙였|남겼|확인했|뺐|이어|휴강|보강|빼|등록)/;
 const UNDO_TOAST_NO = /(되돌|다시 했|복사|못 |못했|않|실패|없어요|예시|권한|확인해 주세요|넣어 주세요|골라 주세요)/;
 const undoToastOk = msg => !!REAL && !!undoTables() && UNDO_TOAST_OK.test(msg) && !UNDO_TOAST_NO.test(msg);
-async function undoLast() {
+// 동그라미 두 개: ↶ 이 화면에서 내가 한 마지막 일을 되돌리기 · ↷ 마지막으로 되돌린 것을 다시 하기
+async function undoStep(fwd, recent) {
   const tables = undoTables(); if (!tables) return;
-  const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_limit: 1, p_tables: tables, p_mine: true });
-  if (error) return toast(dbErr(error, '불러오지'));
-  const b = (data || [])[0];
-  if (!b || !b.can_undo || Date.now() - new Date(b.at) > 10 * 60e3) return undoHereDialog();
-  await undoDo(b.batch, data);
+  let list;
+  if (!REAL) { UNDO.list = UNDO.list || DEMO_UNDO(); list = UNDO.list; }
+  else {
+    const { data, error } = await SB.rpc('change_list', { p_academy: REAL.academy.id, p_limit: 50, p_tables: tables, p_mine: true });
+    if (error) return toast(dbErr(error, '불러오지'));
+    list = data || [];
+  }
+  const mine = list.filter(g => g.can_undo && !g.undone_at && (REAL || g.mine || ROLE === 'owner') && g.items.some(it => tables.includes(it.tbl)));
+  const pick = mine.find(g => isRedoable(g, list) === !!fwd);
+  if (!pick || (recent && Date.now() - new Date(pick.at) > 10 * 60e3)) return fwd ? toast('다시 할 게 없어요 · 되돌린 뒤에 눌러 주세요') : undoHereDialog();
+  await undoDo(pick.batch, list);
 }
+const undoLast = () => undoStep(false, true);
 const undoHint = () => isStaff() ? `<div class="set-line"><div><b>되돌리기</b><small>넣고 · 고치고 · 지운 것을 이전으로 돌려요 (최근 60일)</small></div><a class="btn sm" href="#undo">${ic('undo')}바뀐 기록 보기</a></div>` : '';
 function bindUndo() {
   on('[data-undo]', b => { b.disabled = true; undoDo(b.dataset.undo).finally(() => { b.disabled = false; }); });
@@ -10830,6 +10857,8 @@ function bindUndo() {
   on('[data-act="undoMore"]', () => undoLoad(true));
   on('[data-act="undoReload"]', () => { UNDO.list = null; render(); });
   on('[data-act="undoHere"]', undoHereDialog);
+  on('[data-act="undoBack"]', b => { b.disabled = true; undoStep(false).finally(() => { b.disabled = false; }); });
+  on('[data-act="undoFwd"]', b => { b.disabled = true; undoStep(true).finally(() => { b.disabled = false; }); });
 }
 function bindR18() {
   bindUndo();
