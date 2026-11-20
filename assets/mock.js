@@ -222,6 +222,7 @@ const AREA_MOCK = {
     <div class="m-kanban">${[['문의', ['이도윤 · 초4', '최서아 · 중1']], ['상담', ['강하준 · 초6']], ['체험수업', ['윤지호 · 초5', '임채원 · 중2']], ['등록', ['한예린 · 초3']]].map(([c, list], i) => `
       <div class="m-col" style="--i:${i}"><small>${c} <em>${list.length}</em></small>${list.map(n => `<div class="m-kc">${n}</div>`).join('')}</div>`).join('')}
     </div>
+    <div class="m-note"><div><b>이서연 · 초5 ${mk.chip('특이사항', 'crit')}</b><small>땅콩 알레르기 · 하원은 할머니 (수요일만 혼자)</small></div><span>상담 기록 7개</span></div>
     <div class="m-read"><div><b>겨울방학 특강 안내</b><small>전체 공지 · 어제</small></div><div class="m-meter"><i style="--w:82%"></i></div><span>23/28명 읽음</span></div>`),
   teachers: () => fitBox(PHONE_W, PHONE_H, PHONE_SCREENS.teacher(), 'fit-phone'),
   promo: () => winMock('내 의뢰 · 블로그 정기 포스팅', `

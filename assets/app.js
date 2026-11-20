@@ -10352,7 +10352,9 @@ const STU_NOTE_KIND = { consult: ['학생 상담', 'chat'], parent: ['학부모 
 let DEMO_STU_NOTES = null, STU_NOTE_F = 'all';
 function demoStuNotes() {
   if (DEMO_STU_NOTES) return DEMO_STU_NOTES;
-  const st = DATA.students.slice(0, 6), o = DATA.users.owner.name, t = DATA.users.teacher.name;
+  // 강사 예시(담당 반)에서도 보이게 담당 반 학생 2명 + 다른 반 2명
+  const mine = DATA.students.filter(x => DEMO_MY_CLASSES.includes(x.cls)), other = DATA.students.filter(x => !DEMO_MY_CLASSES.includes(x.cls));
+  const st = [mine[0], other[0], mine[1], other[1]].filter(Boolean), o = DATA.users.owner.name, t = DATA.users.teacher.name;
   const rows = [];
   if (st[0]) rows.push([st[0], 'health', '땅콩 알레르기 · 간식 나눠 줄 때 꼭 확인', true, 30, o], [st[0], 'parent', '어머님 통화 · 리딩 숙제가 많다고 하심. 주 2회로 줄이고 단어 시험은 그대로', false, 9, o], [st[0], 'study', '단어 시험 3주 연속 90점 이상 · 다음 달 B반 올려 보기', false, 2, t]);
   if (st[1]) rows.push([st[1], 'life', '하원은 할머니가 오셔요 · 수요일만 혼자 가요', true, 40, o], [st[1], 'consult', '쉬는 시간에 친구와 다툼 · 따로 이야기 나눔, 다음 주 다시 보기', false, 5, t]);
@@ -10703,6 +10705,7 @@ const DEMO_UNDO = () => {
   const t = m => new Date(Date.now() - m * 60e3).toISOString();
   return [
     { batch: 5, at: t(3), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'invoices', action: 'update', old: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: null }, new: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: TODAY } }] },
+    { batch: 6, at: t(8), by_name: '김민지', mine: ROLE === 'teacher', can_undo: true, n: 1, items: [{ tbl: 'student_notes', action: 'insert', new: { kind: 'study', body: '단어 시험 3주 연속 90점 이상 · 다음 달 B반 올려 보기' } }] },
     { batch: 4, at: t(25), by_name: '김민지', mine: false, can_undo: ROLE === 'owner', n: 1, items: [{ tbl: 'students', action: 'delete', old: { name: '이도윤', class_name: '중등 A반' } }] },
     { batch: 3, at: t(80), by_name: ME.name, mine: true, can_undo: true, n: 12, items: Array.from({ length: 12 }, (_, i) => ({ tbl: 'invoices', action: 'insert', new: { student_name: ['김하늘', '박서준', '최지우', '정민준'][i % 4], title: '11월 수강료', amount: 280000 } })) },
     { batch: 2, at: t(60 * 26), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'timetable', action: 'update', old: { class_name: '초등 B반', start_time: '16:00', end_time: '17:30', room: '1강의실' }, new: { class_name: '초등 B반', start_time: '17:00', end_time: '18:30', room: '1강의실' } }] },
