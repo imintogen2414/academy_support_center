@@ -267,6 +267,8 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 .m-kc { background: #fff; border-radius: 8px; padding: 8px 9px; font-size: 12px; font-weight: 600; box-shadow: 0 1px 2px rgba(25, 31, 40, .06); }
 .m-col:last-child .m-kc { background: var(--blue-600); color: #fff; }
 .m-read { display: grid; grid-template-columns: 1fr 120px auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid #eef0f3; font-size: 12.5px; }
+.m-note { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; background: #fff7e6; border: 1px solid #f6e2b3; font-size: 12.5px; margin-bottom: 8px; }
+.m-note b { display: flex; gap: 6px; align-items: center; font-size: 13.5px; } .m-note small { color: #6b5a2e; font-size: 12px; } .m-note > span { color: #8a7440; font-size: 12px; white-space: nowrap; }
 .m-read b { display: block; font-size: 13.5px; } .m-read small { color: var(--muted); font-size: 12px; }
 .m-meter { height: 8px; border-radius: 4px; background: #eef0f3; overflow: hidden; }
 .m-meter i { display: block; height: 100%; width: var(--w); background: var(--blue-600); border-radius: 4px; }

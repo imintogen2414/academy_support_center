@@ -8133,8 +8133,8 @@ let NAV_OPEN = (() => { try { return JSON.parse(localStorage.getItem('asc-nav') 
 function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
-  const set = SIMPLE() ? `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
-    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `<button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 초대 코드</span></button>` : ''}<button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>` : `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
+  // 간단히 보기: 아래는 설정 · 학원 · 로그아웃 세 칸 한 줄
+  const set = SIMPLE() ? `<div class="nav-foot"><a class="${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>${ROLE !== 'admin' && !SEEKER ? `<button type="button" data-act="switchAcad" title="학원 바꾸기 · 초대 코드 넣기">${ic('home')}<span>학원 · 코드</span></button>` : ''}<button type="button" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>` : `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
     <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `${can('invite') && MY && MY.members ? `<a class="nav-item" href="#members/invite">${ic('users')}<span>초대하기 (코드 · 링크)</span></a>` : ''}<button type="button" class="nav-item" data-act="joinAcad">${ic('plus')}<span>초대 코드 넣기</span></button><button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
   if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   // 센터 관리자(학원 없이): 센터 관리 세부 메뉴를 종류별 묶음으로 바로
@@ -8148,7 +8148,15 @@ function navHtml(area, badge) {
     }).join('') + `<div class="nav-group open"><div class="nav-gi">${item('messages', MY.messages.name, MY.messages.icon)}</div></div>` + set;
   }
   const gs = navGroups();
-  if (Object.keys(MY).length <= 4 || SIMPLE()) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('') + set;
+  if (Object.keys(MY).length <= 4 || gs.length < 2) return item('home', '홈', 'home') + gs.flatMap(g => g[2]).map(id => item(id, MY[id].name, MY[id].icon)).join('') + set;
+  // 간단히 보기: 첫 묶음(매일 쓰는 것)은 제목 없이 · 가운데 묶음은 작은 제목만 · 마지막 묶음(센터 지원)은 접어 두기
+  if (SIMPLE()) return `<div class="nav-simple">${item('home', '홈', 'home')}${gs.map(([label, , ids], i) => {
+    const last = i === gs.length - 1 && gs.length > 2 && ids.length >= 3, list = ids.map(id => item(id, MY[id].name, MY[id].icon)).join('');
+    if (i === 0) return `<div class="nav-sec">${list}</div>`;
+    if (!last) return `<div class="nav-sec"><div class="nav-lb">${esc(label)}</div>${list}</div>`;
+    const open = (NAV_OPEN && NAV_OPEN[label] === true) || ids.includes(area), news = ids.some(id => hasNews(id));
+    return `<div class="nav-group nav-sec ${open ? 'open' : ''}"><button type="button" class="nav-gh" data-navg="${esc(label)}" aria-expanded="${open}"><span>${esc(label)}</span>${!open && news ? '<span class="ndot"></span>' : ''}<i>${open ? '−' : '+'}</i></button><div class="nav-gi">${list}</div></div>`;
+  }).join('')}</div>${set}`;
   // 처음엔 모든 묶음을 펼쳐 두고, 접은 묶음은 기억해요 (지금 보는 메뉴가 든 묶음은 늘 펼침)
   return item('home', '홈', 'home') + gs.map(([label, , ids], i) => {
     const open = !NAV_OPEN || NAV_OPEN[label] !== false || ids.includes(area);
@@ -10344,7 +10352,9 @@ const STU_NOTE_KIND = { consult: ['학생 상담', 'chat'], parent: ['학부모 
 let DEMO_STU_NOTES = null, STU_NOTE_F = 'all';
 function demoStuNotes() {
   if (DEMO_STU_NOTES) return DEMO_STU_NOTES;
-  const st = DATA.students.slice(0, 6), o = DATA.users.owner.name, t = DATA.users.teacher.name;
+  // 강사 예시(담당 반)에서도 보이게 담당 반 학생 2명 + 다른 반 2명
+  const mine = DATA.students.filter(x => DEMO_MY_CLASSES.includes(x.cls)), other = DATA.students.filter(x => !DEMO_MY_CLASSES.includes(x.cls));
+  const st = [mine[0], other[0], mine[1], other[1]].filter(Boolean), o = DATA.users.owner.name, t = DATA.users.teacher.name;
   const rows = [];
   if (st[0]) rows.push([st[0], 'health', '땅콩 알레르기 · 간식 나눠 줄 때 꼭 확인', true, 30, o], [st[0], 'parent', '어머님 통화 · 리딩 숙제가 많다고 하심. 주 2회로 줄이고 단어 시험은 그대로', false, 9, o], [st[0], 'study', '단어 시험 3주 연속 90점 이상 · 다음 달 B반 올려 보기', false, 2, t]);
   if (st[1]) rows.push([st[1], 'life', '하원은 할머니가 오셔요 · 수요일만 혼자 가요', true, 40, o], [st[1], 'consult', '쉬는 시간에 친구와 다툼 · 따로 이야기 나눔, 다음 주 다시 보기', false, 5, t]);
@@ -10695,6 +10705,7 @@ const DEMO_UNDO = () => {
   const t = m => new Date(Date.now() - m * 60e3).toISOString();
   return [
     { batch: 5, at: t(3), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'invoices', action: 'update', old: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: null }, new: { student_name: '김하늘', title: '10월 수강료', amount: 300000, paid_at: TODAY } }] },
+    { batch: 6, at: t(8), by_name: '김민지', mine: ROLE === 'teacher', can_undo: true, n: 1, items: [{ tbl: 'student_notes', action: 'insert', new: { kind: 'study', body: '단어 시험 3주 연속 90점 이상 · 다음 달 B반 올려 보기' } }] },
     { batch: 4, at: t(25), by_name: '김민지', mine: false, can_undo: ROLE === 'owner', n: 1, items: [{ tbl: 'students', action: 'delete', old: { name: '이도윤', class_name: '중등 A반' } }] },
     { batch: 3, at: t(80), by_name: ME.name, mine: true, can_undo: true, n: 12, items: Array.from({ length: 12 }, (_, i) => ({ tbl: 'invoices', action: 'insert', new: { student_name: ['김하늘', '박서준', '최지우', '정민준'][i % 4], title: '11월 수강료', amount: 280000 } })) },
     { batch: 2, at: t(60 * 26), by_name: ME.name, mine: true, can_undo: true, n: 1, items: [{ tbl: 'timetable', action: 'update', old: { class_name: '초등 B반', start_time: '16:00', end_time: '17:30', room: '1강의실' }, new: { class_name: '초등 B반', start_time: '17:00', end_time: '18:30', room: '1강의실' } }] },
