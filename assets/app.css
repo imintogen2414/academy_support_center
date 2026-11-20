@@ -1735,3 +1735,17 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .chip .icon { width: 12px; height: 12px; vertical-align: -1px; margin-right: 2px; }
 .link-btn { background: none; border: 0; padding: 0; color: var(--blue-600); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .link-btn:hover { color: var(--ink); }
+
+/* 왼쪽 메뉴 · 간단히 보기: 묶음 사이 얇은 줄 · 작은 제목 · 센터 지원은 접기 · 아래 세 칸 */
+.nav-simple { display: grid; gap: 4px; }
+.nav-simple .nav-item { padding: 8px 12px; }
+.nav-sec { display: grid; gap: 1px; }
+.nav-sec + .nav-sec { margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.08); }
+.nav-lb { font-size: 11.5px; font-weight: 700; letter-spacing: .4px; color: rgba(255,255,255,.42); padding: 2px 12px 4px; }
+.nav-simple .nav-group { margin-top: 6px; padding: 8px 0 0; }
+.nav-simple .nav-gh { padding: 2px 12px 6px; }
+.nav-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); }
+.nav-foot a, .nav-foot button { display: grid; justify-items: center; gap: 4px; padding: 8px 2px; border-radius: 10px; border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.62); cursor: pointer; text-align: center; }
+.nav-foot a:hover, .nav-foot button:hover, .nav-foot a.on { background: rgba(255,255,255,.08); color: #fff; }
+.nav-foot .icon { width: 18px; height: 18px; }
+.nav-foot span { white-space: nowrap; }
