@@ -44,7 +44,10 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 .link:hover span { transform: translateX(3px); }
 .link.sm { font-size: 14px; }
 .u { text-decoration: underline; text-underline-offset: 3px; color: var(--blue-600); font-weight: 700; }
-.logo-mark { background: var(--blue-600); box-shadow: none; border-radius: 9px; }
+.logo-mark { background: none; box-shadow: none; border-radius: 0; padding: 0; }
+.foot .logo-mark { background: #fff; border-radius: 9px; padding: 3px; }
+:root[data-theme="dark"] .site-top .logo-mark { background: #fff; border-radius: 9px; padding: 3px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .site-top .logo-mark { background: #fff; border-radius: 9px; padding: 3px; } }
 
 /* 머리글 */
 .site-top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px); border-bottom: 1px solid transparent; transition: border-color .2s, box-shadow .2s; }
@@ -216,7 +219,8 @@ body { background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1
 .m-base::before { content: ""; position: absolute; left: 50%; top: 0; width: 120px; height: 9px; margin-left: -60px; border-radius: 0 0 10px 10px; background: #b5bac2; }
 .m-side { background: #fff; border-right: 1px solid #eceef1; padding: 18px 12px; display: grid; gap: 3px; align-content: start; }
 .m-logo { display: flex; align-items: center; gap: 7px; font-size: 13.5px; margin: 0 6px 14px; }
-.m-logo i { width: 18px; height: 18px; border-radius: 6px; background: var(--blue-600); }
+.m-logo i { width: 18px; height: 18px; display: block; flex: none; }
+.m-logo i svg { width: 100%; height: 100%; display: block; }
 .m-side span { padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); }
 .m-side span.on { background: var(--blue-50); color: var(--blue-600); }
 .m-main { padding: 20px 22px; display: grid; gap: 14px; align-content: start; }
