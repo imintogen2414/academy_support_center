@@ -73,7 +73,7 @@ const PHONE_PAGES = {
     <div class="m-card"><small class="m-cap">안 읽은 학부모 5</small>${mk.row('이하은 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('정민재 학부모', '', mk.chip('다시 알림', 'blue'))}${mk.row('한지우 학부모', '', mk.chip('다시 알림', 'blue'))}</div>`],
     ['직책 · 권한', 3, ['직책 · 권한', '매니저 · 재정 담당처럼 학원 안 직책을 정하고, 원장님만 쓰던 기능을 강사마다 하나씩 켜 줘요. 켜 준 화면만 강사 메뉴에 생겨요.'], `
     <div class="m-card m-hi"><span class="m-av2">김</span><div><b>김민지 · 매니저</b><small>초등 B반 · 중등 A반 담당</small></div></div>
-    <div class="m-card"><small class="m-cap">켜 준 기능</small>${[['모든 원생', 1], ['수납', 1], ['결재 처리', 1], ['공지', 1], ['재정', 0], ['원천세', 0]].map(([t, on]) => mk.row(t, '', mk.chip(on ? '켬' : '끔', on ? 'blue' : ''))).join('')}</div>
+    <div class="m-card"><small class="m-cap">켜 준 기능</small>${[['모든 원생', 1], ['수납', 1], ['결재 승인', 1], ['공지', 1], ['재정', 0], ['원천세', 0]].map(([t, on]) => mk.row(t, '', mk.chip(on ? '켬' : '끔', on ? 'blue' : ''))).join('')}</div>
     <div class="m-card"><small class="m-cap">우리 학원 직책</small><div class="m-chips">${mk.chip('매니저', 'blue')}${mk.chip('재정 담당', '')}${mk.chip('상담 실장', '')}</div></div>`]
   ],
   teacher: [
