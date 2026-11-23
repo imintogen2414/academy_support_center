@@ -135,6 +135,7 @@ const DATA = {
 
   /* ---------- 결재 (강사 → 원장) ---------- */
   approvals: [
+    { id: 'a7', kind: '물품 구입', title: '복사 용지 A4 5박스', amount: 125000, category: '비품', requester_name: '정수민', requester_role: 'owner', detail: '복사실 · 다음 달까지 쓸 양', status: 'approved', decided_at: '2026-11-18T09:00:00Z', decided_by_name: '정수민', decided_by_role: 'owner', paid_at: '2026-11-19T09:00:00Z', paid_on: '2026-11-19', pay_method: '법인카드', paid_by_name: '정수민', created_at: '2026-11-18T08:00:00Z' },
     { id: 'a5', kind: '경비 상환', title: '할로윈 특강 풍선 · 꾸미기 재료', amount: 46000, category: '비품', spent_on: '2026-10-30', pay_to: '신한 110-000-000000 김민지', requester_name: '김민지', requester_role: 'teacher', detail: '다이소 · 영수증 사진 붙였어요', status: 'approved', decided_at: '2026-11-02T09:00:00Z', decided_by_name: '정수민', decided_by_role: 'owner', created_at: '2026-10-31T09:00:00Z' },
     { id: 'a6', kind: '선지급', title: '중등 기초반 현장학습 입장료 · 간식', amount: 150000, category: '차량·간식', requester_name: '정하윤', requester_role: 'teacher', detail: '12명 · 과학관 입장료 + 간식', status: 'approved', decided_at: '2026-11-10T09:00:00Z', decided_by_name: '정수민', decided_by_role: 'owner', paid_at: '2026-11-11T09:00:00Z', paid_on: '2026-11-11', pay_method: '계좌이체', paid_by_name: '정수민', created_at: '2026-11-09T09:00:00Z' },
     { id: 'a4', kind: '재정 지출', title: '겨울방학 특강 전단지 인쇄', amount: 85000, requester_name: '정수민', requester_role: 'owner', detail: 'A4 컬러 500장 · 동네 인쇄소', status: 'pending', created_at: '2026-10-26T09:00:00Z' },
