@@ -5568,7 +5568,7 @@ function leadsPage() {
   const views = `<div class="filters">${[['board', '카드로 보기'], ['list', '목록 · 일지로 보기']].map(([k, l]) => `<button class="${LEAD_VIEW === k ? 'on' : ''}" data-lead-view="${k}">${l}</button>`).join('')}</div>`;
   const acts = `<button class="btn primary" data-act="addLead">${ic('plus')}새 문의 추가</button>${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="lead">${ic('chat')}단체 문자</button>` : ''}`;
   if (LEAD_VIEW === 'list') return head('상담·등록', '등록한 학생까지 모든 상담이 한 줄씩 남아요. "일지"에 전화 · 방문 · 레벨테스트 · 체험 기록을 날짜별로 쌓아 두세요.', acts) + views + leadListView();
-  return head('상담·등록', `카드를 다음 단계로 끌어다 놓거나 버튼으로 옮기세요. 등록으로 옮기면 원생 명단에 추가돼요.${REAL ? ' 학생 이름을 누르면 고칠 수 있어요.' : ''} "일지"에 상담 기록을 날짜별로 남겨요.`, acts) + views + `
+  return head('상담·등록', `카드를 다음 단계로 끌어다 놓거나 버튼으로 옮기세요. 등록으로 옮기면 원생 명단에 추가돼요.${REAL ? ' 카드를 누르면 고칠 수 있어요.' : ''} "일지"에 상담 기록을 날짜별로 남겨요.`, acts) + views + `
   <div class="board">
     ${DATA.stages.map((st, si) => {
       const items = DATA.leads.filter(l => l.stage === st.id);
@@ -5576,7 +5576,7 @@ function leadsPage() {
       <div class="col" data-stage="${st.id}">
         <div class="col-head"><b>${st.name}</b><span class="cnt">${items.length}</span></div>
         ${items.map(l => `
-          <div class="lead" draggable="true" data-id="${l.id}">
+          <div class="lead" draggable="true" data-id="${l.id}" tabindex="0" title="눌러서 고치기">
             <div class="top"><span class="nm" ${REAL ? `data-edit-lead="${l.id}" role="button" tabindex="0"` : ''}>${esc(l.name)} <span class="muted small">${esc(l.grade)}</span></span>${l.urgent ? '<span class="chip crit">오늘</span>' : ''}</div>
             <div class="d">${esc(l.want)} · ${esc(l.src)}</div>
             <div class="bot"><span class="next">${esc(l.next)}</span><button class="mv log" data-lead-log="${l.id}">일지 ${leadNotes(l.id).length}</button>${si < 3 ? `<button class="mv" data-move="${l.id}">${DATA.stages[si + 1].name} →</button>` : '<span class="chip good">원생 등록</span>'}</div>
@@ -9531,6 +9531,10 @@ function bind() {
   document.querySelectorAll('.lead').forEach(c => {
     c.ondragstart = e => { e.dataTransfer.setData('text/plain', c.dataset.id); c.classList.add('dragging'); };
     c.ondragend = () => c.classList.remove('dragging');
+    // 카드 아무 곳이나 누르면 고치기 (버튼 · 일지는 그대로)
+    const open = () => REAL ? leadDialog(DATA.leads.find(x => String(x.id) === c.dataset.id)) : toast('예시 계정에서는 고칠 수 없어요');
+    c.onclick = e => { if (e.target.closest('button, a, input, [data-edit-lead]')) return; open(); };
+    c.onkeydown = e => { if (e.key === 'Enter' && e.target === c) { e.preventDefault(); open(); } };
   });
   document.querySelectorAll('.col').forEach(col => {
     col.ondragover = e => { e.preventDefault(); col.classList.add('drop'); };
