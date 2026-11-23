@@ -194,7 +194,7 @@ textarea:focus { border-color: var(--blue-500); outline: none; box-shadow: 0 0 0
 .col-head b { font-size: 14px; }
 .col-head .cnt { font-size: 12px; font-weight: 700; color: var(--blue-600); background: var(--blue-50); border-radius: 99px; padding: 1px 9px; }
 .col.drop { outline: 2px dashed var(--blue-400); outline-offset: -4px; }
-.lead { background: var(--surface); border-radius: 14px; padding: 14px; display: grid; gap: 6px; cursor: grab; box-shadow: var(--shadow); border: 1px solid transparent; }
+.lead { background: var(--surface); border-radius: 14px; padding: 14px; display: grid; gap: 6px; cursor: pointer; box-shadow: var(--shadow); border: 1px solid transparent; }
 .lead:hover { border-color: var(--blue-100); }
 .lead.dragging { opacity: .5; }
 .lead .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

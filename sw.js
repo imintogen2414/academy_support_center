@@ -7,7 +7,7 @@ self.addEventListener('push', e => {
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: '학원지원센터', body: e.data ? e.data.text() : '' }; }
   e.waitUntil(self.registration.showNotification(d.title || '학원지원센터', {
     body: d.body || '',
-    icon: '/assets/icons/icon-192.png',
+    icon: '/assets/icons/icon-192.png?v=2',
     badge: '/assets/icons/badge-96.png',
     tag: d.tag || undefined,
     renotify: !!d.tag,
