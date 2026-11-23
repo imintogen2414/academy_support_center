@@ -135,9 +135,10 @@ const DATA = {
 
   /* ---------- 결재 (강사 → 원장) ---------- */
   approvals: [
-    { id: 'a1', kind: '물품 구입', title: '초등 B반 화이트보드 마커 12개', amount: 28000, requester_name: '김민지', detail: '검정 6 · 파랑 3 · 빨강 3\n쿠팡 링크로 주문할게요.', want_by: '2026-10-28', status: 'pending', created_at: '2026-10-25T09:00:00Z' },
-    { id: 'a2', kind: '재정 지출', title: '할로윈 특강 간식비', amount: 60000, requester_name: '정하윤', detail: '20명 · 쿠키와 음료', status: 'pending', created_at: '2026-10-24T09:00:00Z' },
-    { id: 'a3', kind: '물품 구입', title: '중등 문법 교재 15권', amount: 210000, requester_name: '이도현', status: 'approved', owner_comment: '이번 주 안에 주문해 주세요.', decided_at: '2026-10-22T09:00:00Z', created_at: '2026-10-21T09:00:00Z' }
+    { id: 'a4', kind: '재정 지출', title: '겨울방학 특강 전단지 인쇄', amount: 85000, requester_name: '정수민', requester_role: 'owner', detail: 'A4 컬러 500장 · 동네 인쇄소', status: 'pending', created_at: '2026-10-26T09:00:00Z' },
+    { id: 'a1', kind: '물품 구입', title: '초등 B반 화이트보드 마커 12개', amount: 28000, requester_name: '김민지', requester_role: 'teacher', detail: '검정 6 · 파랑 3 · 빨강 3\n쿠팡 링크로 주문할게요.', want_by: '2026-10-28', status: 'pending', created_at: '2026-10-25T09:00:00Z' },
+    { id: 'a2', kind: '재정 지출', title: '할로윈 특강 간식비', amount: 60000, requester_name: '정하윤', requester_role: 'teacher', detail: '20명 · 쿠키와 음료', status: 'pending', created_at: '2026-10-24T09:00:00Z' },
+    { id: 'a3', kind: '물품 구입', title: '중등 문법 교재 15권', amount: 210000, requester_name: '이도현', requester_role: 'teacher', status: 'approved', owner_comment: '이번 주 안에 주문해 주세요.', decided_by_name: '정수민', decided_by_role: 'owner', decided_at: '2026-10-22T09:00:00Z', created_at: '2026-10-21T09:00:00Z' }
   ],
 
   promoServices: [
