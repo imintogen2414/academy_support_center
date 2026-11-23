@@ -1780,3 +1780,6 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .apv-bars > div { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
 .apv-bars i { display: block; height: 10px; border-radius: 6px; background: var(--blue-500); }
 .apv-bars b { font-size: 13px; }
+/* 구매 요청: 요청 · 승인 · 구입한 사람 한 줄씩 */
+.buy-who { display: flex; flex-direction: column; gap: 2px; }
+.buy-who i { font-style: normal; display: inline-block; min-width: 30px; font-size: 12px; color: var(--muted); margin-right: 4px; }

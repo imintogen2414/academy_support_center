@@ -1468,7 +1468,7 @@ function suppliesPage() {
   const list = all.filter(x => (SUP_CAT === 'all' || (SUP_CAT === 'low' ? supLow(x) : SUP_CAT === 'lent' ? x.lent > 0 : x.category === SUP_CAT)) && stuMatch(SUP_Q, x.name, x.place, x.category, x.memo))
     .sort((a, b) => supLow(b) - supLow(a) || a.category.localeCompare(b.category, 'ko') || a.name.localeCompare(b.name, 'ko'));
   const cats = SUPPLY_CATS.filter(c => all.some(x => x.category === c));
-  const acts = `<button class="btn" data-act="supXlsx" title="지금 목록을 엑셀 파일로 받아요">${ic('download')}엑셀로 받기</button><button class="btn" data-import="supplies" title="엑셀에 적어 둔 품목을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button><button class="btn primary" data-act="addSupply">${ic('plus')}품목 추가</button>`;
+  const acts = `<button class="btn" data-act="buyNew" title="사야 할 물건을 원장님께 요청해요">${ic('plus')}구매 요청</button><button class="btn" data-act="supXlsx" title="지금 목록을 엑셀 파일로 받아요">${ic('download')}엑셀로 받기</button><button class="btn" data-import="supplies" title="엑셀에 적어 둔 품목을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button><button class="btn primary" data-act="addSupply">${ic('plus')}품목 추가</button>`;
   return head('비품 · 교재', '교재 · 도서 · 문구 · 전자기기까지 학원 물건을 여기서 다 관리해요. 들어오고 쓰고 빌려준 것을 누르기만 하면 수량이 바뀌고, 모자라면 홈에 알려 드려요.', acts) + `
   <div class="stats">
     <div class="stat"><span>품목</span><b class="num">${all.length}가지</b></div>
@@ -1483,7 +1483,7 @@ function suppliesPage() {
       <div><div class="t"><span class="nm-link" data-sup-edit="${x.id}" role="button" tabindex="0">${esc(x.name)}</span> <span class="muted small">${esc(x.category)}</span>${supLow(x) ? ' <span class="chip crit">모자람</span>' : ''}</div>
         <div class="d">${x.place ? `${esc(x.place)} · ` : ''}${x.min_qty ? `${x.min_qty}${esc(x.unit)} 아래면 알림` : '알림 없음'}${x.lent ? ` · <b>${x.lent}${esc(x.unit)} 빌려줌</b>` : ''}${x.price ? ` · 하나 ${won(x.price)}` : ''}</div></div>
       <div class="r"><b class="num sup-qty">${x.qty}<small>${esc(x.unit)}</small></b>
-        <span class="btns"><button class="btn sm ghost" data-sup-edit="${x.id}" title="이름 · 수 · 둔 곳 고치기">${ic('pen')}수정</button><button class="btn sm" data-sup-move="${x.id}:in">+ 들어옴</button><button class="btn sm" data-sup-move="${x.id}:out">− 씀</button>${x.category.startsWith('교재') || x.category === '전자기기' || x.lent ? `<button class="btn sm" data-sup-move="${x.id}:lend">빌려줌</button>` : ''}${x.lent ? `<button class="btn sm" data-sup-move="${x.id}:return">돌려받음</button>` : ''}</span></div>
+        <span class="btns">${supLow(x) ? `<button class="btn sm primary" data-buy-item="${x.id}" title="모자란 만큼 구매 요청">구매 요청</button>` : ''}<button class="btn sm ghost" data-sup-edit="${x.id}" title="이름 · 수 · 둔 곳 고치기">${ic('pen')}수정</button><button class="btn sm" data-sup-move="${x.id}:in">+ 들어옴</button><button class="btn sm" data-sup-move="${x.id}:out">− 씀</button>${x.category.startsWith('교재') || x.category === '전자기기' || x.lent ? `<button class="btn sm" data-sup-move="${x.id}:lend">빌려줌</button>` : ''}${x.lent ? `<button class="btn sm" data-sup-move="${x.id}:return">돌려받음</button>` : ''}</span></div>
     </div>`).join('')}</div></section>`
     : `<section class="card empty"><span class="tile-ic">${ic('folder')}</span><h2>${all.length ? '찾는 품목이 없어요' : '아직 넣은 품목이 없어요'}</h2><p class="muted">교재 · 도서 · 문구 · 전자기기 · 청소 용품처럼 학원에 있는 물건을 넣어 보세요. "엑셀 · 넘버스로 넣기"로 한 번에 넣어도 돼요.</p>
       <div class="row-btns" style="justify-content:center"><button class="btn primary" data-act="addSupply">${ic('plus')}품목 추가</button><button class="btn" data-import="supplies">${ic('upload')}엑셀 파일로 한꺼번에 넣기</button></div></section>`}
@@ -4899,20 +4899,21 @@ function decideDialog(a, ok) {
 }
 // 지급 완료 (원장 · 결재 처리 권한): 날짜 · 나간 통장 · 방법 → 재정 지출도 그 통장 · 날짜로
 function apvPayDialog(a) {
-  if (!REAL) { a.paid_at = new Date().toISOString(); a.paid_on = TODAY; a.pay_method = '계좌이체'; a.paid_by_name = ME.name; render(); return toast('지급 완료로 표시했어요 (예시)'); }
+  if (!REAL) { a.paid_at = new Date().toISOString(); a.paid_on = TODAY; a.pay_method = a.kind === '물품 구입' ? '법인카드' : '계좌이체'; a.paid_by_name = ME.name; render(); return toast(`${a.kind === '물품 구입' ? '구입 완료' : '지급 완료'}로 표시했어요 (예시)`); }
   const d = dialogEl();
-  d.innerHTML = `<form method="dialog" class="dlg" id="apForm" novalidate><h2>지급 완료</h2>
+  const buy = a.kind === '물품 구입';
+  d.innerHTML = `<form method="dialog" class="dlg" id="apForm" novalidate><h2>${buy ? '구입 완료' : '지급 완료'}</h2>
     <p class="muted small" style="margin:-6px 0 0">${apvWho(a)} · ${esc(a.kind)} · ${esc(a.title)}</p>
     <div class="apv-view">
-      <div class="set-row"><span>보낼 금액</span><b>${won(a.amount || 0)}</b></div>
+      <div class="set-row"><span>${buy ? '금액' : '보낼 금액'}</span><b>${won(a.amount || 0)}</b></div>
       ${a.pay_to ? `<div class="set-row"><span>받을 계좌</span><b>${esc(a.pay_to)} <button type="button" class="btn sm ghost" id="apCopy">복사</button></b></div>` : ''}
     </div>
-    <div class="two"><label class="f">보낸 날<input type="date" name="day" value="${TODAY}" max="${TODAY}"></label>
+    <div class="two"><label class="f">${buy ? '산 날' : '보낸 날'}<input type="date" name="day" value="${TODAY}" max="${TODAY}"></label>
       <label class="f">방법<select name="method">${APV_PAY_METHODS.map(x => `<option>${x}</option>`).join('')}</select></label></div>
     ${acctSelect('out', '나간 통장')}
     <p class="muted small" style="margin:0">${can('finance') ? (a.expense_id ? '승인할 때 넣은 재정 지출의 날짜 · 통장을 이걸로 맞춰요.' : '재정 지출에도 이 날짜 · 통장으로 넣어요.') : '재정 권한이 없어서 재정 지출은 원장님이 넣어요.'}</p>
     <p class="msg" id="dlgMsg" hidden></p>
-    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">지급 완료</button></div></form>`;
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">${buy ? '구입 완료' : '지급 완료'}</button></div></form>`;
   d.showModal(); $('#dlgCancel').onclick = () => d.close();
   if ($('#apCopy')) $('#apCopy').onclick = () => copyText(a.pay_to, '계좌를 복사했어요');
   $('#apForm').onsubmit = async e => {
@@ -4921,7 +4922,7 @@ function apvPayDialog(a) {
     const { error } = await SB.rpc('mark_approval_paid', { p_id: a.id, p_paid: true, p_day: el.day.value || TODAY, p_account: acct, p_method: el.method.value });
     if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
     d.close(); await Promise.all([loadApprovals(), can('finance') ? loadExpenses() : null]); render();
-    toast(`지급 완료로 표시했어요${can('finance') ? ' · 재정 지출에 넣었어요' : ''}${a.kind === '선지급' ? ' · 다 쓴 뒤 정산을 기다려요' : ''}`);
+    toast(`${buy ? '구입 완료' : '지급 완료'}로 표시했어요${can('finance') ? ' · 재정 지출에 넣었어요' : ''}${a.kind === '선지급' ? ' · 다 쓴 뒤 정산을 기다려요' : ''}`);
   };
 }
 async function apvUnpay(a) {
@@ -5030,6 +5031,88 @@ function apvEditDialog(a) {
     toast(`결재를 고쳤어요${a.expense_id && can('finance') ? ' · 재정 지출도 맞췄어요' : ''}`);
   };
 }
+
+/* ---------- 물품 구매 요청 (결재 approvals의 '물품 구입'): 원장 · 강사 누구나 요청 → 승인 → 구입 완료 → 비품에 넣기
+   줄마다 누가 요청했고 누가 승인 · 구입했는지 보여요. 강사도 다른 선생님 구매 요청을 볼 수 있어서 겹쳐 사지 않아요. */
+let BUY_F = 'open';
+const buyAll = () => apvAll().filter(a => a.kind === '물품 구입');
+const buyState = a => a.status === 'pending' ? 'pending' : a.status === 'rejected' ? 'rejected' : a.paid_at ? 'bought' : 'tobuy';
+const BUY_ST = { pending: ['warn', '승인 기다림'], tobuy: ['info', '살 것'], bought: ['good', '구입 완료'], rejected: ['crit', '반려'] };
+const BUY_F_LIST = { open: ['진행 중', a => ['pending', 'tobuy'].includes(buyState(a))], pending: ['승인 기다림', a => buyState(a) === 'pending'], tobuy: ['살 것', a => buyState(a) === 'tobuy'], bought: ['구입 완료', a => buyState(a) === 'bought'], rejected: ['반려', a => buyState(a) === 'rejected'], mine: ['내가 요청한', a => apvMine(a)], all: ['전체', () => true] };
+const buyRow = a => {
+  const st = buyState(a), [c, l] = BUY_ST[st], mine = apvMine(a), dec = apvCanDecide() && (!mine || ROLE === 'owner');
+  const ac = a.paid_account_id ? acctOf(a.paid_account_id) : null, btn = [];
+  if (st === 'pending' && mine && REAL) btn.push(`<button class="btn sm" data-edit-apv="${a.id}">고치기</button>`, `<button class="btn sm" data-cancel-apv="${a.id}">취소</button>`);
+  if (st === 'pending' && dec) btn.push(`<button class="btn sm" data-apv="${a.id}:0">반려</button>`, `<button class="btn sm primary" data-apv="${a.id}:1">승인</button>`);
+  if (st === 'tobuy' && apvCanDecide()) btn.push(`<button class="btn sm primary" data-apv-pay="${a.id}">${ic('card')}구입 완료</button>`);
+  if (st === 'bought' && isStaff()) btn.push(`<button class="btn sm" data-buy-stock="${a.id}">${ic('plus')}비품에 넣기</button>`);
+  return `<div class="li">
+    <span class="av" style="background:var(--${st === 'pending' ? 'warn' : st === 'rejected' ? 'crit' : st === 'bought' ? 'good' : 'blue-500'})">${ic('folder')}</span>
+    <div><div class="t"><span class="nm-link" data-apv-view="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>${a.amount != null ? ` <b class="num">${won(a.amount)}</b>` : ''}</div>
+      <div class="d buy-who"><span><i>요청</i><b>${apvWho(a)}</b>${mine ? ' <span class="chip mute">나</span>' : ''} · ${md(a.created_at.slice(0, 10))}${a.want_by ? ` · ${md(a.want_by)}까지 필요` : ''}</span>
+        ${a.decided_at ? `<span><i>${a.status === 'rejected' ? '반려' : '승인'}</i><b>${apvDecider(a) || '원장'}</b> · ${md(a.decided_at.slice(0, 10))}${a.owner_comment ? ` — ${esc(a.owner_comment)}` : ''}</span>` : ''}
+        ${a.paid_at ? `<span><i>구입</i><b>${esc(a.paid_by_name || '원장')}</b> · ${md(a.paid_on || a.paid_at.slice(0, 10))}${a.pay_method ? ` · ${esc(a.pay_method)}` : ''}${ac ? ` · ${esc(acctLabel(ac))}` : ''}</span>` : ''}</div>
+      ${a.detail ? `<div class="d pre">${esc(a.detail)}</div>` : ''}
+      ${(a.files || []).length ? fileChips(a.files, 'approvals') : ''}</div>
+    <div class="r"><span class="chip ${c}">${l}</span>${btn.length ? `<span class="btns">${btn.join('')}</span>` : ''}</div>
+  </div>`;
+};
+function buyPage() {
+  const all = buyAll(), F = BUY_F_LIST[BUY_F] ? BUY_F : 'open', list = all.filter(BUY_F_LIST[F][1]), n = k => all.filter(BUY_F_LIST[k][1]).length;
+  const of = k => all.filter(a => buyState(a) === k), mon = TODAY.slice(0, 7), boughtM = of('bought').filter(a => (a.paid_on || '').startsWith(mon));
+  const add = `<button class="btn primary" data-act="buyNew">${ic('plus')}구매 요청하기</button><a class="btn" href="#admin/supplies">${ic('folder')}비품 · 교재 보기</a>`;
+  return head('구매 요청', '교재 · 문구 · 수업 준비물처럼 사야 할 물건을 원장님 · 선생님 누구나 요청해요. 원장님이 승인하고 사면 "구입 완료" → 재정 지출 · 비품 수량까지 이어져요. 줄마다 누가 요청하고 승인 · 구입했는지 보여요.', add) + `
+  <div class="stats">
+    <div class="stat ${of('pending').length ? 'crit' : ''}"><span>승인 기다림</span><b class="num">${of('pending').length}건</b><small class="muted">${won(sum(of('pending'), a => a.amount || 0))}</small></div>
+    <div class="stat ${of('tobuy').length ? 'warn' : ''}"><span>살 것</span><b class="num">${of('tobuy').length}건</b><small class="muted">${won(sum(of('tobuy'), a => a.amount || 0))}</small></div>
+    <div class="stat good"><span>이번 달 산 것</span><b class="num">${won(sum(boughtM, apvSpent))}</b><small class="muted">${boughtM.length}건</small></div>
+    <div class="stat"><span>내가 요청한</span><b class="num">${n('mine')}건</b></div>
+  </div>
+  <div class="filters">${Object.entries(BUY_F_LIST).map(([k, [lb]]) => `<button class="${F === k ? 'on' : ''}" data-buy-f="${k}">${lb} ${n(k)}</button>`).join('')}</div>
+  ${list.length ? `<section class="card"><div class="list stack">${list.map(buyRow).join('')}</div></section>` : `
+  <section class="card empty"><span class="tile-ic">${ic('folder')}</span><h2>${F === 'open' ? '진행 중인 구매 요청이 없어요' : '아직 없어요'}</h2>
+    <p class="muted">필요한 물건이 있으면 "구매 요청하기"로 품목 · 수량 · 금액 · 살 곳을 적어 주세요. 비품 · 교재 화면에서 모자란 품목 옆 "구매 요청"을 눌러도 돼요.</p>${add}</section>`}
+  ${ROLE === 'teacher' && !can('approvals') ? '<p class="muted small">승인 · 구입은 원장님(또는 결재 처리 권한이 있는 선생님)이 해요. 승인 · 구입되면 휴대폰 알림이 가요.</p>' : ''}`;
+}
+function buyDialog(pre = {}) {
+  if (!REAL) return toast('예시 계정에서는 요청할 수 없어요');
+  formDialog({
+    title: '구매 요청하기', table: 'approvals', after: loadApprovals, okText: '요청하기', extra: { kind: '물품 구입' }, moreLabel: '언제까지 필요한지',
+    label: r => `${r.title} 구매 요청을`, doneText: ROLE === 'owner' ? '구매 요청을 올렸어요 · 승인하고 사면 "구입 완료"를 눌러 주세요' : '구매 요청을 올렸어요 · 원장님이 승인하면 알려 드려요',
+    fields: [
+      ['title', '살 물건', { required: true, max: 100, value: pre.title || '', placeholder: '예: 화이트보드 마커 12개 · Reading Explorer 2 10권' }],
+      ['amount', '예상 금액', { type: 'won', value: pre.amount || null, placeholder: '예: 28,000', half: true }],
+      ['category', '지출 항목', { type: 'select', options: EXP_CATS, value: pre.category || '비품', half: true }],
+      ['detail', '세부 사항', { type: 'area', max: 2000, rows: 3, value: pre.detail || '', placeholder: '수량 · 색 · 살 곳(링크) · 어느 반에서 쓰는지 적어 주세요.' }],
+      ['want_by', '언제까지 필요해요?', { type: 'date', half: true, more: true }],
+      ['files', '견적서 · 사진 (선택)', { type: 'files', max: 5, bucket: 'approvals', prefix: () => `${REAL.academy.id}/${USER.id}` }]
+    ]
+  });
+}
+// 구입 완료한 물건 → 비품 · 교재 수량에 "들어옴"으로
+function buyStockDialog(a) {
+  if (!REAL) return toast('예시 계정에서는 저장되지 않아요');
+  const list = supData(), guess = list.find(x => a.title.includes(x.name) || x.name.includes(a.title.split(' ')[0]));
+  const qty = +((a.title.match(/(\d+)\s*(개|권|박스|대|통|세트)/) || [])[1]) || 1;
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="bsForm" novalidate><h2>비품 · 교재에 넣기</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc(a.title)} · ${apvWho(a)} 요청</p>
+    ${list.length ? `<label class="f">어느 품목에 넣을까요?<select name="item">${list.map(x => `<option value="${x.id}" ${guess && x.id === guess.id ? 'selected' : ''}>${esc(x.name)} (지금 ${x.qty}${esc(x.unit)})</option>`).join('')}</select></label>
+    <label class="f">들어온 수<input type="number" name="qty" min="1" value="${qty}"></label>` : '<p class="muted">아직 비품 · 교재에 넣은 품목이 없어요. 먼저 품목을 만들어 주세요.</p>'}
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><button type="button" class="btn" id="bsNew">${ic('plus')}새 품목으로 만들기</button><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button>${list.length ? '<button class="btn primary">넣기</button>' : ''}</div></form>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  $('#bsNew').onclick = () => { d.close(); supplyDialog(null); };
+  $('#bsForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, q = Math.round(+el.qty.value);
+    if (!(q > 0)) { const m = $('#dlgMsg'); m.textContent = '들어온 수를 적어 주세요.'; m.hidden = false; return; }
+    const { error } = await SB.rpc('move_supply', { p_item: el.item.value, p_kind: 'in', p_qty: q, p_who: a.requester_name || null, p_memo: `구매 요청: ${a.title}`.slice(0, 200), p_cost: null });
+    if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
+    d.close(); await loadSupplies(); render(); toast('비품 · 교재 수량에 넣었어요');
+  };
+}
+const BUY_AREA = { name: '구매 요청', icon: 'folder', desc: '사야 할 물건 요청 · 승인 · 구입 완료 · 누가 요청했는지', stat: () => { const p = buyAll().filter(a => ['pending', 'tobuy'].includes(buyState(a))).length; return p ? `진행 중 ${p}건` : `요청 ${buyAll().length}건`; }, render: buyPage };
 
 /* ================= 원장 · 강사 관리 ================= */
 function staffPage() {
@@ -7993,6 +8076,7 @@ const AREAS = {
         paper: { name: '서류·행정', icon: 'doc', desc: '챙길 서류 자동 찾기 · 명부 · 출석부 · 원천세 바로 만들기', stat: () => REAL ? `작성 필요 ${REAL.paperwork.filter(p => p.status === 'todo').length}건${paperSuggestions().length ? ` · 자동 ${paperSuggestions().length}건` : ''}` : `작성 필요 ${DATA.paperwork.filter(p => p.status === 'todo').length}건`, render: paperPage },
         tax: { name: '세금 · 신고', icon: 'calc', desc: '세금 달력 · 원천세 · 사업장현황 · 종합소득세 미리 보기 → 홈택스에 옮겨 적기', stat: () => { const n = taxDeadlines(taxSrc()).find(x => !x.done); return n ? `${n.title} ${dday(n.due) < 0 ? '기한 지남' : `D-${dday(n.due)}`}` : '다가오는 신고 없음'; }, render: taxPage },
         payroll: { name: '원천세 계산', icon: 'calc', desc: '강사 지급액 → 소득세 · 지방세 · 실지급액 · 엑셀', stat: () => REAL ? `${+MONTH.slice(5)}월 지급 ${payOf(MONTH).length}명` : '3.3% · 일용직 계산', render: payrollPage },
+        buy: BUY_AREA,
         supplies: SUPPLY_AREA,
         auto: { name: '자동으로 처리', icon: 'bolt', desc: '매달 청구 · 미납 안내 · 서류 마감을 저절로', stat: () => REAL ? `켜 둔 일 ${AUTO_ITEMS.filter(([k]) => autoOn(k)).length}개` : '켜 두면 저절로', render: autoPage },
         connect: { name: '결제 · 통장 · 앱 연결', icon: 'card', desc: '카드 단말기 · 결제 키오스크 · 통장 · 전문 앱이 저절로 들어오게', stat: () => ['card', 'bank', 'app'].map(k => `${{ card: '카드', bank: '통장', app: '앱' }[k]} ${EXT_ST[linkOf(k).status || 'off'][1]}`).join(' · '), render: connectPage },
@@ -8081,6 +8165,7 @@ AREAS.teacher.promo = { ...AREAS.owner.promo, desc: '특강 · 설명회 홍보 
 function teacherMenus() {
   const o = AREAS.owner, t = AREAS.teacher;
   const admin = { ...o.admin, stat: attendStat, subs: { attend: { ...o.admin.subs.attend, desc: '수업 중에 우리 반 출석 체크 · 입구 QR 출석 화면' } } };
+  admin.subs.buy = o.admin.subs.buy;
   admin.subs.supplies = o.admin.subs.supplies;
   ['billing', 'finance', 'approvals', 'paper', 'payroll'].filter(can).forEach(k => { admin.subs[k] = k === 'approvals' ? { ...o.admin.subs.approvals, name: '결재 처리', desc: '다른 강사가 올린 결재 승인 · 반려' } : o.admin.subs[k]; });
   if (can('finance')) admin.subs.tax = o.admin.subs.tax;
@@ -8717,7 +8802,7 @@ const AREA_INTRO = {
 };
 // 분야 첫 화면: 세부 메뉴가 많으면 하는 일끼리 작은 묶음으로 나눠 보여요 ("센터에 맡기기"는 아래 한 줄로)
 const SUB_GROUPS = {
-  admin: [['매일 쓰는 것', '출석 체크 · 수강료 받기 · 결재', ['attend', 'billing', 'approvals']], ['돈 · 세금', '매출 · 지출 · 세금 미리 계산 · 강사 원천세', ['finance', 'tax', 'payroll']], ['비품 · 서류', '교재 · 비품 수량과 교육청 · 세무 서류', ['supplies', 'paper']], ['자동 처리 · 연결', '매달 청구 · 미납 안내 · 서류를 저절로 · 카드 결제 · 통장 · 전문 앱 연결', ['auto', 'connect']]],
+  admin: [['매일 쓰는 것', '출석 체크 · 수강료 받기 · 결재', ['attend', 'billing', 'approvals']], ['돈 · 세금', '매출 · 지출 · 세금 미리 계산 · 강사 원천세', ['finance', 'tax', 'payroll']], ['구매 · 비품 · 서류', '물품 구매 요청 · 교재 · 비품 수량과 교육청 · 세무 서류', ['buy', 'supplies', 'paper']], ['자동 처리 · 연결', '매달 청구 · 미납 안내 · 서류를 저절로 · 카드 결제 · 통장 · 전문 앱 연결', ['auto', 'connect']]],
   members: [['상담 · 원생', '문의부터 등록 · 명단 · 앱 초대까지', ['leads', 'students', 'invite']], ['수업 관리', '학생 할 일 · 성장 리포트 · 전문 앱 성적표', ['todos', 'reports', 'records']], ['학부모 소통', '공지 · 읽음 확인', ['notices']]],
   teachers: [['우리 강사', '강사 · 담당 반 · 직책과 권한', ['staff', 'roles']], ['교육 · 채용', '강사 교육 영상 · 채용 공고', ['training', 'hire']]],
   get center() { return CENTER_GROUPS; }
@@ -8994,6 +9079,10 @@ function bind() {
   });
   on('[data-fee-paid]', async b => { const ids = REAL.invoices.filter(i => i.student_id === b.dataset.feePaid && i.month === TODAY.slice(0, 7) && !i.paid_at).map(i => i.id); for (const id of ids) await payInvoice(id); });
   on('[data-act="addSupply"]', () => supplyDialog(null));
+  on('[data-act="buyNew"]', () => buyDialog());
+  on('[data-buy-f]', b => { BUY_F = b.dataset.buyF; render(); });
+  on('[data-buy-stock]', b => { const a = apvAll().find(x => x.id === b.dataset.buyStock); if (a) buyStockDialog(a); });
+  on('[data-buy-item]', b => { const x = supData().find(y => String(y.id) === b.dataset.buyItem); if (x) buyDialog({ title: `${x.name} ${Math.max(1, (x.min_qty || 0) * 2 - x.qty)}${x.unit} 구입`, amount: x.price ? x.price * Math.max(1, (x.min_qty || 0) * 2 - x.qty) : null, category: x.category.startsWith('교재') ? '교재비' : '비품', detail: `지금 ${x.qty}${x.unit} · ${x.min_qty}${x.unit} 아래면 알림${x.place ? ` · ${x.place}` : ''}` }); });
   on('[data-act="supXlsx"]', supXlsx);
   on('[data-sup-edit]', b => REAL ? supplyDialog(REAL.supplies.find(x => x.id === b.dataset.supEdit)) : toast('예시 계정에서는 저장되지 않아요'));
   on('[data-sup-move]', b => { const [id, k] = b.dataset.supMove.split(':'); if (!REAL) return toast('예시 계정에서는 저장되지 않아요'); supplyMoveDialog(REAL.supplies.find(x => x.id === id), k); });
@@ -10931,7 +11020,7 @@ async function undoDo(batch, from) {
 const PAGE_UNDO = [
   ['admin/attend', ['attendance']], ['admin/billing', ['invoices', 'tuition_plans', 'discount_presets']],
   ['admin/finance', ['expenses', 'incomes', 'fixed_costs', 'fin_accounts', 'invoices']], ['admin/paper', ['paperwork']], ['admin/tax', ['paperwork', 'payroll']],
-  ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['approvals', 'expenses']], ['approvals', ['approvals']],
+  ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['approvals', 'expenses']], ['admin/buy', ['approvals', 'expenses', 'supplies']], ['approvals', ['approvals']],
   ['members/students', ['students', 'student_notes', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
   ['members/todos', ['student_todos']], ['members/reports', ['growth_reports']], ['members/records', ['app_records']], ['members/notices', ['notices']],
   ['schedule', ['timetable', 'academy_events']], ['library', ['library_items', 'library_folders']],
