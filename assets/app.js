@@ -2922,6 +2922,8 @@ function realOwnerTodo() {
   if (mkr.length) items.push([`강사 홍보 의뢰 ${mkr.length}건 결재하기`, mkr.slice(0, 3).map(r => `${esc(r.requester_name || '강사')} · ${esc(r.title)}`).join(' / '), '#promo/requests', '<span class="chip warn">원장 결재</span>']);
   const pa = REAL.partnerApps.filter(a => a.status === 'owner_review');
   if (pa.length) items.push([`강사 제휴 신청 ${pa.length}건 승인하기`, pa.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.partner_name)}`).join(' / '), '#mou/mine', '<span class="chip warn">원장 확인</span>']);
+  const apvPay = REAL.approvals.filter(x => apvMoney(x) === 'topay');
+  if (apvPay.length) items.push([`결재 지급할 돈 ${won(sum(apvPay, x => x.amount || 0))}`, apvPay.slice(0, 3).map(x => `${esc(x.requester_name || '강사')} · ${esc(x.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">지급 대기</span>']);
   if (apv.length) items.push([`강사 결재 ${apv.length}건 확인하기`, apv.slice(0, 3).map(a => `${esc(a.requester_name || '강사')} · ${esc(a.title)}`).join(' / '), '#admin/approvals', '<span class="chip warn">결재 대기</span>']);
   const fresh = REAL.applicants.filter(a => a.status === 'applied');
   if (fresh.length) items.push([`새 강사 지원자 ${fresh.length}명`, fresh.slice(0, 3).map(a => esc(a.name)).join(' · '), '#teachers/hire', '<span class="chip info">지원</span>']);
@@ -4743,9 +4745,26 @@ setInterval(async () => {
 
 /* ================= 결재: 강사 → 원장 (Supabase approvals) =================
    강사가 물품 · 재정 지출을 올리면 원장이 승인 · 반려. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요. */
-const APV_KINDS = ['물품 구입', '재정 지출', '기타'];
+const APV_KINDS = ['물품 구입', '재정 지출', '경비 상환', '선지급', '기타'];
 const APV_STATE = { pending: ['warn', '결재 대기'], approved: ['good', '승인'], rejected: ['crit', '반려'] };
-const APV_EXP = { '물품 구입': '교재비', '재정 지출': '기타', '기타': '기타' };
+const APV_EXP = { '물품 구입': '교재비', '재정 지출': '기타', '경비 상환': '기타', '선지급': '기타', '기타': '기타' };
+const APV_PAY_METHODS = ['계좌이체', '현금', '법인카드', '대량이체'];
+// 결재 안의 돈 단계: 경비 상환 · 선지급은 승인 뒤 "지급 대기" → 지급 완료(통장 · 방법) → 선지급은 정산(실제 쓴 돈 · 영수증)
+const apvNeedsPay = a => a.kind === '경비 상환' || a.kind === '선지급';
+const apvMoney = a => a.status !== 'approved' ? null : a.kind === '선지급' && a.paid_at ? (a.settled_at ? 'settled' : 'settle') : a.paid_at ? 'paid' : apvNeedsPay(a) ? 'topay' : null;
+const APV_MONEY = { topay: ['warn', '지급 대기'], paid: ['good', '지급 완료'], settle: ['info', '정산 기다림'], settled: ['good', '정산 끝'] };
+const apvSpent = a => a.used_amount != null ? a.used_amount : a.amount || 0; // 실제로 나간 돈
+const apvDiff = a => a.used_amount != null && a.amount != null ? a.amount - a.used_amount : 0; // +면 돌려받을 돈, -면 더 줄 돈
+const apvDiffText = a => { const d = apvDiff(a); return !d ? '차액 없음' : d > 0 ? `${won(d)} 돌려받기` : `${won(-d)} 더 주기`; };
+const apvMoneyLine = a => {
+  const m = apvMoney(a); if (!m) return '';
+  if (m === 'topay') return `<div class="d apv-money">${ic('card')}<b>지급 대기</b> · ${won(a.amount || 0)}${a.pay_to ? ` · 받을 계좌 ${esc(a.pay_to)}` : ''}</div>`;
+  const ac = a.paid_account_id ? acctOf(a.paid_account_id) : null;
+  const paid = `${md(a.paid_on || (a.paid_at || '').slice(0, 10))} 지급${a.pay_method ? ` · ${esc(a.pay_method)}` : ''}${ac ? ` · ${esc(acctLabel(ac))}` : ''}${a.paid_by_name ? ` · ${esc(a.paid_by_name)}` : ''}`;
+  if (m === 'settled') return `<div class="d apv-money">${ic('check')}${paid} · <b>정산</b> 실제 ${won(a.used_amount)} · ${apvDiffText(a)}${a.settle_note ? ` · ${esc(a.settle_note)}` : ''}</div>`;
+  return `<div class="d apv-money">${ic('check')}${paid}${m === 'settle' ? ' · <b>쓴 돈 정산을 기다려요</b>' : ''}</div>`;
+};
+const apvCanDecide = () => ROLE === 'owner' || can('approvals');
 // 강사는 내가 올린 것만 (결재 처리 권한이 있으면 결재함 apvInbox에서 다른 강사 것도)
 const apvAll = () => REAL ? REAL.approvals : DATA.approvals;
 const apvData = () => ROLE !== 'teacher' ? apvAll() : apvAll().filter(a => REAL ? a.requested_by === USER.id : a.requester_name === ME.name);
@@ -4757,33 +4776,55 @@ const apvWho = a => `${esc(a.requester_name || '강사')}${apvRoleName(a.request
 const apvDecider = a => a.decided_by_name ? `${esc(a.decided_by_name)}${apvRoleName(a.decided_by_role) ? ` ${apvRoleName(a.decided_by_role)}` : ''}` : '';
 const apvMine = a => REAL ? a.requested_by === USER.id : a.requester_name === ME.name;
 const apvRow = (a, owner) => {
-  const [c, l] = APV_STATE[a.status];
+  const [c, l] = APV_STATE[a.status], m = apvMoney(a), mine = apvMine(a);
+  const meta = [a.category ? `항목 ${esc(a.category)}` : '', a.spent_on ? `${md(a.spent_on)} 씀` : ''].filter(Boolean).join(' · ');
+  const btn = [];
+  if (owner && a.status === 'pending') { if (mine && REAL) btn.push(`<button class="btn sm" data-edit-apv="${a.id}">고치기</button>`, `<button class="btn sm" data-cancel-apv="${a.id}">취소</button>`); btn.push(`<button class="btn sm" data-apv="${a.id}:0">반려</button>`, `<button class="btn sm primary" data-apv="${a.id}:1">승인</button>`); }
+  if (!owner && a.status === 'pending') btn.push(`<button class="btn sm" data-cancel-apv="${a.id}">취소</button>`);
+  if (owner && m === 'topay') btn.push(`<button class="btn sm primary" data-apv-pay="${a.id}">${ic('card')}지급 완료</button>`);
+  if (m === 'settle' && (mine || owner)) btn.push(`<button class="btn sm primary" data-apv-settle="${a.id}">${ic('calc')}정산하기</button>`);
+  if (owner && a.status !== 'pending' && apvCanEdit()) btn.push(`<button class="btn sm" data-apv-view="${a.id}">${ic('eye')}다시 보기</button>`, `<button class="btn sm" data-apv-edit="${a.id}">${ic('pen')}고치기</button>`);
   return `
     <div class="li">
-      <span class="av" style="background:${a.status === 'pending' ? 'var(--warn)' : a.status === 'approved' ? 'var(--good)' : 'var(--crit)'}">${ic(a.kind === '재정 지출' ? 'card' : 'doc')}</span>
-      <div><div class="t">${owner ? `<span class="nm-link" data-apv-view="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>` : a.status !== 'pending' ? `<span class="nm-link" data-apv-view="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>` : `<span class="nm-link" data-edit-apv="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>`} <span class="chip mute">${esc(a.kind)}</span>${a.edited_at ? ` <span class="chip info">${esc(a.edited_by_name || '원장')} 고침 ${md(a.edited_at.slice(0, 10))}</span>` : ''}</div>
-        <div class="d"><b>${apvWho(a)}</b>${apvMine(a) ? ' <span class="chip mute">내가 올림</span>' : ''} · ${md(a.created_at.slice(0, 10))} 올림${a.want_by ? ` · ${md(a.want_by)}까지 필요` : ''}${a.amount != null ? ` · <b>${won(a.amount)}</b>` : ''}</div>
+      <span class="av" style="background:${a.status === 'pending' ? 'var(--warn)' : a.status === 'approved' ? 'var(--good)' : 'var(--crit)'}">${ic(a.kind === '물품 구입' || a.kind === '기타' ? 'doc' : 'card')}</span>
+      <div><div class="t">${!owner && a.status === 'pending' ? `<span class="nm-link" data-edit-apv="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>` : `<span class="nm-link" data-apv-view="${a.id}" role="button" tabindex="0">${esc(a.title)}</span>`} <span class="chip mute">${esc(a.kind)}</span>${a.edited_at ? ` <span class="chip info">${esc(a.edited_by_name || '원장')} 고침 ${md(a.edited_at.slice(0, 10))}</span>` : ''}</div>
+        <div class="d"><b>${apvWho(a)}</b>${mine ? ' <span class="chip mute">내가 올림</span>' : ''} · ${md(a.created_at.slice(0, 10))} 올림${a.want_by ? ` · ${md(a.want_by)}까지 필요` : ''}${a.amount != null ? ` · <b>${won(a.amount)}</b>` : ''}</div>
+        ${meta ? `<div class="d">${meta}</div>` : ''}
         ${a.detail ? `<div class="d pre">${esc(a.detail)}</div>` : ''}
+        ${(a.files || []).length ? fileChips(a.files, 'approvals') : ''}
         ${a.decided_at ? `<div class="d">${APV_STATE[a.status][1]} · <b>${apvDecider(a) || '원장'}</b> ${md(a.decided_at.slice(0, 10))}${a.owner_comment ? ` — ${esc(a.owner_comment)}` : ''}</div>` : ''}
+        ${apvMoneyLine(a)}
         ${a.expense_id ? '<div class="d">재정 지출에 넣었어요</div>' : ''}</div>
-      <div class="r"><span class="chip ${c}">${l}</span>${owner && a.status === 'pending' ? `<span class="btns">${apvMine(a) && REAL ? `<button class="btn sm" data-edit-apv="${a.id}">고치기</button><button class="btn sm" data-cancel-apv="${a.id}">취소</button>` : ''}<button class="btn sm" data-apv="${a.id}:0">반려</button><button class="btn sm primary" data-apv="${a.id}:1">승인</button></span>`
-        : !owner && a.status === 'pending' ? `<button class="btn sm" data-cancel-apv="${a.id}">취소</button>` : a.decided_at ? `<span class="time">${md(a.decided_at.slice(0, 10))} 결재</span>` : ''}${owner && a.status !== 'pending' && apvCanEdit() ? `<span class="btns"><button class="btn sm" data-apv-view="${a.id}">${ic('eye')}다시 보기</button><button class="btn sm" data-apv-edit="${a.id}">${ic('pen')}고치기</button></span>` : ''}</div>
+      <div class="r"><span class="chip ${c}">${l}</span>${m ? ` <span class="chip ${APV_MONEY[m][0]}">${APV_MONEY[m][1]}</span>` : ''}${btn.length ? `<span class="btns">${btn.join('')}</span>` : a.decided_at ? `<span class="time">${md(a.decided_at.slice(0, 10))} 결재</span>` : ''}</div>
     </div>`;
 };
-// 원장: 결재함
-function approvalsOwnerPage() {
-  const all = apvInbox(), list = all.filter(a => apvFilter === 'all' || (apvFilter === 'mine' ? apvMine(a) : a.status === apvFilter));
-  const n = k => all.filter(a => a.status === k).length, mine = all.filter(apvMine).length;
-  const add = `<button class="btn primary" data-act="newApv">${ic('plus')}결재 올리기</button>`;
-  return head('결재', '강사님 · 원장님이 올린 물품 구입 · 재정 지출 결재예요. 줄마다 누가 올렸고 누가 결재했는지 보여요. 승인할 때 "지출에 바로 넣기"를 고르면 재정에 저절로 들어가요.', add) + `
+// 결재 안의 돈 한눈에: 대기 · 지급할 돈 · 정산 · 이번 달 결재로 나간 돈(항목별)
+function apvMoneyCard(all, owner) {
+  const mon = TODAY.slice(0, 7), topay = all.filter(a => apvMoney(a) === 'topay'), settle = all.filter(a => apvMoney(a) === 'settle');
+  const pend = all.filter(a => a.status === 'pending');
+  const out = all.filter(a => a.status === 'approved' && ((a.paid_on || '').startsWith(mon) || (!a.paid_on && (a.decided_at || '').startsWith(mon))));
+  const cats = {}; out.forEach(a => { const k = a.category || APV_EXP[a.kind] || '기타'; cats[k] = (cats[k] || 0) + apvSpent(a); });
+  const top = Object.entries(cats).sort((x, y) => y[1] - x[1]), max = top.length ? top[0][1] : 1;
+  return `
   <div class="stats">
-    <div class="stat ${n('pending') ? 'crit' : ''}"><span>결재 대기</span><b class="num">${n('pending')}건</b></div>
-    <div class="stat"><span>대기 금액</span><b class="num">${won(sum(all.filter(a => a.status === 'pending'), a => a.amount || 0))}</b></div>
-    <div class="stat good"><span>이번 달 승인</span><b class="num">${all.filter(a => a.status === 'approved' && (a.decided_at || '').startsWith(TODAY.slice(0, 7))).length}건</b></div>
+    <div class="stat ${pend.length ? 'crit' : ''}"><span>결재 대기</span><b class="num">${pend.length}건</b><small class="muted">${won(sum(pend, a => a.amount || 0))}</small></div>
+    <div class="stat ${topay.length ? 'warn' : ''}"><span>${owner ? '지급할 돈' : '받을 돈'}</span><b class="num">${won(sum(topay, a => a.amount || 0))}</b><small class="muted">경비 상환 · 선지급 ${topay.length}건</small></div>
+    <div class="stat"><span>정산 기다림</span><b class="num">${settle.length}건</b><small class="muted">선지급 ${won(sum(settle, a => a.amount || 0))}</small></div>
+    <div class="stat good"><span>이번 달 결재로 나간 돈</span><b class="num">${won(sum(out, apvSpent))}</b><small class="muted">${out.length}건 승인</small></div>
   </div>
-  <div class="filters">${[['pending', `결재 대기 ${n('pending')}`], ['approved', '승인'], ['rejected', '반려'], ['mine', `내가 올린 ${mine}`], ['all', '전체']].map(([k, l]) => `<button class="${apvFilter === k ? 'on' : ''}" data-apv-filter="${k}">${l}</button>`).join('')}</div>
+  ${owner && top.length ? `<section class="card apv-cats"><div class="card-head"><h2>이번 달 결재 지출 · 항목별</h2>${can('finance') ? '<a class="btn sm" href="#admin/finance">재정에서 보기 →</a>' : ''}</div>
+    <div class="apv-bars">${top.map(([k, v]) => `<div><span>${esc(k)}</span><i style="width:${Math.max(4, Math.round(v / max * 100))}%"></i><b class="num">${won(v)}</b></div>`).join('')}</div></section>` : ''}`;
+}
+// 원장(결재 처리 권한): 결재함
+function approvalsOwnerPage() {
+  const all = apvInbox(), F = { pending: a => a.status === 'pending', topay: a => apvMoney(a) === 'topay', settle: a => apvMoney(a) === 'settle', approved: a => a.status === 'approved', rejected: a => a.status === 'rejected', mine: apvMine, all: () => true };
+  const list = all.filter(F[apvFilter] || F.all), n = k => all.filter(F[k]).length, topay = all.filter(F.topay);
+  const add = `<button class="btn primary" data-act="newApv">${ic('plus')}결재 올리기</button>${topay.length ? `<button class="btn" data-act="apvBulk">${ic('download')}지급할 돈 대량이체 파일</button>` : ''}`;
+  return head('결재', '물품 구입 · 재정 지출 · 경비 상환 · 선지급을 올리고 승인하면, 지급 · 정산까지 여기서 끝내요. 지급하면 재정 지출에도 그 통장 · 날짜로 들어가요. 줄마다 누가 올렸고 누가 결재 · 지급했는지 보여요.', add)
+  + apvMoneyCard(all, true) + `
+  <div class="filters">${[['pending', `결재 대기 ${n('pending')}`], ['topay', `지급 대기 ${n('topay')}`], ['settle', `정산 ${n('settle')}`], ['approved', '승인'], ['rejected', '반려'], ['mine', `내가 올린 ${n('mine')}`], ['all', '전체']].map(([k, l]) => `<button class="${apvFilter === k ? 'on' : ''}" data-apv-filter="${k}">${l}</button>`).join('')}</div>
   ${list.length ? `<section class="card"><div class="list stack">${list.map(a => apvRow(a, true)).join('')}</div></section>` : `
-  <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>${apvFilter === 'pending' ? '기다리는 결재가 없어요' : '아직 없어요'}</h2>
+  <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>${apvFilter === 'pending' ? '기다리는 결재가 없어요' : apvFilter === 'topay' ? '지급할 돈이 없어요' : '아직 없어요'}</h2>
     <p class="muted">강사님이 "결재"에서 올리면 여기에 바로 나와요. 원장님도 위 "결재 올리기"로 올릴 수 있어요.</p></section>`}` + (ROLE === 'owner' ? otherApvCard() : '');
 }
 // 강사가 올린 홍보 의뢰 · 제휴 신청도 원장 결재를 거쳐요 (비용이 드는 바깥 의뢰라서). 결재함에서 한눈에 보고 그 화면에서 승인 · 반려
@@ -4800,40 +4841,46 @@ function otherApvCard() {
         <div><div class="t">${esc(t || '')}</div><div class="d">${k} · ${esc(who || '강사')} 선생님</div></div><div class="r"><span class="chip warn">원장 결재</span></div></a>`).join('')}</div>` : ''}
   </section>`;
 }
-// 강사: 결재 요청
+// 강사: 결재 요청 (경비 상환 · 선지급도) + 받을 돈 · 정산
 function approvalsTeacherPage() {
   const all = apvData();
   const add = `<button class="btn primary" data-act="newApv">${ic('plus')}결재 올리기</button>`;
-  return head('결재', '수업에 필요한 물품이나 비용을 원장님께 결재받아요. 기다리는 동안에는 제목을 눌러 고치거나 취소할 수 있어요. 홍보 의뢰 · 제휴 신청도 원장님이 승인해야 센터로 넘어가요.', add) + (all.length ? `
+  const inbox = can('approvals') && apvInbox().length ? `<p class="muted small" style="margin:0 0 10px">결재 처리 권한이 있어요 · 다른 선생님 결재는 <a href="#admin/approvals">결재함</a>에서 처리해요.</p>` : '';
+  return head('결재', '수업에 필요한 물품 · 비용을 원장님께 결재받아요. 내 돈으로 먼저 냈으면 "경비 상환", 미리 받아서 쓸 돈이면 "선지급"으로 올리고 영수증을 붙여 주세요. 지급되면 여기서 바로 보이고, 선지급은 다 쓴 뒤 "정산하기"로 실제 쓴 돈을 넣어요.', add) + inbox + (all.length ? apvMoneyCard(all, false) + `
   <section class="card"><div class="list stack">${all.map(a => apvRow(a, false)).join('')}</div></section>` : `
   <section class="card empty"><span class="tile-ic">${ic('check')}</span><h2>아직 올린 결재가 없어요</h2>
-    <p class="muted">교재 · 수업 준비물 · 행사 비용처럼 원장님 확인이 필요한 걸 올려 주세요. 승인 · 반려되면 여기서 바로 보여요.</p>${add}</section>`);
+    <p class="muted">교재 · 수업 준비물 · 행사 비용처럼 원장님 확인이 필요한 걸 올려 주세요. 내 돈으로 먼저 산 것도 영수증과 함께 "경비 상환"으로 올리면 돌려받아요.</p>${add}</section>`);
 }
 function approvalDialog(a) {
   if (!REAL) { toast('예시 계정에서는 올릴 수 없어요'); return; }
   formDialog({
-    title: a ? '결재 고치기' : '결재 올리기', table: 'approvals', row: a, after: loadApprovals, okText: a ? '저장' : '올리기',
+    title: a ? '결재 고치기' : '결재 올리기', table: 'approvals', row: a, after: loadApprovals, okText: a ? '저장' : '올리기', moreLabel: '쓴 날 · 받을 계좌 · 언제까지',
     label: r => `${r.title} 결재를`, doneText: ROLE === 'owner' ? '결재를 올렸어요 · 결재함에서 승인 · 반려할 수 있어요' : '결재를 올렸어요 · 원장님이 확인하면 알려 드려요',
     fields: [
-      ['kind', '종류', { type: 'select', required: true, options: APV_KINDS, value: '물품 구입', half: true }],
+      ['kind', '종류 · 경비 상환 = 먼저 낸 돈 돌려받기 · 선지급 = 미리 받고 나중에 정산', { type: 'select', required: true, options: APV_KINDS, value: '물품 구입', half: true }],
       ['amount', '금액', { type: 'won', placeholder: '예: 45,000', half: true }],
       ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 초등 B반 화이트보드 마커 12개' }],
-      ['detail', '자세한 내용', { type: 'area', max: 2000, rows: 4, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
-      ['want_by', '언제까지 필요해요?', { type: 'date' }]
+      ['category', '지출 항목 (재정에 들어갈 이름)', { type: 'select', options: EXP_CATS, half: true }],
+      ['files', '영수증 · 견적서', { type: 'files', max: 5, bucket: 'approvals', prefix: () => `${REAL.academy.id}/${USER.id}` }],
+      ['detail', '자세한 내용', { type: 'area', max: 2000, rows: 3, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
+      ['spent_on', '쓴 날 · 영수증 날짜', { type: 'date', half: true, more: true }],
+      ['want_by', '언제까지 필요해요?', { type: 'date', half: true, more: true }],
+      ['pay_to', '돌려받을 계좌 (경비 상환 · 선지급)', { max: 100, placeholder: '예: 신한 110-123-456789 김민지', more: true }]
     ]
   });
 }
-// 원장: 승인 · 반려 창
+// 승인 · 반려 창
 function decideDialog(a, ok) {
   const d = dialogEl();
   const canExp = ok && a.amount > 0 && can('finance');
   d.innerHTML = `
   <form method="dialog" class="dlg" id="apvForm" novalidate>
     <h2>${ok ? '결재 승인' : '결재 반려'}</h2>
-    <p class="muted small" style="margin:0">올린 사람 ${apvWho(a)} · ${esc(a.title)}${a.amount != null ? ` · ${won(a.amount)}` : ''}</p>
+    <p class="muted small" style="margin:0">올린 사람 ${apvWho(a)} · ${esc(a.kind)} · ${esc(a.title)}${a.amount != null ? ` · ${won(a.amount)}` : ''}${(a.files || []).length ? ` · 영수증 ${a.files.length}개` : ''}</p>
+    ${ok && apvNeedsPay(a) ? `<p class="hint" style="margin:6px 0 0">${ic('card')}<span>${esc(a.kind)}이라 승인하면 <b>지급 대기</b>에 들어가요. 돈을 보낸 뒤 "지급 완료"를 누르면 통장 · 날짜가 재정에 남아요.${a.pay_to ? ` 받을 계좌: ${esc(a.pay_to)}` : ''}</span></p>` : ''}
     <label class="f">${ok ? '전할 말 (선택)' : '반려 이유'}<textarea name="comment" rows="3" maxlength="500" placeholder="${ok ? '예: 다음 주 월요일까지 구입해 주세요. 영수증은 꼭 챙겨 주세요.' : '예: 이번 달 예산을 넘어서 다음 달에 다시 올려 주세요.'}"></textarea></label>
-    ${canExp ? `<label class="chk-line"><input type="checkbox" name="toExp" checked><span>재정에 지출로 바로 넣기</span></label>
-    <label class="f">지출 항목<select name="cat">${EXP_CATS.map(c => `<option ${c === APV_EXP[a.kind] ? 'selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
+    ${canExp ? `<label class="chk-line"><input type="checkbox" name="toExp" checked><span>재정에 지출로 바로 넣기${apvNeedsPay(a) ? ' (지급할 때 통장 · 날짜를 맞춰요)' : ''}</span></label>
+    <label class="f">지출 항목<select name="cat">${EXP_CATS.map(c => `<option ${c === (a.category || APV_EXP[a.kind]) ? 'selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn ${ok ? 'primary' : 'danger'}">${ok ? '승인' : '반려'}</button></div>
   </form>`;
@@ -4845,46 +4892,128 @@ function decideDialog(a, ok) {
     if (!ok && !comment) { const m = $('#dlgMsg'); m.textContent = '반려 이유를 적어 주세요.'; m.hidden = false; return; }
     const cat = canExp && el.toExp.checked ? el.cat.value : null;
     const { error } = await SB.rpc('decide_approval', { p_id: a.id, p_ok: ok, p_comment: comment || null, p_category: cat });
-    if (error) { const m = $('#dlgMsg'); m.textContent = /not_pending/.test(error.message) ? '이미 결재한 건이에요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; m.hidden = false; return; }
+    if (error) { const m = $('#dlgMsg'); m.textContent = /not_pending/.test(error.message) ? '이미 결재한 건이에요.' : dbErr(error); m.hidden = false; return; }
     d.close(); await Promise.all([loadApprovals(), cat ? loadExpenses() : null]); render();
-    toast(ok ? `승인했어요${cat ? ' · 재정 지출에 넣었어요' : ''}` : '반려했어요');
+    toast(ok ? `승인했어요${cat ? ' · 재정 지출에 넣었어요' : ''}${apvNeedsPay(a) ? ' · 지급 대기에 들어갔어요' : ''}` : '반려했어요');
+  };
+}
+// 지급 완료 (원장 · 결재 처리 권한): 날짜 · 나간 통장 · 방법 → 재정 지출도 그 통장 · 날짜로
+function apvPayDialog(a) {
+  if (!REAL) { a.paid_at = new Date().toISOString(); a.paid_on = TODAY; a.pay_method = '계좌이체'; a.paid_by_name = ME.name; render(); return toast('지급 완료로 표시했어요 (예시)'); }
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="apForm" novalidate><h2>지급 완료</h2>
+    <p class="muted small" style="margin:-6px 0 0">${apvWho(a)} · ${esc(a.kind)} · ${esc(a.title)}</p>
+    <div class="apv-view">
+      <div class="set-row"><span>보낼 금액</span><b>${won(a.amount || 0)}</b></div>
+      ${a.pay_to ? `<div class="set-row"><span>받을 계좌</span><b>${esc(a.pay_to)} <button type="button" class="btn sm ghost" id="apCopy">복사</button></b></div>` : ''}
+    </div>
+    <div class="two"><label class="f">보낸 날<input type="date" name="day" value="${TODAY}" max="${TODAY}"></label>
+      <label class="f">방법<select name="method">${APV_PAY_METHODS.map(x => `<option>${x}</option>`).join('')}</select></label></div>
+    ${acctSelect('out', '나간 통장')}
+    <p class="muted small" style="margin:0">${can('finance') ? (a.expense_id ? '승인할 때 넣은 재정 지출의 날짜 · 통장을 이걸로 맞춰요.' : '재정 지출에도 이 날짜 · 통장으로 넣어요.') : '재정 권한이 없어서 재정 지출은 원장님이 넣어요.'}</p>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">지급 완료</button></div></form>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  if ($('#apCopy')) $('#apCopy').onclick = () => copyText(a.pay_to, '계좌를 복사했어요');
+  $('#apForm').onsubmit = async e => {
+    e.preventDefault();
+    const el = e.target.elements, acct = el.acct ? el.acct.value || null : null; acctKeep('out', acct);
+    const { error } = await SB.rpc('mark_approval_paid', { p_id: a.id, p_paid: true, p_day: el.day.value || TODAY, p_account: acct, p_method: el.method.value });
+    if (error) { const m = $('#dlgMsg'); m.textContent = dbErr(error); m.hidden = false; return; }
+    d.close(); await Promise.all([loadApprovals(), can('finance') ? loadExpenses() : null]); render();
+    toast(`지급 완료로 표시했어요${can('finance') ? ' · 재정 지출에 넣었어요' : ''}${a.kind === '선지급' ? ' · 다 쓴 뒤 정산을 기다려요' : ''}`);
+  };
+}
+async function apvUnpay(a) {
+  if (!confirm('지급 완료를 취소할까요? (재정에 넣은 지출은 그대로 남아요 · 필요하면 재정에서 지워 주세요)')) return;
+  if (!REAL) { a.paid_at = null; a.paid_on = null; render(); return; }
+  const { error } = await SB.rpc('mark_approval_paid', { p_id: a.id, p_paid: false, p_day: null, p_account: null, p_method: null });
+  if (error) return toast(dbErr(error));
+  await loadApprovals(); render(); toast('지급 완료를 취소했어요');
+}
+// 선지급 정산 (올린 사람 · 결재 처리 권한): 실제 쓴 돈 · 영수증 → 차액(돌려받기 / 더 주기)
+function apvSettleDialog(a) {
+  const d = dialogEl(), add = [];
+  d.innerHTML = `<form method="dialog" class="dlg" id="asForm" novalidate><h2>선지급 정산</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc(a.title)} · 미리 받은 돈 <b>${won(a.amount || 0)}</b></p>
+    <label class="f">실제로 쓴 돈<span class="won-wrap"><input name="used" class="won-in" inputmode="numeric" autocomplete="off" value="${comma(a.used_amount ?? a.amount ?? '')}"><i>원</i></span></label>
+    <p class="muted small" id="asDiff" style="margin:0"></p>
+    <label class="f">메모<textarea name="note" rows="2" maxlength="500" placeholder="예: 간식 82,000원 · 남은 18,000원은 계좌로 돌려드렸어요">${esc(a.settle_note || '')}</textarea></label>
+    <div class="f">영수증 <span class="muted small">${(a.files || []).length ? `이미 ${a.files.length}개 · ` : ''}더 붙일 수 있어요</span><div id="asFiles" class="muted small"></div><label class="btn sm img-add">${ic('upload')}영수증 고르기<input type="file" multiple id="asIn" hidden></label></div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">정산하기</button></div></form>`;
+  d.showModal(); $('#dlgCancel').onclick = () => d.close();
+  const el = $('#asForm').elements, diff = () => { const u = numOf(el.used.value), x = (a.amount || 0) - u; $('#asDiff').textContent = el.used.value.trim() === '' ? '' : !x ? '미리 받은 돈과 같아요 · 차액 없음' : x > 0 ? `남은 돈 ${won(x)} → 학원에 돌려주기` : `모자란 ${won(-x)} → 학원이 더 주기`; };
+  d.addEventListener('input', diff); diff();
+  $('#asIn').onchange = e => { add.push(...[...e.target.files].slice(0, 10 - (a.files || []).length - add.length)); $('#asFiles').textContent = add.map(f => f.name).join(' · '); e.target.value = ''; };
+  $('#asForm').onsubmit = async e => {
+    e.preventDefault();
+    const fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+    if (el.used.value.trim() === '' || !(numOf(el.used.value) >= 0)) return fail('실제로 쓴 돈을 숫자로 적어 주세요.');
+    const used = Math.round(numOf(el.used.value)), note = el.note.value.trim();
+    if (!REAL) { Object.assign(a, { used_amount: used, settle_note: note, settled_at: new Date().toISOString() }); d.close(); render(); return toast(`정산했어요 · ${apvDiffText(a)} (예시)`); }
+    const up = [];
+    for (const [i, f] of add.entries()) {
+      const path = `${REAL.academy.id}/${USER.id}/${crypto.randomUUID()}/${safeName(f.name, i)}`;
+      fail(`영수증 올리는 중… ${i + 1}/${add.length}`);
+      const r = await putFile('approvals', path, f);
+      if (r.error) { if (up.length) await SB.storage.from('approvals').remove(up.map(x => x.path)); return fail(upErr(r.error, f.name)); }
+      up.push({ path, name: f.name.slice(0, 200), size: f.size, mime: (f.type || '').slice(0, 100) || null });
+    }
+    const { error } = await SB.rpc('settle_approval', { p_id: a.id, p_used: used, p_note: note || null, p_files: up.length ? [...(a.files || []), ...up] : null });
+    if (error) { if (up.length) await SB.storage.from('approvals').remove(up.map(x => x.path)); return fail(dbErr(error)); }
+    d.close(); await Promise.all([loadApprovals(), a.expense_id && can('finance') ? loadExpenses() : null]); render();
+    toast(`정산했어요 · ${apvDiff({ ...a, used_amount: used }) ? apvDiffText({ ...a, used_amount: used }) : '차액 없음'}`);
   };
 }
 
-// 결재 다시 보기: 올린 내용 · 결재 의견 · 넣은 지출 · 고친 기록을 한 장에 (원장은 고치기 · 강사는 보기만)
+// 결재 다시 보기: 올린 내용 · 결재 의견 · 지급 · 정산 · 넣은 지출 · 고친 기록을 한 장에
 const apvCanEdit = () => ROLE === 'owner' || can('approvals');
 function apvViewDialog(a) {
-  const d = dialogEl(), [c, l] = APV_STATE[a.status], ex = a.expense_id && REAL ? (REAL.expenses || []).find(e => e.id === a.expense_id) : null;
+  const d = dialogEl(), [c, l] = APV_STATE[a.status], m = apvMoney(a), ex = a.expense_id && REAL ? (REAL.expenses || []).find(e => e.id === a.expense_id) : null;
   const row = (k, v) => v ? `<div class="set-row"><span>${k}</span><b>${v}</b></div>` : '';
+  const ac = a.paid_account_id ? acctOf(a.paid_account_id) : null;
   d.innerHTML = `<form method="dialog" class="dlg"><h2>${esc(a.title)}</h2>
-    <p style="margin:-4px 0 0"><span class="chip ${c}">${l}</span> <span class="chip mute">${esc(a.kind)}</span></p>
+    <p style="margin:-4px 0 0"><span class="chip ${c}">${l}</span> <span class="chip mute">${esc(a.kind)}</span>${m ? ` <span class="chip ${APV_MONEY[m][0]}">${APV_MONEY[m][1]}</span>` : ''}</p>
     <div class="apv-view">
       ${row('올린 사람', `${apvWho(a)} · ${md(a.created_at.slice(0, 10))} ${a.created_at.slice(11, 16)}`)}
       ${row('금액', a.amount != null ? won(a.amount) : '')}
+      ${row('지출 항목', a.category ? esc(a.category) : '')}
+      ${row('쓴 날', a.spent_on ? md(a.spent_on) : '')}
       ${row('언제까지', a.want_by ? md(a.want_by) : '')}
+      ${row('받을 계좌', a.pay_to ? esc(a.pay_to) : '')}
       ${a.detail ? `<div class="set-row col"><span>자세한 내용</span><p class="pre" style="margin:4px 0 0">${esc(a.detail)}</p></div>` : ''}
+      ${(a.files || []).length ? `<div class="set-row col"><span>영수증 · 견적서</span>${fileChips(a.files, 'approvals')}</div>` : ''}
       ${row('결재', a.decided_at ? `${md(a.decided_at.slice(0, 10))} ${a.decided_at.slice(11, 16)} ${l}` : '아직 기다리는 중')}
       ${a.decided_at ? row('결재한 사람', apvDecider(a) || '원장') : ''}
       ${a.owner_comment ? `<div class="set-row col"><span>결재 의견</span><p class="pre" style="margin:4px 0 0">${esc(a.owner_comment)}</p></div>` : ''}
+      ${a.paid_at ? row('지급', `${md(a.paid_on || a.paid_at.slice(0, 10))}${a.pay_method ? ` · ${esc(a.pay_method)}` : ''}${ac ? ` · ${esc(acctLabel(ac))}` : ''}${a.paid_by_name ? ` · ${esc(a.paid_by_name)}` : ''}`) : m === 'topay' ? row('지급', '아직 안 보냈어요') : ''}
+      ${a.settled_at ? row('정산', `실제 ${won(a.used_amount)} · ${apvDiffText(a)}${a.settle_note ? ` · ${esc(a.settle_note)}` : ''}`) : ''}
       ${a.expense_id ? row('재정 지출', ex ? `${md(ex.day)} · ${esc(ex.category)} · ${won(ex.amount)}` : '넣었어요') : ''}
       ${a.edited_at ? row('고친 기록', `${esc(a.edited_by_name || '원장')} · ${md(a.edited_at.slice(0, 10))} ${a.edited_at.slice(11, 16)}`) : ''}
     </div>
-    <div class="acts">${ROLE !== 'teacher' || apvCanEdit() ? (REAL ? `<button type="button" class="btn" data-apv-edit2="${a.id}">${ic('pen')}고치기</button>` : '') : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></form>`;
+    <div class="acts">${apvCanDecide() && m === 'topay' ? `<button type="button" class="btn primary" data-v-pay>${ic('card')}지급 완료</button>` : ''}${apvCanDecide() && a.paid_at && !a.settled_at ? '<button type="button" class="btn" data-v-unpay>지급 취소</button>' : ''}${m === 'settle' && (apvMine(a) || apvCanDecide()) ? `<button type="button" class="btn primary" data-v-settle>${ic('calc')}정산하기</button>` : ''}${apvCanEdit() && REAL ? `<button type="button" class="btn" data-apv-edit2="${a.id}">${ic('pen')}고치기</button>` : ''}<span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button></div></form>`;
   d.showModal(); $('#dlgCancel').onclick = () => d.close();
   const e2 = d.querySelector('[data-apv-edit2]'); if (e2) e2.onclick = () => { d.close(); apvEditDialog(a); };
+  const p = d.querySelector('[data-v-pay]'); if (p) p.onclick = () => { d.close(); apvPayDialog(a); };
+  const u = d.querySelector('[data-v-unpay]'); if (u) u.onclick = () => { d.close(); apvUnpay(a); };
+  const s = d.querySelector('[data-v-settle]'); if (s) s.onclick = () => { d.close(); apvSettleDialog(a); };
 }
-// 원장(결재 처리 권한): 결재가 끝난 것도 고쳐요 — 승인하며 넣은 지출 금액 · 내용도 함께 바뀌어요
+// 원장(결재 처리 권한): 결재가 끝난 것도 고쳐요 — 승인하며 넣은 지출 금액 · 항목 · 내용도 함께 바뀌어요
 function apvEditDialog(a) {
   if (!REAL) return toast('예시 계정에서는 고칠 수 없어요');
   const d = dialogEl();
   d.innerHTML = `<form method="dialog" class="dlg" id="aeForm" novalidate><h2>결재 고치기</h2>
-    <p class="muted small" style="margin:-6px 0 0">${apvWho(a)} · ${md(a.created_at.slice(0, 10))} 올림 · ${APV_STATE[a.status][1]}${a.expense_id ? ' · 금액을 바꾸면 재정 지출도 같이 바뀌어요' : ''}</p>
+    <p class="muted small" style="margin:-6px 0 0">${apvWho(a)} · ${md(a.created_at.slice(0, 10))} 올림 · ${APV_STATE[a.status][1]}${a.expense_id ? ' · 금액 · 항목을 바꾸면 재정 지출도 같이 바뀌어요' : ''}</p>
     <div class="two"><label class="f">종류<select name="kind">${APV_KINDS.map(k => `<option ${k === a.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
       <label class="f">금액<span class="won-wrap"><input name="amount" class="won-in" inputmode="numeric" autocomplete="off" value="${a.amount != null ? comma(a.amount) : ''}"><i>원</i></span></label></div>
     <label class="f">무엇이 필요하세요?<input name="title" maxlength="100" value="${esc(a.title)}"></label>
-    <label class="f">자세한 내용<textarea name="detail" rows="4" maxlength="2000">${esc(a.detail || '')}</textarea></label>
-    <label class="f">언제까지 필요해요?<input type="date" name="want" value="${a.want_by || ''}"></label>
-    ${a.status !== 'pending' ? `<label class="f">원장 의견<textarea name="comment" rows="2" maxlength="500">${esc(a.owner_comment || '')}</textarea></label>` : ''}
+    <div class="two"><label class="f">지출 항목<select name="cat"><option value="">선택 안 함</option>${EXP_CATS.map(c => `<option ${c === a.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
+      <label class="f">쓴 날<input type="date" name="spent" value="${a.spent_on || ''}"></label></div>
+    <label class="f">자세한 내용<textarea name="detail" rows="3" maxlength="2000">${esc(a.detail || '')}</textarea></label>
+    <div class="two"><label class="f">언제까지 필요해요?<input type="date" name="want" value="${a.want_by || ''}"></label>
+      <label class="f">받을 계좌<input name="payto" maxlength="100" value="${esc(a.pay_to || '')}"></label></div>
+    ${a.status !== 'pending' ? `<label class="f">결재 의견<textarea name="comment" rows="2" maxlength="500">${esc(a.owner_comment || '')}</textarea></label>` : ''}
     <p class="msg" id="dlgMsg" hidden></p>
     <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">취소</button><button class="btn primary">저장</button></div></form>`;
   d.showModal(); $('#dlgCancel').onclick = () => d.close();
@@ -4894,7 +5023,8 @@ function apvEditDialog(a) {
     const title = el.title.value.trim(), amt = el.amount.value.trim() === '' ? null : Math.round(numOf(el.amount.value));
     if (!title) return fail('무엇이 필요한지 적어 주세요.');
     if (amt != null && !(amt >= 0)) return fail('금액은 숫자로 적어 주세요.');
-    const { error } = await SB.rpc('edit_approval', { p_id: a.id, p_kind: el.kind.value, p_title: title, p_amount: amt, p_detail: el.detail.value, p_want_by: el.want.value || null, p_comment: el.comment ? el.comment.value : null });
+    const { error } = await SB.rpc('edit_approval', { p_id: a.id, p_kind: el.kind.value, p_title: title, p_amount: amt, p_detail: el.detail.value, p_want_by: el.want.value || null, p_comment: el.comment ? el.comment.value : null,
+      p_category: el.cat.value || null, p_spent_on: el.spent.value || null, p_pay_to: el.payto.value || null });
     if (error) return fail(dbErr(error));
     d.close(); await Promise.all([loadApprovals(), a.expense_id && can('finance') ? loadExpenses() : null]); render();
     toast(`결재를 고쳤어요${a.expense_id && can('finance') ? ' · 재정 지출도 맞췄어요' : ''}`);
@@ -9142,6 +9272,9 @@ function bind() {
   on('[data-lib-readers]', b => libReadersDialog(b.dataset.libReaders));
   on('[data-apv-view]', b => { const a = apvAll().find(x => x.id === b.dataset.apvView); if (a) apvViewDialog(a); });
   on('[data-apv-edit]', b => { const a = apvAll().find(x => x.id === b.dataset.apvEdit); if (a) apvEditDialog(a); });
+  on('[data-apv-pay]', b => { const a = apvAll().find(x => x.id === b.dataset.apvPay); if (a) apvPayDialog(a); });
+  on('[data-apv-settle]', b => { const a = apvAll().find(x => x.id === b.dataset.apvSettle); if (a) apvSettleDialog(a); });
+  on('[data-act="apvBulk"]', () => bulkPayDialog({ apv: apvInbox().filter(a => apvMoney(a) === 'topay') }));
   on('[data-demo-notice]', (b, e) => { e.preventDefault(); demoNoticeReaders(+b.dataset.demoNotice); });
   // 성장 리포트
   on('[data-act="newReport"]', newReportDialog);
@@ -10677,6 +10810,7 @@ const UNDO_TBL = {
   paperwork: ['서류', 'doc'], payroll: ['원천세 계산', 'calc'], timetable: ['시간표', 'cal'], academy_events: ['일정', 'cal'], notices: ['공지', 'notice'],
   library_items: ['자료실', 'doc'], library_folders: ['자료실 폴더', 'doc'], tuition_plans: ['정해 둔 수강료', 'card'], discount_presets: ['할인', 'card'],
   fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'], student_notes: ['원생 기록', 'doc'],
+  approvals: ['결재', 'check'],
   student_todos: ['오늘 할 일', 'check'], growth_reports: ['성장 리포트', 'doc'], fin_accounts: ['통장', 'card'], abroad_promos: ['유학 안내', 'globe'],
   academy_titles: ['직책', 'shield'], app_records: ['학습 기록', 'chart'], job_posts: ['채용 공고', 'brief'], payee_accounts: ['받는 사람 계좌', 'card']
 };
@@ -10797,7 +10931,7 @@ async function undoDo(batch, from) {
 const PAGE_UNDO = [
   ['admin/attend', ['attendance']], ['admin/billing', ['invoices', 'tuition_plans', 'discount_presets']],
   ['admin/finance', ['expenses', 'incomes', 'fixed_costs', 'fin_accounts', 'invoices']], ['admin/paper', ['paperwork']], ['admin/tax', ['paperwork', 'payroll']],
-  ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['expenses']],
+  ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['approvals', 'expenses']], ['approvals', ['approvals']],
   ['members/students', ['students', 'student_notes', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
   ['members/todos', ['student_todos']], ['members/reports', ['growth_reports']], ['members/records', ['app_records']], ['members/notices', ['notices']],
   ['schedule', ['timetable', 'academy_events']], ['library', ['library_items', 'library_folders']],
@@ -11657,20 +11791,22 @@ function payTestMe() {
 
 /* ---------- 대량이체 파일: 강사 급여 · 월세처럼 여러 곳에 한 번에 보낼 때 ---------- */
 const BANKS = ['KB국민', '신한', '우리', '하나', 'NH농협', 'IBK기업', '카카오뱅크', '토스뱅크', '케이뱅크', 'SC제일', '한국씨티', 'iM뱅크(대구)', '부산', '경남', '광주', '전북', '제주', '새마을금고', '신협', '우체국', '수협', 'KDB산업'];
-async function bulkPayDialog() {
+async function bulkPayDialog(opts) {
+  const apvRows = opts && Array.isArray(opts.apv) ? opts.apv : null; // 결재 "지급할 돈"에서 열면 경비 상환 · 선지급을 채워요
   const m = MONTH, short = unHtml(DATA.academy.name).replace(/\s/g, '').slice(0, 6);
   let saved = [];
   if (REAL) { const { data } = await SB.from('payee_accounts').select('name, bank, account, holder').eq('academy_id', REAL.academy.id); saved = data || []; }
   const acc = n => saved.find(a => a.name === n) || {};
   let rows = REAL ? payOf(m).map(x => ({ name: x.person_name, amount: x.gross - x.income_tax - x.local_tax, ...acc(x.person_name), memo: `${short}${+m.slice(5)}월급여` }))
     : [{ name: '김민지', bank: '신한', account: '110000000000', holder: '김민지', amount: 1740600, memo: `${short}${+m.slice(5)}월급여` }, { name: '이준호', bank: 'KB국민', account: '00000000000000', holder: '이준호', amount: 1257300, memo: `${short}${+m.slice(5)}월급여` }];
+  if (apvRows) rows = apvRows.map(x => ({ name: x.requester_name || '', amount: x.amount || 0, ...acc(x.requester_name), memo: `${short}${x.kind === '선지급' ? '선지급' : '경비'}`.slice(0, 20), apv: x.id }));
   if (!rows.length) rows = [{ name: '', amount: '', memo: '' }];
   const d = dialogEl();
   const paint = () => {
     d.innerHTML = `<form method="dialog" class="dlg bulk-dlg" id="bpForm" novalidate>
       <h2>${monthLabel(m)} 대량이체 파일</h2>
       <p class="muted small" style="margin:-6px 0 0">은행 기업 · 개인 인터넷뱅킹의 <b>"대량이체(다건이체)"</b>에 올릴 엑셀이에요. 원천세 계산의 실지급액이 채워져 있고, 계좌는 한 번 넣으면 다음 달에도 기억해요. 은행마다 양식 칸 순서가 조금 다르면 은행 양식에 붙여 넣어 주세요.</p>
-      <div class="bp-rows">${rows.map((r, i) => `<div class="bp-row" data-i="${i}">
+      <div class="bp-rows">${rows.map((r, i) => `<div class="bp-row" data-i="${i}" ${r.apv ? `data-apv="${r.apv}"` : ''}>
         <input name="name" value="${esc(r.name || '')}" maxlength="50" placeholder="받는 사람 (예: 김민지 · 건물주)">
         <select name="bank"><option value="">은행</option>${BANKS.map(b => `<option ${r.bank === b ? 'selected' : ''}>${b}</option>`).join('')}${r.bank && !BANKS.includes(r.bank) ? `<option selected>${esc(r.bank)}</option>` : ''}</select>
         <input name="account" value="${esc(r.account || '')}" maxlength="40" inputmode="numeric" placeholder="계좌번호">
@@ -11679,10 +11815,11 @@ async function bulkPayDialog() {
         <input name="memo" value="${esc(r.memo || '')}" maxlength="20" placeholder="받는 분 통장 표시">
         <button type="button" class="btn sm ghost" data-bp-del="${i}" aria-label="빼기">×</button></div>`).join('')}</div>
       <div class="row-btns"><button type="button" class="btn sm" id="bpAdd">${ic('plus')}받는 사람 더하기</button>${fixedData().length ? '<button type="button" class="btn sm" id="bpFixed">매달 나가는 돈(월세 등) 넣기</button>' : ''}<span style="flex:1"></span><b id="bpSum" class="num"></b></div>
+      ${rows.some(r => r.apv) ? `<label class="chk-line"><input type="checkbox" name="markPaid" checked><span>받은 파일로 보낼 결재(경비 상환 · 선지급)는 오늘 날짜 "대량이체"로 지급 완료 표시</span></label>` : ''}
       <label class="f">보내는 분 통장 표시 <span class="muted small">내 통장에 찍히는 이름</span><input name="from" maxlength="20" value="${esc(`${short}${+m.slice(5)}월`)}"></label>
       <p class="msg" id="dlgMsg" hidden></p>
       <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">${ic('download')}이체 파일 받기</button></div></form>`;
-    const read = () => { rows = [...d.querySelectorAll('.bp-row')].map(el => ({ name: el.querySelector('[name=name]').value.trim(), bank: el.querySelector('[name=bank]').value, account: el.querySelector('[name=account]').value.trim(), holder: el.querySelector('[name=holder]').value.trim(), amount: numOf(el.querySelector('[name=amount]').value), memo: el.querySelector('[name=memo]').value.trim() })); };
+    const read = () => { rows = [...d.querySelectorAll('.bp-row')].map(el => ({ name: el.querySelector('[name=name]').value.trim(), bank: el.querySelector('[name=bank]').value, account: el.querySelector('[name=account]').value.trim(), holder: el.querySelector('[name=holder]').value.trim(), amount: numOf(el.querySelector('[name=amount]').value), memo: el.querySelector('[name=memo]').value.trim(), apv: el.dataset.apv || null })); };
     const total = () => { read(); $('#bpSum').textContent = `합계 ${won(sum(rows, r => r.amount || 0))} · ${rows.filter(r => r.amount).length}건`; };
     d.addEventListener('input', total); total();
     $('#bpAdd').onclick = () => { read(); rows.push({ name: '', amount: '', memo: '' }); paint(); };
@@ -11704,7 +11841,13 @@ async function bulkPayDialog() {
       const body = list.map(r => [r.bank, r.account.replace(/\D/g, ''), r.holder || r.name, String(r.amount), r.memo, from, r.name]);
       const guide = [['대량이체 파일 쓰는 법'], [], ['1', '은행 인터넷뱅킹(기업뱅킹) → 이체 → "대량이체" 또는 "다건이체"'], ['2', '은행 화면의 "엑셀 양식 받기"로 받은 양식과 칸 순서를 비교해요'], ['3', '칸 순서가 같으면 이 파일을 바로 올리고, 다르면 첫 시트의 줄을 은행 양식에 붙여 넣어요'], ['4', '계좌번호는 숫자만 넣었어요 · 합계 금액을 꼭 한 번 더 확인해요'], [], ['합계', '', '', won(sum(list, r => r.amount)), `${list.length}건`]];
       downloadXlsx(`bulk_transfer_${m}.xlsx`, [head, ...body], [12, 18, 12, 14, 18, 18, 16], { sheet: '대량이체', more: [['쓰는 법', guide, [6, 70, 6, 16, 10]]] });
-      d.close(); toast(`대량이체 파일을 받았어요 · ${list.length}건 ${won(sum(list, r => r.amount))}`);
+      const paidApv = e.target.elements.markPaid && e.target.elements.markPaid.checked ? list.filter(r => r.apv) : [];
+      if (paidApv.length && REAL) {
+        const acct = acctLast('out');
+        for (const r of paidApv) { const { error } = await SB.rpc('mark_approval_paid', { p_id: r.apv, p_paid: true, p_day: TODAY, p_account: acct, p_method: '대량이체' }); if (error) toast(dbErr(error)); }
+        await Promise.all([loadApprovals(), can('finance') ? loadExpenses() : null]); render();
+      }
+      d.close(); toast(`대량이체 파일을 받았어요 · ${list.length}건 ${won(sum(list, r => r.amount))}${paidApv.length ? ` · 결재 ${paidApv.length}건 지급 완료` : ''}`);
     };
   };
   paint(); d.showModal();

@@ -1770,3 +1770,13 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .ud-k.back { color: var(--r-owner); }
 .ud-k.fwd { color: var(--good); }
 .undo-dlg h2 .icon { width: 20px; height: 20px; vertical-align: -3px; }
+
+/* 결재 안의 돈: 지급 · 정산 한 줄, 항목별 막대 */
+.apv-money { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.apv-money .icon { width: 14px; height: 14px; }
+.stat small.muted { display: block; font-size: 12px; margin-top: 2px; }
+.apv-cats { margin-bottom: 14px; }
+.apv-bars { display: grid; gap: 8px; }
+.apv-bars > div { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+.apv-bars i { display: block; height: 10px; border-radius: 6px; background: var(--blue-500); }
+.apv-bars b { font-size: 13px; }
