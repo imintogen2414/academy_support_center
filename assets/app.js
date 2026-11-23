@@ -2620,7 +2620,7 @@ async function adminExport(from, to, pick, label) {
   if (has('approvals')) {
     const ap = REAL.approvals.filter(x => x.created_at.slice(0, 10) >= from && x.created_at.slice(0, 10) <= to);
     summary.push(['결재', '올라온 결재', `${ap.length}건`, `승인 ${ap.filter(x => x.status === 'approved').length} · 반려 ${ap.filter(x => x.status === 'rejected').length} · 대기 ${ap.filter(x => x.status === 'pending').length}`]);
-    add('결재', [...head('결재'), ['올린 날', '올린 사람', '종류', '내용', '금액(원)', '필요한 날', '상태', '처리한 날', '원장 의견', '자세한 내용'],
+    add('결재', [...head('결재'), ['올린 날', '올린 사람', '종류', '요청 사항', '금액(원)', '필요한 날', '상태', '처리한 날', '원장 의견', '세부 사항'],
       ...ap.map(x => [x.created_at.slice(0, 10), x.requester_name || '', x.kind || '', x.title, x.amount != null ? S(x.amount) : '', x.want_by || '', (APV_STATE[x.status] || [, x.status])[1], x.decided_at ? x.decided_at.slice(0, 10) : '', x.owner_comment || '', x.detail || ''])], [11, 10, 9, 20, 11, 11, 9, 11, 18, 26]);
   }
   if (has('settings')) {
@@ -4859,10 +4859,10 @@ function approvalDialog(a) {
     fields: [
       ['kind', '종류 · 경비 상환 = 먼저 낸 돈 돌려받기 · 선지급 = 미리 받고 나중에 정산', { type: 'select', required: true, options: APV_KINDS, value: '물품 구입', half: true }],
       ['amount', '금액', { type: 'won', placeholder: '예: 45,000', half: true }],
-      ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 초등 B반 화이트보드 마커 12개' }],
+      ['title', '요청 사항', { required: true, max: 100, placeholder: '예: 초등 B반 화이트보드 마커 12개 구입' }],
       ['category', '지출 항목 (재정에 들어갈 이름)', { type: 'select', options: EXP_CATS, half: true }],
       ['files', '영수증 · 견적서', { type: 'files', max: 5, bucket: 'approvals', prefix: () => `${REAL.academy.id}/${USER.id}` }],
-      ['detail', '자세한 내용', { type: 'area', max: 2000, rows: 3, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
+      ['detail', '세부 사항', { type: 'area', max: 2000, rows: 3, placeholder: '품목 · 수량 · 구입처(링크) · 필요한 이유를 적어 주세요.' }],
       ['spent_on', '쓴 날 · 영수증 날짜', { type: 'date', half: true, more: true }],
       ['want_by', '언제까지 필요해요?', { type: 'date', half: true, more: true }],
       ['pay_to', '돌려받을 계좌 (경비 상환 · 선지급)', { max: 100, placeholder: '예: 신한 110-123-456789 김민지', more: true }]
@@ -4982,7 +4982,7 @@ function apvViewDialog(a) {
       ${row('쓴 날', a.spent_on ? md(a.spent_on) : '')}
       ${row('언제까지', a.want_by ? md(a.want_by) : '')}
       ${row('받을 계좌', a.pay_to ? esc(a.pay_to) : '')}
-      ${a.detail ? `<div class="set-row col"><span>자세한 내용</span><p class="pre" style="margin:4px 0 0">${esc(a.detail)}</p></div>` : ''}
+      ${a.detail ? `<div class="set-row col"><span>세부 사항</span><p class="pre" style="margin:4px 0 0">${esc(a.detail)}</p></div>` : ''}
       ${(a.files || []).length ? `<div class="set-row col"><span>영수증 · 견적서</span>${fileChips(a.files, 'approvals')}</div>` : ''}
       ${row('결재', a.decided_at ? `${md(a.decided_at.slice(0, 10))} ${a.decided_at.slice(11, 16)} ${l}` : '아직 기다리는 중')}
       ${a.decided_at ? row('결재한 사람', apvDecider(a) || '원장') : ''}
@@ -5007,10 +5007,10 @@ function apvEditDialog(a) {
     <p class="muted small" style="margin:-6px 0 0">${apvWho(a)} · ${md(a.created_at.slice(0, 10))} 올림 · ${APV_STATE[a.status][1]}${a.expense_id ? ' · 금액 · 항목을 바꾸면 재정 지출도 같이 바뀌어요' : ''}</p>
     <div class="two"><label class="f">종류<select name="kind">${APV_KINDS.map(k => `<option ${k === a.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
       <label class="f">금액<span class="won-wrap"><input name="amount" class="won-in" inputmode="numeric" autocomplete="off" value="${a.amount != null ? comma(a.amount) : ''}"><i>원</i></span></label></div>
-    <label class="f">무엇이 필요하세요?<input name="title" maxlength="100" value="${esc(a.title)}"></label>
+    <label class="f">요청 사항<input name="title" maxlength="100" value="${esc(a.title)}"></label>
     <div class="two"><label class="f">지출 항목<select name="cat"><option value="">선택 안 함</option>${EXP_CATS.map(c => `<option ${c === a.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
       <label class="f">쓴 날<input type="date" name="spent" value="${a.spent_on || ''}"></label></div>
-    <label class="f">자세한 내용<textarea name="detail" rows="3" maxlength="2000">${esc(a.detail || '')}</textarea></label>
+    <label class="f">세부 사항<textarea name="detail" rows="3" maxlength="2000">${esc(a.detail || '')}</textarea></label>
     <div class="two"><label class="f">언제까지 필요해요?<input type="date" name="want" value="${a.want_by || ''}"></label>
       <label class="f">받을 계좌<input name="payto" maxlength="100" value="${esc(a.pay_to || '')}"></label></div>
     ${a.status !== 'pending' ? `<label class="f">결재 의견<textarea name="comment" rows="2" maxlength="500">${esc(a.owner_comment || '')}</textarea></label>` : ''}
@@ -5021,7 +5021,7 @@ function apvEditDialog(a) {
     e.preventDefault();
     const el = e.target.elements, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
     const title = el.title.value.trim(), amt = el.amount.value.trim() === '' ? null : Math.round(numOf(el.amount.value));
-    if (!title) return fail('무엇이 필요한지 적어 주세요.');
+    if (!title) return fail('요청 사항을 적어 주세요.');
     if (amt != null && !(amt >= 0)) return fail('금액은 숫자로 적어 주세요.');
     const { error } = await SB.rpc('edit_approval', { p_id: a.id, p_kind: el.kind.value, p_title: title, p_amount: amt, p_detail: el.detail.value, p_want_by: el.want.value || null, p_comment: el.comment ? el.comment.value : null,
       p_category: el.cat.value || null, p_spent_on: el.spent.value || null, p_pay_to: el.payto.value || null });
@@ -5455,8 +5455,8 @@ function promoReqDialog(service) {
     after: async () => { await loadPromoReqs(); location.hash = '#promo/requests'; },
     label: () => '',
     fields: [
-      ['title', '무엇이 필요하세요?', { required: true, max: 100, placeholder: '예: 겨울방학 특강 블로그 포스팅 4건' }],
-      ['detail', '자세한 내용', { type: 'area', max: 2000, placeholder: '대상 학년, 강조할 점, 참고할 자료나 원하는 분위기를 적어 주세요.' }],
+      ['title', '요청 사항', { required: true, max: 100, placeholder: '예: 겨울방학 특강 블로그 포스팅 4건' }],
+      ['detail', '세부 사항', { type: 'area', max: 2000, placeholder: '대상 학년, 강조할 점, 참고할 자료나 원하는 분위기를 적어 주세요.' }],
       ['want_by', '언제까지', { type: 'date', half: true }], ['contact', '연락받을 번호', { type: 'tel', max: 50, placeholder: '010-0000-0000', half: true }]
     ]
   });
