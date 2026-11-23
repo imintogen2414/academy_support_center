@@ -6088,6 +6088,8 @@ function formDialog({ title, table, fields: all, row, extra = {}, okText, label,
   $('#dlgCancel').onclick = () => d.close();
   d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
     const inp = d.querySelector(`[name="${b.dataset.pick}"]`);
+    // 여러 줄 칸(특이사항 등)은 지우지 않고 "알레르기: "처럼 이어 적기
+    if (inp.tagName === 'TEXTAREA') { inp.value = `${inp.value.trim() ? `${inp.value.trim()}\n` : ''}${b.dataset.v}: `; inp.focus(); return; }
     inp.value = b.dataset.v;
     b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
   });
@@ -6178,6 +6180,7 @@ function studentDialog(s) {
       ['status', '다니는지', { type: 'select', required: true, options: Object.entries(STU_STATUS).map(([k, [, l]]) => [k, l]), value: 'active', half: true }], ['joined_on', '들어온 날', { type: 'date', value: TODAY, half: true }],
       ['left_on', '그만두는 날 (정해졌으면)', { type: 'date', half: true }],
       ['memo', '메모', { max: 500 }],
+      ['special', s && stuNotes(s.id).some(n => n.pinned) ? `특이사항 더 적기 · 지금: ${stuNotes(s.id).filter(n => n.pinned).map(n => n.body).join(' / ').slice(0, 80)}` : '특이사항 (알레르기 · 하원 방법 · 주의할 점 — 원장님 · 선생님만 봐요)', { type: 'area', own: true, rows: 2, max: 2000, placeholder: '예: 땅콩 알레르기 · 간식 줄 때 꼭 확인 / 수요일은 할머니가 데리러 오셔요', chips: ['알레르기', '하원 방법', '복용하는 약', '주의할 점'] }],
       // 수강생 관리표 칸 (성별 · 구분 · 오전/오후 · 수강 기간)
       ['gender', '성별', { type: 'select', options: ['남', '여'], blank: '안 적음', half: true, more: true }],
       ['track', '구분 (예: 스파르타 · 일반)', { max: 30, half: true, more: true, chips: stuTracks() }],
@@ -6189,17 +6192,28 @@ function studentDialog(s) {
     ],
     moreLabel: '성별 · 구분 · 오전/오후 · 수강 기간 · 문자 동의 (수강생 관리표에 나와요)',
     check: d => d.status === 'left' && !d.left_on ? '그만두는 날을 넣어 주세요.' : d.course_from && d.course_to && d.course_to < d.course_from ? '수강 마무리일이 시작일보다 앞이에요.' : null,
-    // 새 학생: 수강료를 골랐고 "이번 달 청구서도"를 켜면 청구서까지 한 번에
-    ...(!s && can('billing') ? { save: async (d, base) => {
-      const { bill_now, ...row } = d;
-      const { data, error } = await SB.from('students').insert({ ...row, ...base }).select('*').single();
-      if (error) return dbErr(error);
-      if (bill_now && row.tuition_plan_id && (row.status || 'active') === 'active') {
-        const inv = feeInvoice(data);
-        if (inv) { const r = await SB.from('invoices').insert(inv); if (r.error) toast(dbErr(r.error, '청구서를 만들지')); else await loadInvoices(); }
+    // 저장: 새 학생은 수강료를 골랐고 "이번 달 청구서도"를 켜면 청구서까지, 특이사항을 적으면 학생 기록에 "특이사항"(위에 고정)으로 남겨요
+    save: async (d, base) => {
+      const { bill_now, special, ...row } = d;
+      let stu = s;
+      if (s) { const { error } = await SB.from('students').update(row).eq('id', s.id); if (error) return dbErr(error); }
+      else {
+        const { data, error } = await SB.from('students').insert({ ...row, ...base }).select('*').single();
+        if (error) return dbErr(error);
+        stu = data;
+        if (bill_now && row.tuition_plan_id && (row.status || 'active') === 'active') {
+          const inv = feeInvoice(data);
+          if (inv) { const r = await SB.from('invoices').insert(inv); if (r.error) toast(dbErr(r.error, '청구서를 만들지')); else await loadInvoices(); }
+        }
+      }
+      const sp = (special || '').trim();
+      if (sp && stu) {
+        const kind = /알레르기|약|건강|아토피|천식|병|다쳐|부상/.test(sp) ? 'health' : /하원|등원|데리러|픽업|차량/.test(sp) ? 'life' : 'memo';
+        const r = await SB.from('student_notes').insert({ academy_id: REAL.academy.id, student_id: stu.id, kind, day: TODAY, body: sp, pinned: true });
+        if (r.error) toast(dbErr(r.error, '특이사항을 남기지')); else await loadStuNotes();
       }
       return null;
-    } } : {})
+    }
   });
 }
 
