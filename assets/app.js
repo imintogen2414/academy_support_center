@@ -10759,10 +10759,11 @@ function leadListView() {
    상담 중인 분 · 원생 학부모 · 원생 본인을 골라 한 번에. {이름}은 받는 분 이름으로 바뀌어요.
    홍보 문자는 "문자 받기 동의"한 분에게만, 앞에 (광고) · 뒤에 무료 수신거부가 붙고 밤 9시 ~ 아침 8시에는 못 보내요.
    문자 회사 비밀 값이 아직 없으면 번호 · 문구 복사 / 휴대폰 문자 앱으로 열기로 대신 보내요. */
-const SMS_TPL = [['설명회 안내', '[{학원}] {이름}님, 11월 학부모 설명회에 초대합니다. 일시: 11/15(토) 오전 11시 · 장소: 학원 3층. 참석 여부를 회신해 주세요.'],
-  ['체험수업 안내', '[{학원}] {이름}님, 체험수업 예약을 도와드릴게요. 이번 주 화 · 목 오후 5시에 가능해요. 편한 날을 알려 주세요.'],
-  ['등록 혜택', '[{학원}] {이름}님, 이번 달 등록하시면 첫 달 교재비를 지원해 드려요. 상담 문의는 학원으로 연락 주세요.'],
-  ['휴원 안내', '[{학원}] {이름}님, 11/20(목)은 학원 휴원일입니다. 보강 일정은 따로 안내드릴게요.']];
+const SMS_TPL = [['설명회 안내', '{이름}님, 11월 학부모 설명회에 초대합니다. 일시: 11/15(토) 오전 11시 · 장소: 학원 3층. 참석 여부를 회신해 주세요.'],
+  ['체험수업 안내', '{이름}님, 체험수업 예약을 도와드릴게요. 이번 주 화 · 목 오후 5시에 가능해요. 편한 날을 알려 주세요.'],
+  ['등록 혜택', '{이름}님, 이번 달 등록하시면 첫 달 교재비를 지원해 드려요. 상담 문의는 학원으로 연락 주세요.'],
+  ['휴원 안내', '{이름}님, 11/20(목)은 학원 휴원일입니다. 보강 일정은 따로 안내드릴게요.']];
+const smsHead = (acad, ad) => `${ad ? '(광고)' : ''}[학원지원센터 > ${acad}]\n`;
 const smsBytes = t => [...t].reduce((a, c) => a + (c.charCodeAt(0) > 127 ? 2 : 1), 0);
 function smsPeople() {
   const stName = id => (DATA.stages.find(s => s.id === id) || {}).name || '';
@@ -10786,18 +10787,19 @@ async function smsDialog(src = 'lead') {
   const draw = () => {
     const list = P[S.src] || [], groups = [...new Set(list.map(p => p.group).filter(Boolean))];
     const picked = Object.values(P).flat().filter(p => S.picks.has(p.key) && usable(p));
-    const body = (S.ad ? `(광고)[${acad}]\n` : '') + S.text.replaceAll('{학원}', acad) + (S.ad ? '\n무료거부 080-○○○-○○○○' : '');
+    const body = smsHead(acad, S.ad) + S.text.replaceAll('{학원}', acad) + (S.ad ? '\n무료거부 080-○○○-○○○○' : '');
     const bytes = smsBytes(body.replaceAll('{이름}', '홍길동'));
     d.innerHTML = `<form method="dialog" class="dlg wide sms-dlg" id="smsForm" novalidate>
       <h2>단체 문자</h2>
-      <p class="muted small" style="margin:-6px 0 0">${REAL ? (S.ready ? `이번 달 남은 문자 <b>${S.left == null ? '제한 없음' : `${S.left}건`}</b> · 센터 문자 번호로 학원 이름을 붙여 보내요.` : '문자 회사 연결 전이에요. 지금은 번호 · 문구를 복사하거나 휴대폰 문자 앱으로 열어 보내요.') : '예시 계정이라 실제로는 보내지 않아요.'}</p>
+      <p class="muted small" style="margin:-6px 0 0">${REAL ? (S.ready ? `이번 달 남은 문자 <b>${S.left == null ? '제한 없음' : `${S.left}건`}</b> · 센터 문자 번호로 보내고, 맨 앞에 <b>[학원지원센터 &gt; ${esc(acad)}]</b>이 저절로 붙어요.` : '문자 회사 연결 전이에요. 지금은 번호 · 문구를 복사하거나 휴대폰 문자 앱으로 열어 보내요.') : '예시 계정이라 실제로는 보내지 않아요.'}</p>
       <div class="filters">${[['lead', `상담 중인 분 ${P.lead.length}`], ['parent', `원생 학부모 ${P.parent.length}`], ['student', `${famOn() ? '원생 본인' : '수강생'} ${P.student.length}`]].filter(([k]) => P[k].length).map(([k, l]) => `<button type="button" class="${S.src === k ? 'on' : ''}" data-sms-src="${k}">${l}</button>`).join('')}</div>
       <div class="pick-chips">${groups.map(g => `<button type="button" data-sms-grp="${esc(g)}">${esc(g)} 모두</button>`).join('')}<button type="button" data-sms-grp="">모두 풀기</button></div>
       <div class="ro-list sms-list">${list.map(p => `<label class="ro-row ${usable(p) ? '' : 'off'}"><input type="checkbox" data-sms-p="${p.key}" ${S.picks.has(p.key) && usable(p) ? 'checked' : ''} ${usable(p) ? '' : 'disabled'}><b>${esc(p.name || '')}</b><span class="muted small">${esc(p.who)}${p.phone ? ` · ${esc(p.phone)}` : ' · 번호 없음'}</span>${p.ok ? '' : ' <span class="chip mute">홍보 동의 전</span>'}</label>`).join('') || '<p class="muted small">받을 분이 없어요.</p>'}</div>
       <div class="pick-chips"><label><input type="radio" name="ad" value="0" ${S.ad ? '' : 'checked'}><span>안내 문자 <small>수업 · 휴원 · 수납 안내</small></span></label><label><input type="radio" name="ad" value="1" ${S.ad ? 'checked' : ''}><span>홍보 문자 (광고) <small>설명회 · 이벤트 · 등록 혜택</small></span></label></div>
-      ${S.ad ? `<p class="muted small sms-law">홍보 문자는 법으로 <b>문자 받기에 동의한 분</b>에게만, 앞에 <b>(광고)</b>와 학원 이름 · 뒤에 <b>무료 수신거부 번호</b>를 붙여서, <b>밤 9시 ~ 아침 8시를 피해</b> 보내야 해요. 동의는 상담 정보 고치기 · 원생 수정에서 체크해요.${night() ? ' <b class="neg">지금은 보낼 수 없는 시간이에요.</b>' : ''}</p>` : ''}
+      ${S.ad ? `<p class="muted small sms-law">홍보 문자는 법으로 <b>문자 받기에 동의한 분</b>에게만, 앞에 <b>(광고)</b>와 보내는 곳(학원지원센터 &gt; 학원 이름) · 뒤에 <b>무료 수신거부 번호</b>를 붙여서, <b>밤 9시 ~ 아침 8시를 피해</b> 보내야 해요. 동의는 상담 정보 고치기 · 원생 수정에서 체크해요.${night() ? ' <b class="neg">지금은 보낼 수 없는 시간이에요.</b>' : ''}</p>` : ''}
       <div class="pick-chips">${SMS_TPL.map(([t], i) => `<button type="button" data-sms-tpl="${i}">${t}</button>`).join('')}<button type="button" data-sms-name>{이름} 넣기</button></div>
-      <label class="f">문구<textarea name="text" rows="5" maxlength="1500" placeholder="예: [학원] {이름}님, 이번 주 금요일은 휴원입니다.">${esc(S.text)}</textarea></label>
+      <label class="f">문구<textarea name="text" rows="5" maxlength="1500" placeholder="예: {이름}님, 이번 주 금요일은 휴원입니다.">${esc(S.text)}</textarea></label>
+      <p class="muted small" style="margin:0">받는 분 화면: <b>${esc(smsHead(acad, S.ad).trim())}</b> + 문구${S.ad ? ' + 무료거부 번호' : ''}</p>
       <p class="muted small" id="smsInfo" style="margin:0">${bytes <= 90 ? '단문(SMS)' : '장문(LMS)'} · ${bytes}바이트 · {이름}은 받는 분 이름으로 바뀌어요</p>
       ${S.logs.length ? `<details class="feed-done"><summary>최근 보낸 문자 ${S.logs.length}건</summary><div class="list">${S.logs.map(g => `<div class="li"><span class="av" style="background:var(--navy-700)">${ic('chat')}</span><div><div class="t">${md(g.created_at.slice(0, 10))} · ${g.sent}명${g.ad ? ' <span class="chip warn">광고</span>' : ''} <span class="muted small">${esc(g.by_name || '')} · ${esc(g.target || '')}</span></div><div class="d">${esc(g.body.slice(0, 60))}</div></div></div>`).join('')}</div></details>` : ''}
       <p class="msg" id="dlgMsg" hidden></p>
@@ -10805,7 +10807,7 @@ async function smsDialog(src = 'lead') {
         <button class="btn primary" ${!picked.length || (S.ad && night()) || (REAL && S.ready === false) ? 'disabled' : ''}>${picked.length}명에게 보내기</button></div></form>`;
     if (!d.open) d.showModal();
     const f = $('#smsForm'), ta = f.elements.text, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
-    const sync = () => { S.text = ta.value; const b = smsBytes(((S.ad ? `(광고)[${acad}]\n` : '') + S.text.replaceAll('{학원}', acad)).replaceAll('{이름}', '홍길동')); $('#smsInfo').textContent = `${b <= 90 ? '단문(SMS)' : '장문(LMS)'} · ${b}바이트 · {이름}은 받는 분 이름으로 바뀌어요`; };
+    const sync = () => { S.text = ta.value; const b = smsBytes((smsHead(acad, S.ad) + S.text.replaceAll('{학원}', acad)).replaceAll('{이름}', '홍길동')); $('#smsInfo').textContent = `${b <= 90 ? '단문(SMS)' : '장문(LMS)'} · ${b}바이트 · {이름}은 받는 분 이름으로 바뀌어요`; };
     ta.oninput = sync;
     $('#dlgCancel').onclick = () => d.close();
     f.querySelectorAll('[data-sms-src]').forEach(b => b.onclick = () => { S.text = ta.value; S.src = b.dataset.smsSrc; S.picks = new Set(P[S.src].filter(usable).map(p => p.key)); draw(); });

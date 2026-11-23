@@ -1,7 +1,7 @@
 // 단체 문자 보내기: 상담 · 원생 · 학부모 연락처를 골라 한 번에 (원장, 또는 "공지" 권한이 있는 강사)
 //   POST { academy_id, to: [{ phone, name }], text, ad, target }
 // 문구의 {이름}은 받는 사람마다 이름으로 바꿔요. 학원마다 한 달 500건(sms_left), 센터 관리자는 제한 없음.
-// 홍보 문자(ad)는 "(광고)" + 학원 이름을 앞에, 무료 수신거부 번호(SOLAPI_OPTOUT)를 뒤에 붙이고, 밤 9시 ~ 아침 8시에는 보내지 않아요.
+// 모든 문자 맨 앞에 "[학원지원센터 > 학원 이름]", 홍보 문자(ad)는 그 앞에 "(광고)"도 붙이고, 무료 수신거부 번호(SOLAPI_OPTOUT)를 뒤에 붙이고, 밤 9시 ~ 아침 8시에는 보내지 않아요.
 // 보내는 곳은 솔라피(SOLAPI_API_KEY · SOLAPI_API_SECRET · SOLAPI_SENDER) — 키는 Supabase 비밀 값으로, 없으면 not_ready.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -70,8 +70,12 @@ Deno.serve(async req => {
   let text = String(body.text || "").trim();
   if (!text || text.length > 1500) return reply({ error: "bad_text" });
   const { data: acad } = await admin.from("academies").select("name").eq("id", A).maybeSingle();
+  // 받는 분 화면에서 누가 보냈는지 알도록 맨 앞에 [학원지원센터 > 학원 이름] (홍보는 (광고)도) — 화면이 붙인 [학원 이름]은 겹치지 않게 빼요
+  const aname = acad ? String(acad.name || "") : "";
+  text = text.replace(/^\(광고\)\s*/, "").replace(/^\[([^\]\n]{0,60})\]\s*/, (m, inner: string) => (inner.includes("학원지원센터") || (aname && inner.trim() === aname) ? "" : m)).trim();
+  if (!text) return reply({ error: "bad_text" });
+  text = `${ad ? "(광고)" : ""}[학원지원센터 > ${aname || "학원"}]\n${text}`;
   if (ad) {
-    if (!text.startsWith("(광고)")) text = `(광고)[${acad ? acad.name : ""}]\n${text}`;
     if (env("SOLAPI_OPTOUT") && !text.includes(digits(env("SOLAPI_OPTOUT")).slice(-4))) text += `\n무료거부 ${env("SOLAPI_OPTOUT")}`;
   }
   // 받는 사람: 휴대폰만, 같은 번호는 한 번
