@@ -1,0 +1,330 @@
+<title>토익 인바디 리포트</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+@@CSS@@
+
+<div class="wrap">
+
+  <div class="topbar">
+    <span><b>INTO</b> LANGUAGE ACADEMY</span>
+    <span>TOEIC INBODY</span>
+  </div>
+
+  <!-- ============ LANDING ============ -->
+  <section id="v-intro">
+    <div class="hero">
+      <p class="eyebrow">SELF TEST · 17 QUESTIONS</p>
+      <h1 class="metal">토익 인바디</h1>
+      <p class="sub">듣기 6 + 읽기 8 + 운영 3문항 · 약 11분</p>
+      <p class="tagline">총점은 몸무게일 뿐입니다. 맞힌 개수가 아니라 <em>확신하고 맞힌 개수</em>로 실력을 잽니다.</p>
+    </div>
+
+    <div class="catch">
+      <p>다시 돌아오지 않을 2026년 연말,<br><em>토익의 맷집을 키우라!</em></p>
+    </div>
+
+    <div class="name-box">
+      <label for="f-name">이름</label>
+      <input id="f-name" name="name" type="text" autocomplete="name" maxlength="20" placeholder="결과지에 표시됩니다 (선택)">
+      <div class="score-in">
+        <div>
+          <label for="f-first">처음 받은 토익 점수</label>
+          <input id="f-first" name="first" type="number" inputmode="numeric" min="10" max="990" step="5" placeholder="예: 420">
+        </div>
+        <div>
+          <label for="f-recent">가장 최근 토익 점수</label>
+          <input id="f-recent" name="recent" type="number" inputmode="numeric" min="10" max="990" step="5" placeholder="예: 630">
+        </div>
+      </div>
+      <p class="name-note">최근 점수는 실제 응시 결과이므로 예측에서 가장 큰 비중을 차지합니다. 넣을수록 예상 구간이 정확해집니다.</p>
+    </div>
+
+    <div class="stages">
+      <div class="stage-card">
+        <div class="k">STAGE 1</div>
+        <div class="t">듣기 6문항</div>
+        <div class="d">Part 2 세 문항과 Part 3 대화 한 세트. 실제 음원으로 진행합니다.</div>
+      </div>
+      <div class="stage-card">
+        <div class="k">STAGE 2</div>
+        <div class="t">읽기 8문항</div>
+        <div class="d">Part 5 여섯 문항에 Part 6·7 한 문항씩.</div>
+      </div>
+      <div class="stage-card">
+        <div class="k">STAGE 3</div>
+        <div class="t">운영 3문항</div>
+        <div class="d">시험장에서 시간과 판단을 어떻게 쓰는지.</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px">
+      <button class="btn" id="startBtn">인바디 측정 시작</button>
+    </div>
+
+    <p class="fineprint">
+      · 듣기는 소리가 납니다. 음량을 켜거나 이어폰을 준비해 주세요. 소리를 쓸 수 없으면 대본 보기로 진행할 수 있습니다.<br>
+      · 음원은 문항당 한 번 더 듣기까지만 됩니다. 실제 시험처럼 한 번에 듣는 쪽을 권합니다.<br>
+      · 읽기 문항은 Part 5·6·7 출제 유형을 따라 자체 제작한 문제입니다.<br>
+      · 예상 점수 구간은 14문항과 입력한 성적으로 낸 추정이며, 실제 시험 점수를 보장하지 않습니다.<br>
+      · 입력한 이름과 점수는 결과 화면 표시에만 쓰이고 저장되지 않습니다.
+    </p>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <section id="v-quiz" hidden>
+    <div class="hud">
+      <span class="stage" id="qStage">STAGE 1</span>
+      <span><b id="qNow">01</b> <span id="qTotal">/ 6</span></span>
+      <span id="qTimer">00:00</span>
+    </div>
+    <div class="bar" id="qBar" aria-hidden="true"></div>
+
+    <p class="qtag" id="qTag"></p>
+
+    <div class="player" id="qPlayer" hidden>
+      <div class="lead" id="playLead"></div>
+      <audio id="au" preload="auto"></audio>
+      <button type="button" class="play-btn" id="playBtn">
+        <span class="wave" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span id="playLabel">재생하기</span>
+      </button>
+      <div class="track" aria-hidden="true"><i id="trackFill"></i></div>
+      <div class="player-row">
+        <button type="button" class="btn-line" id="replayBtn" disabled>한 번 더 듣기</button>
+        <button type="button" class="btn-line" id="scriptBtn">대본 보기</button>
+      </div>
+      <p class="player-note" id="playerNote" hidden></p>
+      <div class="script" id="scriptBox" hidden></div>
+    </div>
+
+    <div class="setlist" id="qSet" hidden></div>
+    <div class="passage" id="qPassage" hidden></div>
+    <p class="stem" id="qStem" hidden></p>
+    <div class="opts" id="qOpts"></div>
+
+    <div style="margin-top: 22px" id="goWrap" hidden>
+      <button class="btn" id="goBtn" disabled>세 문항 모두 답해 주세요</button>
+    </div>
+
+    <div class="conf" id="qConf" hidden>
+      <div class="q">방금 문항, 얼마나 확신했나요?</div>
+      <div class="row">
+        <button type="button" class="sure" data-c="sure">확신했다</button>
+        <button type="button" class="half" data-c="half">반반이었다</button>
+        <button type="button" class="guess" data-c="guess">찍었다</button>
+      </div>
+      <p class="conf-note">답을 잘못 골랐다면 위에서 다시 고르면 바뀝니다.</p>
+    </div>
+
+    <div class="qfoot">
+      <button class="btn-line" id="backBtn">← 이전</button>
+      <span class="hint" id="qHint"></span>
+    </div>
+  </section>
+
+  <!-- ============ 분석 연출 ============ -->
+  <section id="v-calc" hidden>
+    <div class="calc">
+      <div class="ring" aria-hidden="true"></div>
+      <h2 class="metal">인바디 측정 중</h2>
+      <div class="lines" id="calcLines"></div>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section id="v-result" hidden>
+    <div class="res-head">
+      <p class="eyebrow pink">INBODY RESULT</p>
+      <p class="who" id="rWho">당신의 토익 체형은</p>
+      <h1 class="metal" id="rName">청해 린머슬형</h1>
+      <p class="codeline" id="rCode">LMP</p>
+      <p class="tline" id="rLine"></p>
+      <p class="score100">인바디 점수 <b id="rScore">0</b> / 100<span id="rGrade"></span></p>
+    </div>
+
+    <div class="predict">
+      <div class="k">NEXT SCORE ESTIMATE</div>
+      <div class="range" id="pRange">—</div>
+      <div class="sub" id="pSub"></div>
+      <div class="delta" id="pDelta" hidden></div>
+    </div>
+
+    <div class="chart" id="pChartWrap" hidden></div>
+
+    <div class="cards">
+      <div class="card c1">
+        <div class="body">
+          <div class="title">표면 점수</div>
+          <div class="cond-k">맞힌 개수를 그대로 환산한 예상 총점</div>
+          <div class="cond-v" id="cSurface">—</div>
+        </div>
+        <div class="badge" id="bSurface">0/14<br>정답</div>
+      </div>
+      <div class="card c2">
+        <div class="body">
+          <div class="title">실질 점수</div>
+          <div class="cond-k">찍어서 맞힌 문항을 걷어낸 예상 총점</div>
+          <div class="cond-v" id="cReal">—</div>
+        </div>
+        <div class="badge" id="bReal">0/14<br>확신</div>
+      </div>
+      <div class="card c3">
+        <div class="body">
+          <div class="title">추측 의존도</div>
+          <div class="cond-k">맞힌 문항 중 반반·찍음의 비중</div>
+          <div class="cond-v" id="cFat">—</div>
+        </div>
+        <div class="badge">체지방<br>률</div>
+      </div>
+      <div class="card c4">
+        <div class="body">
+          <div class="title">오개념 문항</div>
+          <div class="cond-k">확신했는데 틀린 문항</div>
+          <div class="cond-v" id="cWrongSure">—</div>
+        </div>
+        <div class="badge">혼자<br>못 고침</div>
+      </div>
+    </div>
+
+    <p class="fineprint">
+      * 예상 구간은 14문항과 입력한 성적으로 낸 추정이며, 실제 시험 점수를 보장하지 않습니다.<br>
+      * 오개념 문항은 모르는 문항보다 위험합니다. 틀린 줄 모르면 고칠 기회도 없습니다.
+    </p>
+
+    <div class="save-box" id="saveBox" hidden>
+      <div class="save-grid">
+        <div class="save-stage" aria-hidden="true">
+          <div class="sheet3d">
+            <div class="pg b2"></div>
+            <div class="pg b1"></div>
+            <div class="front">
+              <div class="sh-brand">INTO · TOEIC INBODY</div>
+              <div class="sh-title" id="shTitle">청해 린머슬형</div>
+              <div class="sh-rule"></div>
+              <div class="sh-k">NEXT SCORE</div>
+              <div class="sh-range" id="shRange">— –  —</div>
+              <div class="sh-bars">
+                <i><b id="shB1" style="width:0;background:#3BE7FF"></b></i>
+                <i><b id="shB2" style="width:0;background:#5BFFB0"></b></i>
+                <i><b id="shB3" style="width:0;background:#FFC53D"></b></i>
+              </div>
+              <div class="sh-foot">토익의<br>맷집을 키우라!</div>
+            </div>
+          </div>
+        </div>
+        <div class="save-side">
+          <div class="t">결과지 저장</div>
+          <p>측정 결과를 세로 한 장으로 정리해 드립니다. 저장할지 묻는 창이 뜨면 확인해 주세요.</p>
+          <div class="save-row">
+            <button class="btn-3d" id="savePng">이미지로 저장</button>
+            <button class="btn-3d" id="savePdf">PDF로 저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="sec">확신도 교차 분석</h2>
+    <p class="copy dim" style="font-size: 14px; margin-top: 12px">맞았는지 틀렸는지보다, 어떻게 맞고 어떻게 틀렸는지가 다음에 할 공부를 정합니다.</p>
+    <div class="cross" id="rCross"></div>
+
+    <h2 class="sec">영역별 정답률</h2>
+    <div id="rSections"></div>
+
+    <h2 class="sec">풀이 속도</h2>
+    <div id="rSpeed"></div>
+
+    <h2 class="sec">구성 분석</h2>
+    <div class="axes" id="rAxes"></div>
+
+    <h2 class="sec">진단</h2>
+    <div id="rDesc"></div>
+
+    <h2 class="sec">시험장에서의 당신</h2>
+    <div class="scene" id="rScene"></div>
+
+    <div class="flags">
+      <div class="flag good"><div class="k">강점</div><ul class="flist" id="rGood"></ul></div>
+      <div class="flag risk"><div class="k">약점</div><ul class="flist" id="rRisk"></ul></div>
+    </div>
+
+    <div class="myth" id="rMyth"></div>
+
+    <h2 class="sec">학습 궁합</h2>
+    <div class="fitgrid">
+      <div class="fit ok"><div class="k">잘 맞아요</div><ul class="flist" id="rFit"></ul></div>
+      <div class="fit no"><div class="k">피하세요</div><ul class="flist" id="rAvoid"></ul></div>
+    </div>
+
+    <h2 class="sec">8가지 체형 중 나의 자리</h2>
+    <div class="legend">
+      <div><b>L / R</b><span>듣기가 앞서면 L(청해), 읽기가 앞서면 R(독해)</span></div>
+      <div><b>M / F</b><span>확신하고 맞히면 M(근육), 찍어서 맞히면 F(지방)</span></div>
+      <div><b>P / T</b><span>페이스를 지키면 P(안정), 시간에 쫓기면 T(흔들림)</span></div>
+    </div>
+    <div class="matrix" id="rMatrix"></div>
+
+    <h2 class="sec">4주 처방</h2>
+    <div id="rRx"></div>
+
+    <h2 class="sec">오답 리뷰</h2>
+    <div class="review" id="rReview"></div>
+
+    <div class="cta">
+      <p class="eyebrow">NEXT STEP</p>
+      <div class="h metal">자가 측정은 체중계,<br>정밀 측정은 인바디</div>
+      <p>오늘 재신 건 윤곽입니다. 14문항으로는 어느 쪽이 약한지까지만 보입니다. 정밀 측정은 Part 1부터 7까지 60문항으로 재서, <strong>약한 이유</strong>를 수치로 분리해 드립니다.</p>
+
+      <div class="cmp">
+        <div class="cmp-col">
+          <div class="cmp-k">오늘 자가 측정</div>
+          <div class="cmp-n">14문항 · 11분</div>
+          <ul class="cmp-l">
+            <li>8가지 체형 판정</li>
+            <li>추측 의존도</li>
+            <li>LC · RC 균형</li>
+            <li>4주 처방 3가지</li>
+          </ul>
+        </div>
+        <div class="cmp-col pro">
+          <div class="cmp-k">학원 정밀 측정</div>
+          <div class="cmp-n">60문항 · 20분</div>
+          <ul class="cmp-l">
+            <li>Part 1–7 전 파트 측정</li>
+            <li>4대 체성분 수치화</li>
+            <li>A4 결과지 발급</li>
+            <li>4주 뒤 재측정 비교</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="cmp-k" style="margin-top: 24px">정밀 측정에서만 나오는 수치</div>
+      <div class="chips">
+        <span><b>어휘 근육량</b>아는 단어와 쓰는 단어의 격차</span>
+        <span><b>문법 골격근</b>문장 구조를 세우는 힘</span>
+        <span><b>청해 지구력</b>후반부 집중력 하락 폭</span>
+        <span><b>독해 속도</b>분당 처리 단어 수</span>
+      </div>
+
+      <p class="cta-last">오늘 결과지를 들고 오시면 상담 때 같이 봅니다. 같은 점수대여도 <strong>4주로 되는 체형</strong>이 있고 <strong>8주가 필요한 체형</strong>이 있습니다. 어느 쪽인지 정하고 시작하셔야 합니다.</p>
+    </div>
+
+    <div class="catch" style="margin-top: 30px">
+      <p>다시 돌아오지 않을 2026년 연말,<br><em>토익의 맷집을 키우라!</em></p>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap">
+      <button class="btn-line" id="copyBtn">결과 복사하기</button>
+      <button class="btn-line" id="againBtn">다시 측정하기</button>
+    </div>
+
+    <p class="foot">해당 테스트는 참고용이며 실제 시험 점수를 예측하거나 보장하지 않습니다.</p>
+  </section>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+@@JS@@
