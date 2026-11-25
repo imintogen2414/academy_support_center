@@ -1,3 +1,17 @@
+/*__MP3SHIM__*/
+(function(){
+  var B="https://jpvpboc1cxpjrwn9.public.blob.vercel-storage.com/inbody/audio/";
+  var M={
+    "audio/t2-p2-28.mp3": B+"t2-p2-28.mp3",
+    "audio/t2-p2-29.mp3": B+"t2-p2-29.mp3",
+    "audio/t2-p2-30.mp3": B+"t2-p2-30.mp3",
+    "audio/t2-p3-32-34.mp3": B+"t2-p3-32-34.mp3"
+  };
+  var cur = window.__AUDIO || {};
+  var k;
+  for (k in M) { cur[k] = M[k]; }
+  window.__AUDIO = cur;
+})();
 
 (function () {
   "use strict";
