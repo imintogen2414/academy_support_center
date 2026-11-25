@@ -5604,7 +5604,7 @@ function studentsPage() {
   <section class="card"><div class="table">
     <div class="tr th"><span>학생</span><span>반</span><span>학부모</span><span>출석률</span><span>${ROLE === 'teacher' ? '' : '10월 수납'}</span></div>
     ${list.map(s => `
-      <div class="tr"><span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${s.name}</b></a> <span class="muted small">${s.grade}</span>${noteChip(s.id)}</span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${telLink(s.phone)}</span></span><span class="num">${s.attend}%</span><span>${ROLE === 'teacher' ? '' : s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
+      <div class="tr"><span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${s.name}</b></a> <span class="muted small">${s.grade}</span>${noteChip(s.id)}${checkChip(s.id)}</span><span>${s.cls}</span><span>${s.parent} <span class="muted small">${telLink(s.phone)}</span></span><span class="num">${s.attend}%</span><span>${ROLE === 'teacher' ? '' : s.paid ? '<span class="chip good">완료</span>' : '<span class="chip crit">미납</span>'}</span></div>`).join('')}
   </div></section>`;
 }
 
@@ -5807,7 +5807,7 @@ function realStudentsPage() {
     <div class="tr th sv"><span>${famOn() ? '학생' : '수강생'}</span><span>반</span><span>${famOn() ? '학부모' : '연락처'}</span><span>${bill ? `수강료 · ${+TODAY.slice(5, 7)}월` : '메모'}</span><span></span></div>
     ${list.map(s => `
       <div class="tr sv ${(s.status || 'active') === 'left' ? 'gone' : ''}">
-        <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${stuStChip(s)}${noteChip(s.id)}${canEdit ? by(s) : ''}</span>
+        <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${stuStChip(s)}${noteChip(s.id)}${checkChip(s.id)}${canEdit ? by(s) : ''}</span>
         <span>${esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
         <span>${famOn() ? `${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>` : telLink(s.phone || s.parent_phone) || '-'}${canEdit && appOn() ? appLinked(s.id) : ''}</span>
         ${bill ? feeCell(s) : `<span class="muted small">${esc(s.memo || '')}</span>`}
@@ -5911,7 +5911,7 @@ function studentDetail(id) {
   const info = card('기본 정보', `${v.info.map(([k, val]) => `<div class="set-row"><span>${k}</span><b>${val}</b></div>`).join('')}${v.memo ? `<p class="d pre" style="margin:8px 0 0">${esc(v.memo)}</p>` : ''}`);
   const acts = REAL ? `<button class="btn" data-edit-student="${id}">${ic('pen')}정보 고치기</button>` : '';
   return head(esc(v.name), [v.grade, v.cls].filter(Boolean).map(esc).join(' · ') + (v.parent && famOn() ? ` · 학부모 ${esc(v.parent)}` : ''), acts) + `
-  <div class="stu-grid">${contact}${stuNotesCard(id, v.leads)}${attend}${bills}${leads}${todos}${reps}${recStuCard(id)}${info}</div>`;
+  <div class="stu-grid">${contact}${stuNotesCard(id, v.leads)}${stuChecksCard(id)}${attend}${bills}${leads}${todos}${reps}${recStuCard(id)}${info}</div>`;
 }
 
 // 원생과 이어진 학부모·학생 계정
@@ -9016,6 +9016,9 @@ function bind() {
   on('[data-act="roster"]', rosterDialog);
   on('[data-stu-st]', b => { STU_ST = b.dataset.stuSt; render(); });
   on('[data-sn-add]', b => stuNoteDialog(b.dataset.snAdd));
+  on('[data-stck-add]', b => stuCheckDialog(b.dataset.stckAdd));
+  on('[data-stck-tog]', b => stuCheckToggle(b.dataset.stckTog));
+  on('[data-stck-del]', b => stuCheckDel(b.dataset.stckDel));
   on('[data-sn-all]', b => { STU_NOTE_F = 'all'; stuNoteDialog(b.dataset.snAll); });
   on('#view [data-sn-edit]', b => stuNoteDialog(b.dataset.snStu, b.dataset.snEdit));
   on('[data-act="addStudent"]', () => REAL ? studentDialog(null) : toast('예시 계정에서는 추가할 수 없어요'));
@@ -10068,7 +10071,7 @@ async function boot() {
       approvals: [], reports: [], library: [], libFolders: [], library_folders: [], payroll: [], autoLogs: [], timetable: [], events: [], todos: [], todoDay: TODAY, family: [], notices: [], noticeStats: {}, promoReqs: [], kids: [], kidAttend: [], kidBills: [], reads: new Set(), cnews: [], cnewsRead: new Set() };
     useAcademy();
     await loadServices();
-    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies(), loadLeadNotes(), loadStuNotes(), loadExt()]);
+    if (ROLE === 'owner' || ROLE === 'teacher') await Promise.all([loadStudents(), loadLeads(), loadAttendance(), loadTraining(), loadApprovals(), loadPlans(), loadSupplies(), loadLeadNotes(), loadStuNotes(), loadStuChecks().catch(() => { REAL.stuChecks = []; }), loadExt()]);
     if (ROLE === 'owner') await Promise.all([loadTaxProfiles(), loadTeacherClasses(), loadInvite(), loadInvoices(), loadExpenses(), loadIncomes(), loadFixed(), loadAccounts(), loadPaperwork(), loadJobs(), loadPartnerApps(),
       loadFamilyMembers(), loadNotices(), loadPromoReqs(), loadTasks(), loadPayroll(), loadAutoLogs(), loadStaffPerms(), loadCnews()]);
     // 강사: 기본 + 원장님이 켜 준 권한의 자료만 (권한이 없으면 DB도 돌려주지 않아요)
@@ -10600,6 +10603,99 @@ function yearReport(y) {
   toast(`${y}년 결산서를 만들었어요`);
 }
 
+/* ---------- 학생별 체크리스트 (student_checks): 학생마다 챙길 일을 적고 하나씩 체크 (원장 · 강사만) ----------
+   입학 서류 받기 · 교재 주기 · 학부모 앱 연결처럼 학생마다 다른 일을. 같은 반 · 원생 모두에게 한 번에 넣을 수도 있어요. */
+const CHECK_PRESETS = ['입학 서류 받기', '교재 주기', '레벨테스트', '학부모 앱 연결', '첫 상담', '수강료 안내', '개인정보 동의서', '사진 동의서', '차량 안내'];
+let DEMO_STU_CHECKS = null;
+function demoStuChecks() {
+  if (DEMO_STU_CHECKS) return DEMO_STU_CHECKS;
+  const mine = DATA.students.filter(x => DEMO_MY_CLASSES.includes(x.cls)), other = DATA.students.filter(x => !DEMO_MY_CLASSES.includes(x.cls));
+  const st = [mine[0], other[0], mine[1]].filter(Boolean), o = DATA.users.owner.name, t = DATA.users.teacher.name;
+  const rows = [];
+  if (st[0]) rows.push([st[0], '입학 서류 받기', true, o, null], [st[0], '교재 주기', true, t, null], [st[0], '학부모 앱 연결', false, null, 3], [st[0], '레벨테스트 다시 보기', false, null, -2]);
+  if (st[1]) rows.push([st[1], '개인정보 동의서', false, null, 5], [st[1], '교재 주기', true, o, null]);
+  if (st[2]) rows.push([st[2], '첫 상담', false, null, null]);
+  DEMO_STU_CHECKS = rows.map(([x, title, done, who, due], i) => ({ id: `ck${i}`, student_id: x.id, title, done, done_by_name: who, done_at: done ? addDays(TODAY, -i - 1) : null, due: due == null ? null : addDays(TODAY, due), by_name: o, by_id: null, created_at: addDays(TODAY, -10 + i) }));
+  return DEMO_STU_CHECKS;
+}
+const stuChecks = sid => (REAL ? REAL.stuChecks || [] : demoStuChecks()).filter(c => c.student_id === sid)
+  .sort((a, b) => (a.done - b.done) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.created_at).localeCompare(String(b.created_at)));
+async function loadStuChecks() {
+  const { data } = await SB.from('student_checks').select('*').eq('academy_id', REAL.academy.id).order('created_at').limit(10000);
+  REAL.stuChecks = data || [];
+}
+// 원생 명단 이름 옆: 아직 안 한 게 있으면 "체크 2/5"
+const checkChip = sid => { const l = stuChecks(sid), d = l.filter(c => c.done).length; return l.length && d < l.length ? ` <span class="chip info" title="${esc(l.filter(c => !c.done).map(c => c.title).join(' / '))}">${ic('check')}체크 ${d}/${l.length}</span>` : ''; };
+const canCheckDel = c => !REAL || ROLE === 'owner' || c.by_id === USER.id;
+function stuChecksCard(sid) {
+  const l = stuChecks(sid), d = l.filter(c => c.done).length;
+  return `<section class="card stck"><div class="card-head"><h2>체크리스트 <span class="muted small">${l.length ? `${d}/${l.length} 끝` : ''}</span></h2><span class="btns"><button class="btn sm primary" data-stck-add="${sid}">${ic('plus')}항목 넣기</button></span></div>
+    ${l.length ? `${d ? `<div class="stck-bar"><i style="width:${Math.round(d / l.length * 100)}%"></i></div>` : ''}<ul class="stck-list">${l.map(c => {
+      const late = !c.done && c.due && c.due < TODAY;
+      return `<li class="${c.done ? 'done' : ''}"><button type="button" class="stck-box" data-stck-tog="${c.id}" aria-pressed="${c.done}" aria-label="${esc(c.title)} ${c.done ? '체크 풀기' : '체크하기'}">${c.done ? ic('check') : ''}</button>
+        <div><b>${esc(c.title)}</b>${c.due && !c.done ? ` <span class="chip ${late ? 'crit' : 'mute'}">${md(c.due)}까지</span>` : ''}${c.done ? `<span class="muted small">${md(String(c.done_at || '').slice(0, 10))} ${esc(c.done_by_name || '')} 체크</span>` : ''}</div>
+        ${canCheckDel(c) ? `<button type="button" class="stck-x" data-stck-del="${c.id}" aria-label="${esc(c.title)} 지우기">×</button>` : ''}</li>`; }).join('')}</ul>`
+      : '<p class="muted" style="margin:0">입학 서류 · 교재 · 앱 연결처럼 이 학생에게 챙길 일을 넣고 하나씩 체크해요. 같은 반 학생 모두에게 한 번에 넣을 수도 있어요.</p>'}
+  </section>`;
+}
+async function stuCheckToggle(id) {
+  const c = (REAL ? REAL.stuChecks : demoStuChecks()).find(x => x.id === id); if (!c) return;
+  if (!REAL) { c.done = !c.done; c.done_at = c.done ? new Date().toISOString() : null; c.done_by_name = c.done ? ME.name : null; return render(); }
+  const { error } = await SB.from('student_checks').update({ done: !c.done }).eq('id', id);
+  if (error) return toast(dbErr(error));
+  await loadStuChecks(); render();
+}
+async function stuCheckDel(id) {
+  const c = (REAL ? REAL.stuChecks : demoStuChecks()).find(x => x.id === id); if (!c) return;
+  if (!confirm(`"${c.title}"을(를) 지울까요?`)) return;
+  if (!REAL) { DEMO_STU_CHECKS = demoStuChecks().filter(x => x.id !== id); render(); return toast('지웠어요 (예시)'); }
+  const { error } = await SB.from('student_checks').delete().eq('id', id);
+  if (error) return toast(dbErr(error));
+  await loadStuChecks(); render(); toast('지웠어요');
+}
+// 항목 넣기: 이 학생만 / 같은 반 모두 / 원생 모두
+function stuCheckDialog(sid) {
+  const x = stuById(sid); if (!x) return;
+  const cls = REAL ? x.class_name : x.cls, pool = (REAL ? REAL.students : DATA.students.filter(s => demoMine(s.cls)));
+  const same = cls ? pool.filter(s => (REAL ? s.class_name : s.cls) === cls) : [];
+  const d = dialogEl();
+  d.innerHTML = `<form method="dialog" class="dlg" id="ckForm" novalidate>
+    <h2>체크리스트 항목 넣기</h2>
+    <p class="muted small" style="margin:-6px 0 0">${esc(x.name)}${cls ? ` · ${esc(cls)}` : ''} · 원장님 · 선생님만 봐요</p>
+    <label class="f">챙길 일<input name="title" maxlength="100" placeholder="예: 입학 서류 받기" autofocus></label>
+    <div class="pick-chips">${CHECK_PRESETS.map(t => `<button type="button" data-ck-pre="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    <label class="f">언제까지 (선택)<input type="date" name="due"></label>
+    <div class="f">누구에게<div class="pick-chips">
+      <label><input type="radio" name="who" value="one" checked><span>${esc(x.name)}만</span></label>
+      ${same.length > 1 ? `<label><input type="radio" name="who" value="cls"><span>${esc(cls)} 모두 ${same.length}명</span></label>` : ''}
+      ${pool.length > 1 ? `<label><input type="radio" name="who" value="all"><span>다니는 원생 모두 ${pool.length}명</span></label>` : ''}</div></div>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">${ic('plus')}넣기</button></div></form>`;
+  d.showModal();
+  const f = $('#ckForm'), el = f.elements, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  $('#dlgCancel').onclick = () => d.close();
+  f.querySelectorAll('[data-ck-pre]').forEach(b => b.onclick = () => { el.title.value = b.dataset.ckPre; el.title.focus(); });
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const title = el.title.value.trim(), due = el.due.value || null, who = el.who.value;
+    if (!title) return fail('챙길 일을 적어 주세요.');
+    const ids = who === 'cls' ? same.map(s => s.id) : who === 'all' ? pool.map(s => s.id) : [sid];
+    // 같은 학생에게 같은 이름의 안 끝난 항목이 있으면 건너뛰어요
+    const has = new Set((REAL ? REAL.stuChecks || [] : demoStuChecks()).filter(c => c.title === title && !c.done).map(c => c.student_id));
+    const add = ids.filter(id => !has.has(id));
+    if (!add.length) return fail('이미 넣어 둔 항목이에요.');
+    if (!REAL) {
+      add.forEach((id, i) => demoStuChecks().push({ id: `ck${Date.now()}${i}`, student_id: id, title, due, done: false, by_name: ME.name, created_at: new Date().toISOString() }));
+      d.close(); render(); return toast(`${add.length}명에게 넣었어요 (예시라서 새로 고치면 사라져요)`);
+    }
+    const btn = f.querySelector('.btn.primary'); btn.disabled = true;
+    const { error } = await SB.from('student_checks').insert(add.map(id => ({ academy_id: REAL.academy.id, student_id: id, title, due })));
+    btn.disabled = false;
+    if (error) return fail(dbErr(error));
+    await loadStuChecks(); d.close(); render(); toast(add.length > 1 ? `${add.length}명에게 넣었어요${ids.length > add.length ? ` · 이미 있는 ${ids.length - add.length}명은 건너뜀` : ''}` : '넣었어요');
+  };
+}
+
 /* ---------- 원생 기록 (student_notes): 학생마다 특이사항 · 상담 기록이 날짜별로 쌓여요 (원장 · 강사만) ----------
    특이사항(pinned)은 학생 한 명 보기 맨 위와 원생 명단 이름 옆에 늘 보여요. 등록 전 상담 일지(lead_notes)도 같은 줄에 이어 보여요. */
 const STU_NOTE_KIND = { consult: ['학생 상담', 'chat'], parent: ['학부모 상담', 'phone'], study: ['학습', 'pen'], life: ['생활 · 태도', 'users'], health: ['건강 · 안전', 'shield'], memo: ['메모', 'doc'] };
@@ -10922,12 +11018,12 @@ const UNDO_TBL = {
   students: ['원생', 'users'], attendance: ['출결', 'attend'], invoices: ['수납 · 청구', 'card'], expenses: ['나간 돈', 'chart'], incomes: ['들어온 돈', 'chart'],
   paperwork: ['서류', 'doc'], payroll: ['원천세 계산', 'calc'], timetable: ['시간표', 'cal'], academy_events: ['일정', 'cal'], notices: ['공지', 'notice'],
   library_items: ['자료실', 'doc'], library_folders: ['자료실 폴더', 'doc'], tuition_plans: ['정해 둔 수강료', 'card'], discount_presets: ['할인', 'card'],
-  fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'], student_notes: ['원생 기록', 'doc'],
+  fixed_costs: ['매달 나가는 돈', 'chart'], supplies: ['비품 · 교재', 'doc'], leads: ['상담 · 등록', 'leads'], lead_notes: ['상담 일지', 'leads'], student_notes: ['원생 기록', 'doc'], student_checks: ['체크리스트', 'check'],
   approvals: ['결재 승인', 'check'],
   student_todos: ['오늘 할 일', 'check'], growth_reports: ['성장 리포트', 'doc'], fin_accounts: ['통장', 'card'], abroad_promos: ['유학 안내', 'globe'],
   academy_titles: ['직책', 'shield'], app_records: ['학습 기록', 'chart'], job_posts: ['채용 공고', 'brief'], payee_accounts: ['받는 사람 계좌', 'card']
 };
-const UNDO_GROUPS = [['all', '전체'], ['people', '원생 · 상담', ['students', 'student_notes', 'leads', 'lead_notes', 'student_todos', 'growth_reports', 'app_records']], ['money', '돈 · 수납', ['invoices', 'expenses', 'incomes', 'payroll', 'tuition_plans', 'discount_presets', 'fixed_costs', 'fin_accounts', 'payee_accounts']],
+const UNDO_GROUPS = [['all', '전체'], ['people', '원생 · 상담', ['students', 'student_notes', 'student_checks', 'leads', 'lead_notes', 'student_todos', 'growth_reports', 'app_records']], ['money', '돈 · 수납', ['invoices', 'expenses', 'incomes', 'payroll', 'tuition_plans', 'discount_presets', 'fixed_costs', 'fin_accounts', 'payee_accounts']],
   ['attend', '출결', ['attendance']], ['sched', '시간표 · 일정', ['timetable', 'academy_events']], ['etc', '공지 · 자료 · 그 밖', ['notices', 'library_items', 'library_folders', 'paperwork', 'supplies', 'abroad_promos', 'academy_titles', 'job_posts']]];
 const UNDO_ACT = { insert: '추가', update: '고침', delete: '지움' };
 const UNDO_FIELD = { name: '이름', title: '제목', amount: '금액', list_amount: '원가', class_name: '반', status: '상태', day: '날짜', memo: '메모', category: '항목', paid_at: '납부한 날',
@@ -11045,7 +11141,7 @@ const PAGE_UNDO = [
   ['admin/attend', ['attendance']], ['admin/billing', ['invoices', 'tuition_plans', 'discount_presets']],
   ['admin/finance', ['expenses', 'incomes', 'fixed_costs', 'fin_accounts', 'invoices']], ['admin/paper', ['paperwork']], ['admin/tax', ['paperwork', 'payroll']],
   ['admin/payroll', ['payroll', 'payee_accounts', 'expenses']], ['admin/supplies', ['supplies', 'expenses']], ['admin/approvals', ['approvals', 'expenses']], ['admin/buy', ['approvals', 'expenses', 'supplies']], ['approvals', ['approvals']],
-  ['members/students', ['students', 'student_notes', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
+  ['members/students', ['students', 'student_notes', 'student_checks', 'invoices', 'tuition_plans', 'discount_presets']], ['members/leads', ['leads', 'lead_notes', 'students', 'invoices']],
   ['members/todos', ['student_todos']], ['members/reports', ['growth_reports']], ['members/records', ['app_records']], ['members/notices', ['notices']],
   ['schedule', ['timetable', 'academy_events']], ['library', ['library_items', 'library_folders']],
   ['teachers/hire', ['job_posts']], ['teachers/roles', ['academy_titles']], ['mou/abroad', ['abroad_promos']]];
