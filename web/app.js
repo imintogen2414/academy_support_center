@@ -1266,6 +1266,23 @@
       sections: sectionRows, cross: CROSS, recent: recentScore, first: firstScore
     };
 
+    try {
+      var spent = 0, ti;
+      for (ti = 0; ti < times.length; ti++) { if (typeof times[ti] === "number") { spent += times[ti]; } }
+      sendStats({
+        name: who ? String(who).slice(0, 40) : null,
+        code: code, type_name: t.name, score100: score100, grade: grade,
+        p_lo: pLo, p_hi: pHi, first_score: firstScore, recent_score: recentScore,
+        correct: correct, n: N_SCORED,
+        lc_correct: lcC, n_lc: N_LC, rc_correct: rcC, n_rc: N_RC,
+        fat: fat, sure: sure, wrong_sure: wrongSure,
+        pct_l: pctL, pct_m: pctM, pct_p: pctP,
+        secs: Math.min(86400, Math.round(spent)),
+        detail: detail,
+        ua: String(navigator.userAgent || "").slice(0, 300)
+      });
+    } catch (e) {}
+
     setText("shTitle", t.name);
     setText("shRange", pLo + "–" + pHi);
     el("shB1").style.width = pctL + "%";
@@ -1273,6 +1290,26 @@
     el("shB3").style.width = pctP + "%";
 
     runReveal(score100, pLo, pHi, fills);
+  }
+
+  /* ---------- 학원 통계 전송 ----------
+     결과가 나온 뒤 한 번만 보낸다. 실패해도 응시 화면에는 아무 영향이 없다.
+     저장되는 것은 결과 숫자와 입력한 이름뿐이고, 조회는 학원 관리자 계정만 할 수 있다. */
+  var STATS_URL = "https://lfzzqahnyshhmiyqzkdm.supabase.co/rest/v1/inbody_results";
+  var STATS_KEY = "sb_publishable_L8dn1JDRKKgGQqYrQcQomw_pIRNoku7";
+  var statsSent = false;
+  function sendStats(row) {
+    if (statsSent || !window.fetch) { return; }
+    statsSent = true;
+    try {
+      window.fetch(STATS_URL, {
+        method: "POST",
+        headers: { "apikey": STATS_KEY, "content-type": "application/json", "Prefer": "return=minimal" },
+        body: JSON.stringify(row),
+        keepalive: true,
+        mode: "cors"
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   /* ---------- 연출 ---------- */
