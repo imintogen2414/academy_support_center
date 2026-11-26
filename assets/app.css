@@ -1831,3 +1831,35 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .idea-cm-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
 .idea-cm-form textarea { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); resize: vertical; }
 @media (max-width: 640px) { .idea-cm-form { grid-template-columns: 1fr; } }
+
+/* 원생 명단에서 바로 넣기 · 고치기 (.stu-add · .inl) */
+.stu-table .tr.sv { grid-template-columns: 1.1fr 1fr 1.6fr 1.4fr 210px; }
+.stu-table .tr.sv > .btns { flex-wrap: wrap; justify-content: flex-end; }
+.stu-add { background: var(--blue-50); border-radius: 12px; margin: 4px 0; }
+.stu-add input { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); }
+.stu-add input:focus, .inl-in:focus { outline: 2px solid var(--blue-500); outline-offset: 0; border-color: transparent; }
+.inl { cursor: text; border-radius: 6px; padding: 1px 3px; margin: -1px -3px; border-bottom: 1px dashed transparent; }
+.inl:hover, .inl:focus-visible { border-bottom-color: var(--blue-500); background: var(--blue-50); }
+.inl-in { width: 100%; max-width: 220px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); }
+@media (max-width: 760px) { .stu-table .tr.sv { grid-template-columns: 1fr 1fr; } .stu-add > span:nth-child(4) { display: none; } .stu-add > .btns { grid-column: 1 / -1; } }
+
+/* 수강생 현황: 줄 · 칸이 밀리지 않게 진짜 표로 (.mg-st-t) + 위에 숫자 한 줄 */
+.mg-count { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; margin: 0 0 12px; }
+.mg-count > span { display: inline-flex; gap: 6px; align-items: baseline; font-size: 14px; }
+.mg-count b { font-size: 22px; }
+.mg-count .sub { color: var(--muted); font-size: 13px; margin-left: -12px; }
+.mg-count .neg b { color: var(--crit); }
+.mg-st-wrap { overflow-x: auto; }
+.mg-st-t { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 520px; }
+.mg-st-t th, .mg-st-t td { padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.mg-st-t thead th { font-size: 12.5px; color: var(--muted); font-weight: 700; text-align: center; background: var(--sunk); }
+.mg-st-t thead tr:first-child th { color: var(--ink); font-size: 13px; }
+.mg-st-t thead th.g-m { color: var(--blue-600); }
+.mg-st-t thead th.g-f { color: var(--r-student, #C1388C); }
+.mg-st-t tbody th { text-align: left; font-weight: 600; }
+.mg-st-t td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mg-st-t td.neg { color: var(--crit); font-weight: 700; }
+.mg-st-t .gl { border-left: 2px solid var(--line); }
+.mg-st-t tr.sum th, .mg-st-t tr.sum td { background: var(--blue-50); font-weight: 700; }
+.mg-kind-note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; }
+.mg-kind-note .icon { width: 15px; height: 15px; flex: none; margin-top: 2px; }
