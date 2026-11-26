@@ -28,6 +28,8 @@ const ICON = {
   shield: '<path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>',
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   star: '<path d="M12 2l3 6.5 7 .8-5.2 4.7 1.5 7L12 17.5 5.7 21l1.5-7L2 9.3l7-.8z"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+  heart: '<path d="M12 20s-7-4.4-9.2-8.6C1.2 8.2 3.2 4.5 6.7 4.5c2 0 3.3 1.1 5.3 3.2 2-2.1 3.3-3.2 5.3-3.2 3.5 0 5.5 3.7 3.9 6.9C19 15.6 12 20 12 20z"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.4.6 4 2.8 4 6"/>',
   brief: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
   grad: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
@@ -7107,6 +7109,186 @@ async function loadMyInquiries() {
   const { data } = await SB.from('inquiries').select('*').eq('user_id', USER.id).order('created_at', { ascending: false });
   INQS = data || [];
 }
+/* ================= 학원지원센터 개선창 (ideas · idea_comments · idea_likes) =================
+   쓰는 사람 누구나 "이렇게 바뀌면 좋겠어요"를 올리고 답글 · 좋아요. 익명 없이 이름 · 학원 · 역할 · 직책이 보여요(트리거가 채움).
+   진행 단계 · 센터 답변은 센터 관리자만. 글쓴이에게 답글 · 단계 바뀜 휴대폰 알림(private.push_idea). */
+const IDEA_CAT = { feature: '기능 제안', screen: '화면 · 사용', bug: '오류', etc: '기타' };
+const IDEA_ST = { new: ['mute', '접수'], review: ['info', '검토 중'], planned: ['warn', '만들 예정'], done: ['good', '반영 완료'], hold: ['crit', '보류'] };
+const IDEA_ROLE = { owner: '원장', teacher: '선생님', parent: '학부모', student: '학생', admin: '센터 관리자', partner: '파트너' };
+let IDEAS = null, IDEA_F = { sort: 'new', st: 'all', cat: 'all', mine: false }, DEMO_IDEAS = null;
+const ideaMe = () => USER ? USER.id : 'me';
+const isCenterAdm = () => ROLE === 'admin' || !!(CENTER && !CENTER.partner);
+function demoIdeas() {
+  if (DEMO_IDEAS) return DEMO_IDEAS;
+  const t = n => addDays(TODAY, -n) + 'T10:00:00';
+  const posts = [
+    { id: 'i1', author_name: '이하은', author_role: 'owner', academy_name: '푸른숲영어학원', category: 'feature', status: 'planned', title: '원생 명단에서 바로 빼고 · 넣고 · 고치기',
+      body: '수강생 등록 관리 쓰고 있는데, 명단 화면에서 바로 제외 · 추가 · 수정이 즉각적으로 되면 좋겠어요.', admin_note: '명단 줄에서 바로 고치기 · 그만두기를 만들고 있어요. 다음 업데이트에 넣을게요.', admin_note_by: '학원지원센터', created_at: t(2), likes: ['u1', 'u2', 'u3', 'u4'], comments: [['정수민', 'owner', '하늘영어학원', '', '저도 필요해요! 한 명씩 들어가서 고치는 게 번거로워요.', false, 1], ['학원지원센터', 'admin', '학원지원센터', '', '좋은 의견 감사해요. 명단 줄에서 바로 고치기 · 그만두기를 만들고 있어요.', true, 0]] },
+    { id: 'i2', author_name: '이하은', author_role: 'owner', academy_name: '푸른숲영어학원', category: 'screen', status: 'review', title: '수강생 현황 표에서 수강 중 · 취소 · 예정 칸이 밀려 보여요',
+      body: '관리표 위쪽 현황에서 칸이 밀려 있어서 순간 취소가 8명인 줄 알았어요. 그리고 신규와 재등록은 어떻게 구별되나요?', created_at: t(2), likes: ['u1', 'u2'], comments: [] },
+    { id: 'i3', author_name: '김민지', author_role: 'teacher', author_title: '매니저', academy_name: '하늘영어학원', category: 'feature', status: 'new', title: '숙제 사진을 학생이 직접 올리면 좋겠어요',
+      body: '오늘 할 일에 학생이 숙제 사진을 붙이면 선생님이 확인 표시만 하면 될 것 같아요.', created_at: t(4), likes: ['u3'], comments: [['박서준', 'parent', '하늘영어학원', '', '학부모 입장에서도 아이가 숙제를 냈는지 보이면 좋겠어요.', false, 3]] },
+    { id: 'i4', author_name: '최유나', author_role: 'owner', academy_name: '별빛수학학원', category: 'bug', status: 'done', title: '휴대폰에서 시간표 칸이 겹쳐 보여요',
+      body: '아이폰에서 같은 시간에 수업이 두 개 있으면 글자가 겹쳤어요.', admin_note: '고쳤어요. 같은 시간 수업은 나란히 보여요.', admin_note_by: '학원지원센터', created_at: t(12), likes: ['u1', 'u5', 'u6'], comments: [] }
+  ];
+  DEMO_IDEAS = posts.map(p => ({ author_title: '', updated_at: null, ...p, user_id: p.author_name === ME.name ? 'me' : 'x',
+    _likes: p.likes, _comments: p.comments.map(([n, r, a, ti, b, adm, ago], i) => ({ id: `${p.id}c${i}`, idea_id: p.id, author_name: n, author_role: r, academy_name: a, author_title: ti, body: b, is_admin: adm, created_at: t(ago), user_id: n === ME.name ? 'me' : 'x' })) }));
+  return DEMO_IDEAS;
+}
+const ideaList = () => USER ? (IDEAS || []) : demoIdeas();
+async function loadIdeas() {
+  const [a, c, l] = await Promise.all([SB.from('ideas').select('*').order('created_at', { ascending: false }).limit(500),
+    SB.from('idea_comments').select('*').order('created_at').limit(5000), SB.from('idea_likes').select('idea_id, user_id').limit(20000)]);
+  if (a.error) { IDEAS = []; IDEAS_ERR = a.error; return; }
+  IDEAS_ERR = null;
+  IDEAS = (a.data || []).map(i => ({ ...i, _likes: (l.data || []).filter(x => x.idea_id === i.id).map(x => x.user_id), _comments: (c.data || []).filter(x => x.idea_id === i.id) }));
+}
+let IDEAS_ERR = null;
+const ideaWho = x => {
+  const role = IDEA_ROLE[x.author_role] || '';
+  return `<b>${esc(x.author_name || '이름 없음')}</b>${role ? ` <span class="muted">${role}</span>` : ''}${x.academy_name ? ` · ${esc(x.academy_name)}` : ''}${x.author_title ? ` · <span class="chip mute">${esc(x.author_title)}</span>` : ''}`;
+};
+const ideaDate = d => { const t = d ? new Date(d) : null; return t && !isNaN(t) ? `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : ''; };
+function ideasPage() {
+  if (USER && !IDEAS) { loadIdeas().then(() => { if (location.hash.startsWith('#ideas')) render(); }); return head('학원지원센터 개선창', '불러오는 중이에요…', ''); }
+  const all = ideaList(), F = IDEA_F;
+  let list = all.filter(i => (F.st === 'all' || i.status === F.st) && (F.cat === 'all' || i.category === F.cat) && (!F.mine || i.user_id === ideaMe()));
+  list = [...list].sort((a, b) => F.sort === 'like' ? b._likes.length - a._likes.length || String(b.created_at).localeCompare(String(a.created_at)) : String(b.created_at).localeCompare(String(a.created_at)));
+  const n = st => all.filter(i => i.status === st).length;
+  const add = `<button class="btn primary" data-act="ideaNew">${ic('plus')}개선 의견 올리기</button>`;
+  return head('학원지원센터 개선창', '"이렇게 바뀌면 좋겠어요"를 누구나 올려요. 이름 · 학원 · 역할이 함께 보이고, 답글과 좋아요로 의견을 모아요. 센터가 읽고 단계와 답변을 남겨요.', add) + `
+  ${IDEAS_ERR ? `<p class="hint">${ic('help')}<span>개선창을 아직 열 수 없어요 (${esc(dbErr(IDEAS_ERR))}). 센터에서 준비 중이에요.</span></p>` : ''}
+  <div class="filters">${[['new', '최신순'], ['like', '좋아요 많은 순']].map(([k, l]) => `<button class="${F.sort === k ? 'on' : ''}" data-idea-sort="${k}">${l}</button>`).join('')}<span class="sep"></span>
+    <button class="${F.mine ? 'on' : ''}" data-idea-mine>내가 쓴 글 ${all.filter(i => i.user_id === ideaMe()).length}</button></div>
+  <div class="filters">${[['all', `전체 ${all.length}`], ...Object.entries(IDEA_ST).map(([k, [, l]]) => [k, `${l} ${n(k)}`])].map(([k, l]) => `<button class="${F.st === k ? 'on' : ''}" data-idea-st="${k}">${l}</button>`).join('')}</div>
+  <div class="pick-chips idea-cats">${[['all', '모든 종류'], ...Object.entries(IDEA_CAT)].map(([k, l]) => `<button type="button" class="${F.cat === k ? 'on' : ''}" data-idea-cat="${k}">${l}</button>`).join('')}</div>
+  ${list.length ? `<div class="idea-list">${list.map(ideaCard).join('')}</div>` : `
+  <section class="card empty"><span class="tile-ic">${ic('bulb')}</span><h2>${all.length ? '여기에 해당하는 글이 없어요' : '아직 올라온 의견이 없어요'}</h2>
+    <p class="muted">쓰면서 불편했던 점 · 있으면 좋겠는 기능을 편하게 올려 주세요. 다른 분 글에 좋아요를 누르면 센터가 먼저 살펴봐요.</p>${add}</section>`}`;
+}
+function ideaCard(i) {
+  const [c, l] = IDEA_ST[i.status] || IDEA_ST.new, liked = i._likes.includes(ideaMe());
+  return `<article class="card idea-card">
+    <a class="idea-main" href="#ideas/${i.id}">
+      <div class="idea-top"><span class="chip ${c}">${l}</span><span class="chip mute">${IDEA_CAT[i.category] || ''}</span></div>
+      <h3>${esc(i.title)}</h3><p class="idea-body">${esc(i.body)}</p>
+      <div class="idea-who">${ideaWho(i)} <span class="muted small">· ${ideaDate(i.created_at)}</span></div>
+      ${i.admin_note ? `<div class="idea-ans">${ic('chat')}<span><b>센터 답변</b> ${esc(i.admin_note)}</span></div>` : ''}
+    </a>
+    <div class="idea-acts"><button type="button" class="idea-like ${liked ? 'on' : ''}" data-idea-like="${i.id}" aria-pressed="${liked}">${ic('heart')}좋아요 ${i._likes.length}</button>
+      <a class="idea-cm" href="#ideas/${i.id}">${ic('chat')}답글 ${i._comments.length}</a></div>
+  </article>`;
+}
+function ideaDetail(id) {
+  if (USER && !IDEAS) { loadIdeas().then(() => { if (location.hash.startsWith('#ideas')) render(); }); return '<p class="muted">불러오는 중이에요…</p>'; }
+  const i = ideaList().find(x => x.id === id);
+  if (!i) return `<section class="card empty"><h2>글을 찾을 수 없어요</h2><p class="muted">지워졌을 수 있어요.</p><a class="btn" href="#ideas">개선창으로</a></section>`;
+  const [c, l] = IDEA_ST[i.status] || IDEA_ST.new, liked = i._likes.includes(ideaMe()), mine = i.user_id === ideaMe(), adm = isCenterAdm();
+  return `<section class="card idea-one">
+    <div class="idea-top"><span class="chip ${c}">${l}</span><span class="chip mute">${IDEA_CAT[i.category] || ''}</span><span style="flex:1"></span>
+      ${mine ? `<button class="btn sm" data-idea-edit="${i.id}">${ic('pen')}고치기</button>` : ''}${mine || adm ? `<button class="btn sm" data-idea-del="${i.id}">지우기</button>` : ''}</div>
+    <h1 class="idea-h">${esc(i.title)}</h1>
+    <div class="idea-who">${ideaWho(i)} <span class="muted small">· ${ideaDate(i.created_at)}${i.updated_at ? ' · 고침' : ''}</span></div>
+    <p class="idea-full">${esc(i.body)}</p>
+    <div class="idea-acts"><button type="button" class="idea-like ${liked ? 'on' : ''}" data-idea-like="${i.id}" aria-pressed="${liked}">${ic('heart')}좋아요 ${i._likes.length}</button></div>
+    ${i.admin_note ? `<div class="idea-ans">${ic('chat')}<span><b>센터 답변</b>${i.admin_note_at ? ` <span class="muted small">${ideaDate(i.admin_note_at)}</span>` : ''}<br>${esc(i.admin_note)}</span></div>` : ''}
+  </section>
+  ${adm ? `<section class="card"><div class="card-head"><h2>센터 관리자 · 단계와 답변</h2></div>
+    <form id="ideaAdm" class="idea-adm"><div class="pick-chips">${Object.entries(IDEA_ST).map(([k, [, t]]) => `<label><input type="radio" name="st" value="${k}" ${i.status === k ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
+      <label class="f">센터 답변 (글쓴이 · 모두에게 보여요)<textarea name="note" rows="3" maxlength="2000" placeholder="예: 좋은 의견 감사해요. 다음 업데이트에 넣을게요.">${esc(i.admin_note || '')}</textarea></label>
+      <div class="acts"><span style="flex:1"></span><button class="btn primary" data-idea-save="${i.id}">단계 · 답변 저장</button></div></form></section>` : ''}
+  <section class="card"><div class="card-head"><h2>답글 <span class="muted small">${i._comments.length}개</span></h2></div>
+    ${i._comments.length ? `<ol class="idea-cms">${i._comments.map(m => `<li class="${m.is_admin ? 'adm' : ''}"><div class="idea-who">${ideaWho(m)}${m.is_admin ? ' <span class="chip info">센터</span>' : ''} <span class="muted small">· ${ideaDate(m.created_at)}</span>
+        ${m.user_id === ideaMe() || adm ? `<button type="button" class="link-btn" data-idea-cdel="${m.id}" data-idea-of="${i.id}">지우기</button>` : ''}</div><p>${esc(m.body)}</p></li>`).join('')}</ol>` : '<p class="muted small" style="margin:0 0 10px">첫 답글을 남겨 주세요.</p>'}
+    <form id="ideaCm" class="idea-cm-form"><textarea name="body" rows="2" maxlength="1000" placeholder="답글 쓰기 · 이름과 학원이 함께 보여요"></textarea><button class="btn primary" data-idea-cm="${i.id}">답글 올리기</button></form>
+  </section>`;
+}
+function ideaDialog(edit) {
+  const d = dialogEl(), cat = edit ? edit.category : 'feature';
+  const me = `${esc(ME.name || '')} ${IDEA_ROLE[ROLE] || ''}${REAL && REAL.academy ? ` · ${esc(REAL.academy.name)}` : ROLE === 'admin' ? ' · 학원지원센터' : ''}${MY_TITLE ? ` · ${esc(MY_TITLE)}` : ''}`;
+  d.innerHTML = `<form method="dialog" class="dlg" id="ideaForm" novalidate>
+    <h2>${edit ? '개선 의견 고치기' : '개선 의견 올리기'}</h2>
+    <p class="muted small" style="margin:-6px 0 0">익명이 아니에요 · <b>${me}</b>(으)로 모두에게 보여요</p>
+    <div class="f">종류<div class="pick-chips">${Object.entries(IDEA_CAT).map(([k, t]) => `<label><input type="radio" name="cat" value="${k}" ${k === cat ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div></div>
+    <label class="f">제목<input name="title" maxlength="100" value="${edit ? esc(edit.title) : ''}" placeholder="예: 원생 명단에서 바로 고치기"></label>
+    <label class="f">내용<textarea name="body" rows="6" maxlength="3000" placeholder="어떤 화면에서 무엇이 불편했는지, 어떻게 바뀌면 좋을지 적어 주세요.">${edit ? esc(edit.body) : ''}</textarea></label>
+    <p class="msg" id="dlgMsg" hidden></p>
+    <div class="acts"><span style="flex:1"></span><button type="button" class="btn" id="dlgCancel">닫기</button><button class="btn primary">${edit ? '저장' : '올리기'}</button></div></form>`;
+  d.showModal();
+  const f = $('#ideaForm'), el = f.elements, fail = t => { const m = $('#dlgMsg'); m.textContent = t; m.hidden = false; };
+  $('#dlgCancel').onclick = () => d.close();
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const row = { category: el.cat.value, title: el.title.value.trim(), body: el.body.value.trim() };
+    if (!row.title) return fail('제목을 적어 주세요.');
+    if (!row.body) return fail('내용을 적어 주세요.');
+    if (!USER) {
+      if (edit) Object.assign(edit, row, { updated_at: new Date().toISOString() });
+      else demoIdeas().unshift({ ...row, id: `i${Date.now()}`, user_id: 'me', author_name: ME.name, author_role: ROLE, author_title: MY_TITLE || '', academy_name: DATA.academy.name, status: 'new', created_at: new Date().toISOString(), _likes: [], _comments: [] });
+      d.close(); render(); return toast(`${edit ? '고쳤어요' : '올렸어요'} (예시라서 새로 고치면 사라져요)`);
+    }
+    const btn = f.querySelector('.btn.primary'); btn.disabled = true;
+    const r = edit ? await SB.from('ideas').update(row).eq('id', edit.id) : await SB.from('ideas').insert({ ...row, academy_id: REAL && REAL.academy ? REAL.academy.id : null }).select('id').single();
+    btn.disabled = false;
+    if (r.error) return fail(dbErr(r.error));
+    await loadIdeas(); d.close();
+    if (!edit && r.data) location.hash = `#ideas/${r.data.id}`; else render();
+    toast(edit ? '고쳤어요' : '올렸어요 · 센터가 읽고 답변을 남겨요');
+  };
+}
+const ideaById = id => ideaList().find(x => x.id === id);
+async function ideaLike(id) {
+  const i = ideaById(id); if (!i) return;
+  const on = i._likes.includes(ideaMe());
+  if (!USER) { i._likes = on ? i._likes.filter(x => x !== 'me') : [...i._likes, 'me']; return render(); }
+  const r = on ? await SB.from('idea_likes').delete().eq('idea_id', id).eq('user_id', USER.id) : await SB.from('idea_likes').insert({ idea_id: id });
+  if (r.error) return toast(dbErr(r.error));
+  i._likes = on ? i._likes.filter(x => x !== USER.id) : [...i._likes, USER.id]; render();
+}
+function bindIdeas() {
+  on('[data-act="ideaNew"]', () => ideaDialog(null));
+  on('[data-idea-sort]', b => { IDEA_F.sort = b.dataset.ideaSort; render(); });
+  on('[data-idea-st]', b => { IDEA_F.st = b.dataset.ideaSt; render(); });
+  on('[data-idea-cat]', b => { IDEA_F.cat = b.dataset.ideaCat; render(); });
+  on('[data-idea-mine]', () => { IDEA_F.mine = !IDEA_F.mine; render(); });
+  on('[data-idea-like]', (b, e) => { e.preventDefault(); ideaLike(b.dataset.ideaLike); });
+  on('[data-idea-edit]', b => ideaDialog(ideaById(b.dataset.ideaEdit)));
+  on('[data-idea-del]', async b => {
+    if (!confirm('이 글을 지울까요? 답글 · 좋아요도 함께 지워져요.')) return;
+    const id = b.dataset.ideaDel;
+    if (!USER) { DEMO_IDEAS = demoIdeas().filter(x => x.id !== id); location.hash = '#ideas'; return toast('지웠어요 (예시)'); }
+    const { error } = await SB.from('ideas').delete().eq('id', id);
+    if (error) return toast(dbErr(error));
+    await loadIdeas(); location.hash = '#ideas'; toast('지웠어요');
+  });
+  on('[data-idea-cm]', async (b, e) => {
+    e.preventDefault();
+    const id = b.dataset.ideaCm, ta = $('#ideaCm').elements.body, body = ta.value.trim();
+    if (!body) return ta.focus();
+    if (!USER) { ideaById(id)._comments.push({ id: `c${Date.now()}`, idea_id: id, user_id: 'me', author_name: ME.name, author_role: ROLE, author_title: MY_TITLE || '', academy_name: DATA.academy.name, is_admin: false, body, created_at: new Date().toISOString() }); render(); return toast('답글을 달았어요 (예시)'); }
+    b.disabled = true;
+    const { error } = await SB.from('idea_comments').insert({ idea_id: id, body, academy_id: REAL && REAL.academy ? REAL.academy.id : null });
+    b.disabled = false;
+    if (error) return toast(dbErr(error));
+    await loadIdeas(); render(); toast('답글을 달았어요');
+  });
+  on('[data-idea-cdel]', async b => {
+    if (!confirm('이 답글을 지울까요?')) return;
+    const i = ideaById(b.dataset.ideaOf);
+    if (!USER) { i._comments = i._comments.filter(m => m.id !== b.dataset.ideaCdel); return render(); }
+    const { error } = await SB.from('idea_comments').delete().eq('id', b.dataset.ideaCdel);
+    if (error) return toast(dbErr(error));
+    await loadIdeas(); render();
+  });
+  on('[data-idea-save]', async (b, e) => {
+    e.preventDefault();
+    const el = $('#ideaAdm').elements, row = { status: el.st.value, admin_note: el.note.value.trim() || null }, i = ideaById(b.dataset.ideaSave);
+    if (!USER) { Object.assign(i, row, { admin_note_at: new Date().toISOString() }); render(); return toast('저장했어요 (예시)'); }
+    const { error } = await SB.from('ideas').update(row).eq('id', i.id);
+    if (error) return toast(dbErr(error));
+    await loadIdeas(); render(); toast('단계 · 답변을 저장했어요 · 글쓴이에게 알림이 가요');
+  });
+}
 function helpPage() {
   if (INQS === null) { loadMyInquiries().then(() => { if (location.hash === '#help') render(); }); }
   const list = INQS || [];
@@ -8377,8 +8559,8 @@ function navHtml(area, badge) {
   const item = (id, label, icon) => `
     <a class="nav-item ${id === area ? 'on' : ''}" href="#${id}">${ic(icon)}<span>${label}</span>${badge[id] && (ROLE !== 'parent' || id === 'messages') ? `<span class="badge">${badge[id]}</span>` : id !== 'home' && hasNews(id) ? '<span class="ndot nav-dot" title="새 소식"></span>' : ''}</a>`;
   // 간단히 보기: 아래는 설정 · 학원 · 로그아웃 세 칸 한 줄
-  const set = SIMPLE() ? `<div class="nav-foot"><a class="${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>${ROLE !== 'admin' && !SEEKER ? `<button type="button" data-act="switchAcad" title="학원 바꾸기 · 초대 코드 넣기">${ic('home')}<span>학원 · 코드</span></button>` : ''}<button type="button" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>` : `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
-    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `${can('invite') && MY && MY.members ? `<a class="nav-item" href="#members/invite">${ic('users')}<span>초대하기 (코드 · 링크)</span></a>` : ''}<button type="button" class="nav-item" data-act="joinAcad">${ic('plus')}<span>초대 코드 넣기</span></button><button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`;
+  const set = `<a class="nav-item idea-link ${area === 'ideas' ? 'on' : ''}" href="#ideas">${ic('bulb')}<span>학원지원센터 개선창</span></a>` + (SIMPLE() ? `<div class="nav-foot"><a class="${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>${ROLE !== 'admin' && !SEEKER ? `<button type="button" data-act="switchAcad" title="학원 바꾸기 · 초대 코드 넣기">${ic('home')}<span>학원 · 코드</span></button>` : ''}<button type="button" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>` : `<a class="nav-item set-link ${area === 'settings' ? 'on' : ''}" href="#settings">${ic('gear')}<span>설정</span></a>
+    <div class="nav-acc">${ROLE !== 'admin' && !SEEKER ? `${can('invite') && MY && MY.members ? `<a class="nav-item" href="#members/invite">${ic('users')}<span>초대하기 (코드 · 링크)</span></a>` : ''}<button type="button" class="nav-item" data-act="joinAcad">${ic('plus')}<span>초대 코드 넣기</span></button><button type="button" class="nav-item" data-act="switchAcad">${ic('home')}<span>학원 · 역할 바꾸기</span></button>` : ''}<button type="button" class="nav-item" data-act="switchAcc">${ic('users')}<span>계정 전환</span></button><button type="button" class="nav-item" data-act="logoutNow">${ic('logout')}<span>로그아웃</span></button></div>`);
   if (SEEKER) return Object.entries(MY).map(([id, a]) => item(id, a.name, a.icon)).join('') + set;
   // 센터 관리자(학원 없이): 센터 관리 세부 메뉴를 종류별 묶음으로 바로
   if (ROLE === 'admin' && CENTER && !CENTER.partner) {
@@ -8857,6 +9039,7 @@ function resolve(parts) {
   if (aid === 'home' || !aid) return { html: home(), crumbs: [], area: 'home' };
   if (aid === 'guide') return { html: guidePage(), crumbs: [...crumbs, ['전체 메뉴 안내', '#guide']], area: 'guide' };
   if (aid === 'help' && (ROLE === 'owner' || ROLE === 'teacher')) return { html: helpPage(), crumbs: [...crumbs, ['센터에 문의하기', '#help']], area: 'help' };
+  if (aid === 'ideas') { const t = sid && ideaById(sid); return { html: sid ? ideaDetail(sid) : ideasPage(), crumbs: [...crumbs, ['학원지원센터 개선창', '#ideas'], ...(sid ? [[t ? t.title : '글', `#ideas/${sid}`]] : [])], area: 'ideas' }; }
   if (aid === 'settings') return { html: settingsPage(), crumbs: [...crumbs, ['설정', '#settings']], area: 'settings' };
   if (aid === 'services' && ROLE === 'owner') return { html: svcOverviewPage(), crumbs: [...crumbs, ['이용 중인 센터 지원', '#services']], area: 'services' };
   const a = MY[aid];
@@ -8996,7 +9179,7 @@ function render() {
     teacher: ['home', 'musts', 'undo', 'admin', 'members', 'teachers', 'attend', 'students', 'leads', 'messages', 'schedule', 'todos', 'reports', 'library', 'learn', 'jobs', 'approvals', 'mou', 'promo', 'center', 'help'], parent: ['home', 'kid', 'schedule', 'news', 'messages', 'library', 'abroad', 'center'], student: ['home', 'todos', 'messages', 'schedule', 'reports', 'records', 'attend', 'news', 'library', 'abroad', 'center'], admin: ['home', 'center', 'messages'], partner: ['home', 'promo', 'abroad', 'partners', 'messages']
   };
   const path = parts.join('/') || 'home';
-  const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
+  const isReal = path === 'members' || path === 'guide' || path === 'help' || path === 'settings' || path === 'ideas' || path.startsWith('ideas/') || (REAL_PAGES[ROLE] || []).some(p => path === p || path.startsWith(`${p}/`));
   const note = PROFILE && !isReal ? `<div class="demo-note">${ROLE === 'owner'
     ? '이 화면은 아직 예시예요.'
     : '지금 보이는 내용은 아직 예시예요. 실제 데이터는 차례로 연결돼요.'}</div>` : '';
@@ -9012,6 +9195,7 @@ function on(sel, fn) { document.querySelectorAll(sel).forEach(el => el.onclick =
 
 function bind() {
   bindR18();
+  bindIdeas();
   // 원생 명단 · 초대 코드 (실제 데이터)
   on('[data-act="roster"]', rosterDialog);
   on('[data-stu-st]', b => { STU_ST = b.dataset.stuSt; render(); });
