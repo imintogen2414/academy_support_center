@@ -5698,7 +5698,9 @@ function mgRows(m) {
     const my = inv.filter(i => i.student_id === x.id), fee = my.filter(i => !isBook(i)), book = my.filter(isBook), plan = planOf(x);
     const list = fee.length ? sum(fee, i => i.list_amount || i.amount) : null, amt = fee.length ? sum(fee, i => i.amount) : null, refund = sum(fee, i => i.refund || 0);
     const st = (x.status === 'left' && x.left_on && x.left_on <= to) || (fee.length && refund >= amt && refund > 0) ? '수강 취소' : x.course_from && x.course_from > to ? '수강 예정' : '수강 중';
-    const kind = !x.joined_on || x.joined_on >= from ? '신규' : '재등록';
+    // 신규 = 이번 달에 처음 온 학생, 재등록 = 그 전 달부터 다닌 학생(등록일이 지난달 이전이거나, 등록일이 비어도 지난달 이전 수강료 기록이 있으면)
+    const before = REAL.invoices.some(i => i.student_id === x.id && i.month < m && !isBook(i));
+    const kind = x.joined_on ? (x.joined_on >= from ? '신규' : '재등록') : before ? '재등록' : '신규';
     const days = x.course_from && x.course_to ? daysBetween(x.course_from, x.course_to) + 1 : null;
     return { s: x, fee, book, plan, list, amt, disc: list != null ? list - amt : null, refund, st, kind, label: st === '수강 중' ? kind : st,
       paid: fee.length > 0 && fee.every(i => i.paid_at), method: [...new Set(fee.filter(i => i.paid_at).map(i => i.method).filter(Boolean))].join('+'),
@@ -5716,7 +5718,8 @@ function mgSummary(rows) {
 }
 function mgView() {
   const m = STU_MONTH || TODAY.slice(0, 7), rows = mgRows(m), bill = can('billing'), sm = mgSummary(rows), cur = m === TODAY.slice(0, 7);
-  const sumRow = (t, x, cls = '') => `<div class="tr ${cls}"><span>${esc(t)}</span>${x.cnt.map(n => `<span class="num">${n || '<span class="muted">0</span>'}</span>`).join('')}${bill ? `<span class="num">${won(x.fee)}</span><span class="num">${won(x.book)}</span><span class="num">${won(x.disc)}</span><b class="num">${won(x.net)}</b>` : ''}</div>`;
+  const sumRow = (t, x, cls = '') => `<tr class="${cls}"><th scope="row">${esc(t)}</th>${x.cnt.map((n, k) => `<td class="num ${k % 3 === 1 && n ? 'neg' : ''} ${k === 3 ? 'gl' : ''}">${n || '<span class="muted">0</span>'}</td>`).join('')}${bill ? `<td class="num gl">${won(x.fee)}</td><td class="num">${won(x.book)}</td><td class="num">${won(x.disc)}</td><td class="num"><b>${won(x.net)}</b></td>` : ''}</tr>`;
+  const cnt = k => rows.filter(r => r.st === k).length, act = rows.filter(r => r.st === '수강 중');
   const feeTd = r => {
     if (!bill) return '<span class="muted small">-</span>';
     if (r.fee.length) return `<span class="nm-link num" data-edit-inv="${r.fee[0].id}" role="button" tabindex="0">${won(r.list)}</span>`;
@@ -5729,8 +5732,12 @@ function mgView() {
   <div class="mg-bar"><div class="pager"><button class="btn sm" data-mg-month="${shiftMonth(m, -1)}" aria-label="지난달">‹</button><b>${monthLabel(m)}</b><button class="btn sm" data-mg-month="${shiftMonth(m, 1)}" aria-label="다음 달">›</button>${cur ? '' : `<button class="btn sm ghost" data-mg-month="${TODAY.slice(0, 7)}">이번 달</button>`}</div>
     <span class="btns"><button class="btn sm" data-mg-xlsx="1">${ic('download')}${+m.slice(5)}월 관리표 받기</button><button class="btn sm" data-mg-xlsx="12">${ic('download')}12개월 한 파일로</button><button class="btn sm" data-import="students">${ic('upload')}관리표 파일로 넣기</button></span></div>
   <section class="card mg-sum"><div class="card-head"><h2>${+m.slice(5)}월 수강생 현황</h2><span class="sub">${rows.length}명${sm.total.none ? ` · 성별 안 적은 ${sm.total.none}명은 숫자에서 빠져요` : ''}</span></div>
-    <div class="table mg-st ${bill ? '' : 'nobill'}"><div class="tr th"><span>구분</span>${['남', '여'].flatMap(g => MG_ST.map(k => `<span>${g} · ${k.replace('수강 ', '')}</span>`)).join('')}${bill ? '<span>수강료</span><span>교재비</span><span>할인금액</span><span>총 납부금액</span>' : ''}</div>
-      ${sm.tracks.map(([t, x]) => sumRow(t, x)).join('')}${sumRow('합계', sm.total, 'sum')}</div></section>
+    <div class="mg-count"><span><b class="num">${cnt('수강 중')}</b>수강 중</span><span class="sub">신규 ${act.filter(r => r.kind === '신규').length} · 재등록 ${act.filter(r => r.kind === '재등록').length}</span><span class="${cnt('수강 취소') ? 'neg' : ''}"><b class="num">${cnt('수강 취소')}</b>수강 취소</span><span><b class="num">${cnt('수강 예정')}</b>수강 예정</span></div>
+    <div class="mg-st-wrap"><table class="mg-st-t">
+      <thead><tr><th rowspan="2" scope="col">구분</th><th colspan="3" scope="colgroup" class="g-m">남</th><th colspan="3" scope="colgroup" class="g-f gl">여</th>${bill ? '<th colspan="4" scope="colgroup" class="g-pay gl">결제 현황</th>' : ''}</tr>
+        <tr>${['남', '여'].flatMap((g, gi) => MG_ST.map((k, ki) => `<th scope="col" class="${gi && !ki ? 'gl' : ''}">${k.replace('수강 ', '')}</th>`)).join('')}${bill ? '<th scope="col" class="gl">수강료</th><th scope="col">교재비</th><th scope="col">할인</th><th scope="col">총 납부</th>' : ''}</tr></thead>
+      <tbody>${sm.tracks.map(([t, x]) => sumRow(t, x)).join('')}${sumRow('합계', sm.total, 'sum')}</tbody></table></div>
+    <p class="muted small mg-kind-note">${ic('help')}<span><b>신규</b>는 이번 달에 처음 온 학생, <b>재등록</b>은 지난달 이전부터 다닌 학생이에요. 원생의 <b>등록일</b>로 나누고, 등록일이 비어 있으면 지난달 이전 수강료 기록이 있으면 재등록이에요. 다르게 나오면 이름을 눌러 등록일을 고쳐 주세요.</span></p></section>
   <section class="card"><div class="card-head"><h2>${+m.slice(5)}월 수강생 정보 및 관리 현황</h2><span class="sub">이름을 누르면 정보, 수강료를 누르면 청구 · 할인 · 환불을 고쳐요</span></div>
   ${rows.length ? `<div class="mg-table ${bill ? '' : 'nobill'}">
     <div class="mg-tr th"><span>번호</span><span>원생</span><span>구분 · 반</span><span>수강 기간</span><span>상태</span>${bill ? '<span>수강료</span><span>할인</span><span>총 납부 · 결제</span><span>교재비</span><span>환불</span>' : ''}<span>비고</span></div>
@@ -5799,21 +5806,75 @@ function mgXlsx(n) {
   toast(`${months.length > 1 ? `${months.length}개월` : monthLabel(months[0])} 수강생 관리표를 만들었어요`);
 }
 
+// 원생 명단에서 바로: 맨 위 줄에 이름 · 반 · 연락처 적고 Enter → 바로 추가, 반 · 연락처 칸은 눌러서 바로 고치기, 줄마다 그만두기 · 다시 다니기
+const INL_LABEL = { class_name: '반', parent_name: '학부모 이름', parent_phone: '학부모 연락처', phone: '연락처' };
+const inl = (s, f, v, tel) => `<span class="inl" data-inl="${s.id}:${f}" role="button" tabindex="0" title="눌러서 ${INL_LABEL[f]} 고치기">${v ? esc(tel ? fmtPhone(v) : v) : `<span class="muted small">+ ${INL_LABEL[f]}</span>`}</span>`;
+function stuAddRow() {
+  return `<form class="tr sv stu-add" id="stuAddRow" autocomplete="off"><span><input name="n" maxlength="30" placeholder="${famOn() ? '학생' : '수강생'} 이름 *" aria-label="이름"></span>
+    <span><input name="c" maxlength="40" list="stuAddCls" placeholder="반" aria-label="반"><datalist id="stuAddCls">${allClassNames().map(c => `<option value="${esc(c)}">`).join('')}</datalist></span>
+    <span><input name="p" type="tel" maxlength="13" placeholder="${famOn() ? '학부모 연락처' : '연락처'}" aria-label="연락처"></span>
+    <span class="muted small">적고 Enter 누르면 바로 명단에 들어가요</span><span class="btns"><button class="btn sm primary">${ic('plus')}추가</button></span></form>`;
+}
+function bindRosterQuick() {
+  const f = $('#stuAddRow');
+  if (f) {
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const name = f.elements.n.value.trim(); if (!name) { f.elements.n.focus(); return toast('이름을 적어 주세요'); }
+      const ph = f.elements.p.value.trim() || null, row = { academy_id: REAL.academy.id, name, class_name: f.elements.c.value.trim() || null, joined_on: TODAY, ...(famOn() ? { parent_phone: ph } : { phone: ph }) };
+      const btn = f.querySelector('button'); btn.disabled = true;
+      const { error } = await SB.from('students').insert(row);
+      btn.disabled = false;
+      if (error) return toast(dbErr(error));
+      await loadStudents(); render(); toast(`${name} 학생을 명단에 넣었어요`);
+      const nf = $('#stuAddRow'); if (nf) { nf.elements.c.value = row.class_name || ''; nf.elements.n.focus(); } // 같은 반을 잇달아 넣기 좋게
+    };
+  }
+  document.querySelectorAll('[data-inl]').forEach(el => {
+    const open = () => {
+      if (el.querySelector('input')) return;
+      const [id, field] = el.dataset.inl.split(':'), s = REAL.allStudents.find(x => x.id === id); if (!s) return;
+      const tel = /phone/.test(field), old = s[field] || '';
+      el.innerHTML = `<input class="inl-in" value="${esc(old)}" ${tel ? 'type="tel" maxlength="13"' : `maxlength="40" ${field === 'class_name' ? 'list="stuAddCls"' : ''}`} aria-label="${INL_LABEL[field]}">`;
+      const inp = el.querySelector('input'); inp.focus(); inp.select();
+      let done = false;
+      const save = async () => {
+        if (done) return; done = true;
+        const v = inp.value.trim();
+        if (v === old) return render();
+        const { error } = await SB.from('students').update({ [field]: v || null }).eq('id', id);
+        if (error) { toast(dbErr(error)); return render(); }
+        await loadStudents(); render(); toast(`${s.name} · ${INL_LABEL[field]}을(를) 고쳤어요`);
+      };
+      inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { done = true; render(); } };
+      inp.onblur = save;
+    };
+    el.onclick = open; el.onkeydown = e => { if (e.key === 'Enter' && e.target === el) open(); };
+  });
+  const setSt = async (id, row, msg) => {
+    const { error } = await SB.from('students').update(row).eq('id', id);
+    if (error) return toast(dbErr(error));
+    await loadStudents(); render(); toast(msg);
+  };
+  on('[data-stu-quit]', b => { const s = REAL.allStudents.find(x => x.id === b.dataset.stuQuit); if (s && confirm(`${s.name} 학생을 오늘부로 그만둠으로 바꿀까요?\n명단에는 "그만둠"으로 남고, 위 되돌리기로 살릴 수 있어요. 날짜를 정하려면 "원생 정리"를 써 주세요.`)) setSt(s.id, { status: 'left', left_on: TODAY }, `${s.name} 학생을 그만둠으로 바꿨어요`); });
+  on('[data-stu-back]', b => { const s = REAL.allStudents.find(x => x.id === b.dataset.stuBack); if (s) setSt(s.id, { status: 'active', left_on: null }, `${s.name} 학생이 다시 다녀요`); });
+}
 function realStudentsPage() {
   const all = REAL.allStudents, inView = s => STU_ST === 'all' || (s.status || 'active') === STU_ST;
   const list = all.filter(s => inView(s) && stuMatch(STU_Q, s.name, s.class_name, s.parent_name, s.parent_phone, s.grade, s.memo)), canEdit = can('students'), bill = can('billing');
   const add = `${ROLE === 'owner' ? `<button class="btn" data-photo="students" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}명단 사진으로 넣기</button>` : ''}${canEdit ? `<button class="btn" data-act="roster">${ic('users')}원생 정리</button><button class="btn" data-act="quickStudents">${ic('plus')}여러 명 빠르게 넣기</button><button class="btn" data-import="students" title="엑셀에 적어 둔 명단을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button>` : ''}${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="parent">${ic('chat')}단체 문자</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
   const by = x => x.added_by_role === 'teacher' ? `<span class="d small" style="display:block;margin-top:2px">${esc(x.added_by_name || '강사')} 선생님이 추가</span>` : '';
   const body = (all.length ? rosterSummary() + stuStatusBar() : '') + (list.length ? stuFilterBar(allClassNames(), list.length) + `
-  <section class="card"><div class="table">
+  <section class="card"><div class="table stu-table">
     <div class="tr th sv"><span>${famOn() ? '학생' : '수강생'}</span><span>반</span><span>${famOn() ? '학부모' : '연락처'}</span><span>${bill ? `수강료 · ${+TODAY.slice(5, 7)}월` : '메모'}</span><span></span></div>
+    ${canEdit ? stuAddRow() : ''}
     ${list.map(s => `
       <div class="tr sv ${(s.status || 'active') === 'left' ? 'gone' : ''}">
         <span><a class="nm-link" href="#${stuPath()}/${s.id}"><b>${esc(s.name)}</b></a> <span class="muted small">${esc(s.grade || '')}</span>${stuStChip(s)}${noteChip(s.id)}${checkChip(s.id)}${canEdit ? by(s) : ''}</span>
-        <span>${esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
-        <span>${famOn() ? `${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>` : telLink(s.phone || s.parent_phone) || '-'}${canEdit && appOn() ? appLinked(s.id) : ''}</span>
+        <span>${canEdit ? inl(s, 'class_name', s.class_name) : esc(s.class_name || '-')}${planOf(s) ? `<span class="d small" style="display:block;margin-top:2px">${esc(planLabel(planOf(s)))}</span>` : ''}</span>
+        <span>${famOn() ? (canEdit ? `${inl(s, 'parent_name', s.parent_name)} ${inl(s, 'parent_phone', s.parent_phone, true)}` : `${esc(s.parent_name || '-')} <span class="muted small">${telLink(s.parent_phone)}</span>`) : canEdit ? inl(s, s.phone || !s.parent_phone ? 'phone' : 'parent_phone', s.phone || s.parent_phone, true) : telLink(s.phone || s.parent_phone) || '-'}${canEdit && appOn() ? appLinked(s.id) : ''}</span>
         ${bill ? feeCell(s) : `<span class="muted small">${esc(s.memo || '')}</span>`}
-        <span class="btns">${canEdit && appOn() ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button>` : ''}<button class="btn sm" data-edit-student="${s.id}">수정</button></span>
+        <span class="btns">${canEdit && appOn() ? `<button class="btn sm" data-link-student="${s.id}">앱 연결</button>` : ''}<button class="btn sm" data-edit-student="${s.id}">수정</button>${canEdit ? ((s.status || 'active') === 'active' ? `<button class="btn sm ghost" data-stu-quit="${s.id}" title="오늘부로 그만둠 · 명단에는 남아요">그만두기</button>` : `<button class="btn sm ghost" data-stu-back="${s.id}">다시 다니기</button>`) : ''}</span>
       </div>`).join('')}
   </div></section>` : all.length ? stuFilterBar(allClassNames(), 0) + `<section class="card empty"><h2>찾는 학생이 없어요</h2><p class="muted">다른 이름이나 반으로 찾아보세요.</p></section>`
   : `
@@ -9196,6 +9257,7 @@ function on(sel, fn) { document.querySelectorAll(sel).forEach(el => el.onclick =
 function bind() {
   bindR18();
   bindIdeas();
+  if (REAL && REAL.allStudents) bindRosterQuick();
   // 원생 명단 · 초대 코드 (실제 데이터)
   on('[data-act="roster"]', rosterDialog);
   on('[data-stu-st]', b => { STU_ST = b.dataset.stuSt; render(); });
