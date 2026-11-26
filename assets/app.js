@@ -5867,8 +5867,8 @@ function bindRosterQuick() {
 }
 function realStudentsPage() {
   const all = REAL.allStudents, inView = s => STU_ST === 'all' || (s.status || 'active') === STU_ST;
-  const list = all.filter(s => inView(s) && stuMatch(STU_Q, s.name, s.class_name, s.parent_name, s.parent_phone, s.grade, s.memo)), canEdit = can('students'), bill = can('billing');
-  const add = `${ROLE === 'owner' ? `<button class="btn" data-photo="students" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}명단 사진으로 넣기</button>` : ''}${canEdit ? `<button class="btn" data-act="roster">${ic('users')}원생 정리</button><button class="btn" data-act="quickStudents">${ic('plus')}여러 명 빠르게 넣기</button><button class="btn" data-import="students" title="엑셀에 적어 둔 명단을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button>` : ''}${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="parent">${ic('chat')}단체 문자</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
+  const list = all.filter(s => inView(s) && stuMatch(STU_Q, s.name, s.class_name, s.parent_name, s.parent_phone, s.grade, s.memo)), canEdit = ROLE === 'owner' || ROLE === 'teacher', bill = can('billing');
+  const add = `${ROLE === 'owner' ? `<button class="btn" data-photo="students" title="사진을 찍으면 무료로 읽어 표로 채워요">${ic('image')}명단 사진으로 넣기</button>` : ''}${canEdit ? `<button class="btn" data-act="roster">${ic('users')}원생 정리</button><button class="btn" data-act="quickStudents">${ic('plus')}여러 명 빠르게 넣기</button>` : ''}${can('students') ? `<button class="btn" data-import="students" title="엑셀에 적어 둔 명단을 여기로 넣어요">${ic('upload')}엑셀 · 넘버스로 넣기</button>` : ''}${ROLE === 'owner' || can('notices') ? `<button class="btn" data-act="sms" data-src="parent">${ic('chat')}단체 문자</button>` : ''}<button class="btn primary" data-act="addStudent">${ic('plus')}원생 추가</button>`;
   const by = x => x.added_by_role === 'teacher' ? `<span class="d small" style="display:block;margin-top:2px">${esc(x.added_by_name || '강사')} 선생님이 추가</span>` : '';
   const body = (all.length ? rosterSummary() + stuStatusBar() : '') + (list.length ? stuFilterBar(allClassNames(), list.length) + `
   <section class="card"><div class="table stu-table">
@@ -10332,7 +10332,7 @@ async function boot() {
       can('billing') || can('finance') ? loadInvoices() : null, can('finance') ? loadExpenses() : null, can('finance') ? loadIncomes() : null, can('finance') ? loadFixed() : null, can('finance') ? loadAccounts() : null,
       can('paper') ? loadPaperwork() : null, can('payroll') ? loadPayroll() : null, can('hire') ? loadJobs() : null,
       can('staff') ? loadTeacherClasses() : null, can('invite') || can('staff') ? loadInvite() : null,
-      can('students') ? loadFamilyMembers() : null, can('notices') ? loadNotices() : null]);
+      appOn() ? loadFamilyMembers() : null, can('notices') ? loadNotices() : null]);
     if (ROLE === 'teacher') { MY = teacherMenus(); if (REAL.cnews.length) MY.cnews = CNEWS_AREA; }
     if (ROLE === 'parent' || ROLE === 'student') { await loadFamily(); MY = { ...FAMILY_AREAS[ROLE] }; if (!svcOn('mou')) delete MY.abroad; }
     await Promise.all([loadAbroad(), loadSchedule(), loadTodos(), loadReports(), loadLibrary(), loadSeen(), loadPeopleCounts(), loadAppRecs()]);
