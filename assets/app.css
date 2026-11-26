@@ -1863,3 +1863,15 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .mg-st-t tr.sum th, .mg-st-t tr.sum td { background: var(--blue-50); font-weight: 700; }
 .mg-kind-note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; }
 .mg-kind-note .icon { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+
+/* 학원 · 코드 창: 지금 학원 초대 코드 (.mc-) */
+.mc-box { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 12px 0 4px; display: grid; gap: 8px; }
+.mc-box h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.mc-box h3 .icon { width: 16px; height: 16px; color: var(--blue-600); }
+.mc-list { display: grid; gap: 6px; }
+.mc-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.mc-row:first-child { border-top: 0; }
+.mc-row .who { font-size: 13px; color: var(--muted); font-weight: 600; }
+.mc-row b { font-size: 16px; letter-spacing: .06em; }
+.mc-row .btns { display: flex; gap: 6px; }
+@media (max-width: 560px) { .mc-row { grid-template-columns: 1fr auto; } .mc-row .btns { grid-column: 1 / -1; } }

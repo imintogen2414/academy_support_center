@@ -11547,9 +11547,10 @@ function memRow(m, cur) {
 function acadSwitchDialog() {
   const d = dialogEl(), list = memsList();
   d.innerHTML = `<div class="dlg">
-    <h2>학원 · 역할 바꾸기</h2>
+    <h2>학원 · 코드</h2>
     <p class="muted small" style="margin:-6px 0 0">한 아이디로 여러 학원을 쓸 수 있어요. 학원마다 역할이 따로예요(예: A학원 원장 · B학원 원장 · C학원 학부모). 누르면 그 학원 화면으로 바로 바뀌어요.${USER ? '' : ' <b>예시 계정: 눌러서 바꿔 보세요(이 창에서만).</b>'}</p>
     <div class="acc-list">${list.map(m => memRow(m, m.academy_id === curAcadId() && !m.suspended)).join('')}</div>
+    ${myCodesBox()}
     <div class="ms-add">
       <button type="button" class="btn primary" data-act="joinAcad">${ic('plus')}초대 코드 넣기</button>
       <button type="button" class="btn" data-act="newAcad">${ic('home')}새 학원 열기</button>
@@ -11561,6 +11562,20 @@ function acadSwitchDialog() {
   d.querySelectorAll('[data-go-acad]').forEach(b => b.onclick = () => USER ? goAcademy(b.dataset.goAcad) : demoGoAcad(b.dataset.goAcad));
   d.querySelector('[data-act="newAcad"]').onclick = newAcademyDialog;
   d.querySelector('[data-act="joinAcad"]').onclick = joinAcademyDialog;
+  d.querySelectorAll('[data-mc-copy]').forEach(b => b.onclick = () => copyText(b.dataset.mcCopy, `코드 ${b.dataset.mcCopy}를 복사했어요`));
+  d.querySelectorAll('[data-mc-send]').forEach(b => b.onclick = () => sendInvite(b.dataset.mcSend, b.dataset.kind));
+  d.querySelectorAll('[data-mc-go]').forEach(a => a.onclick = () => d.close());
+}
+// 학원 · 코드 창: 지금 학원의 초대 코드 (원장 · 초대 권한 선생님). 없으면 원장님께 받는 안내
+function myCodesBox() {
+  if (ROLE !== 'owner' && ROLE !== 'teacher') return '';
+  const name = REAL ? REAL.academy.name : DATA.academy.name;
+  if (!can('invite')) return `<div class="mc-box"><h3>${ic('users')}${esc(name)} 초대 코드</h3><p class="muted small" style="margin:0">초대 코드는 원장님(또는 초대 권한이 있는 선생님)이 볼 수 있어요. 필요하면 원장님께 받아 주세요.</p></div>`;
+  const codes = REAL ? REAL.codes || [] : [{ kind: 'owner', code: 'DEMO0WNR' }, { kind: 'teacher', code: 'DEMOTCHR' }, { kind: 'family', code: 'DEMOFAMY' }];
+  return `<div class="mc-box"><h3>${ic('users')}${esc(name)} 초대 코드</h3>
+    ${codes.length ? `<div class="mc-list">${codes.map(c => { const k = c.kind === 'family' && !famOn() ? 'adult' : c.kind; return `<div class="mc-row"><span class="who">${CODE_INFO[k] ? CODE_INFO[k][0] : esc(c.kind)}</span><b class="num">${esc(c.code)}</b>
+      <span class="btns"><button type="button" class="btn sm" data-mc-copy="${esc(c.code)}">${ic('copy')}복사</button><button type="button" class="btn sm primary" data-mc-send="${esc(c.code)}" data-kind="${k}">${ic('chat')}링크 보내기</button></span></div>`; }).join('')}</div>` : '<p class="muted small" style="margin:0">코드를 불러오지 못했어요. 초대 코드 화면에서 확인해 주세요.</p>'}
+    ${MY && MY.members ? '<a class="link-btn small" href="#members/invite" data-mc-go>초대 코드 화면에서 QR · 자세히 보기 ›</a>' : ''}</div>`;
 }
 /* ---------- 초대 코드 쉽게 넣기 ----------
    초대 링크 /join/코드(첫 화면이 받아서 가입 · 로그인) → 이 기기 localStorage `asc-invite`(7일)에 남겨 두면 앱이 열릴 때 저절로 들어가요.
