@@ -5686,7 +5686,10 @@ function rosterDialog() {
 /* ---------- 수강생 관리표: 원장님이 넘버스로 쓰던 "M월 수강생 정보 및 관리 현황" 그대로 ----------
    달마다 그 달 다닌 학생 + 청구서(수강료 · 할인 · 총 납부금액 · 결제방식 · 교재비 · 환불)를 한 줄에. 위에는 구분 × 남/여 × 수강 중/취소/예정 + 결제현황 합계.
    명단(students)과 수납(invoices)이 같은 줄이라, 여기서 고치면 수납 · 재정에도 그대로 이어져요. */
-let STU_VIEW = 'list', STU_MONTH = null;
+let STU_VIEW = 'list', STU_MONTH = null, MG_F = 'all';
+// 관리표 줄 순서 · 묶음: 수강 중(신규 → 재등록) → 수강 예정 → 수강 취소
+const MG_GROUPS = [['new', '수강 중 · 신규', r => r.st === '수강 중' && r.kind === '신규', 'good'], ['re', '수강 중 · 재등록', r => r.st === '수강 중' && r.kind === '재등록', 'mute'], ['plan', '수강 예정', r => r.st === '수강 예정', 'info'], ['cancel', '수강 취소', r => r.st === '수강 취소', 'crit']];
+const mgRank = r => MG_GROUPS.findIndex(g => g[2](r));
 const stuTracks = () => [...new Set([...(REAL ? REAL.allStudents.map(x => x.track) : []), ...(REAL ? REAL.plans.map(p => p.group_name) : []), '스파르타', '일반'].filter(Boolean))].slice(0, 8);
 const isBook = i => /교재/.test(i.title || '');
 const MG_ST = ['수강 중', '수강 취소', '수강 예정'];
@@ -5707,7 +5710,7 @@ function mgRows(m) {
       note: [...fee.map(i => i.discount_note), ...fee.filter(i => i.refund).map(i => `환불 ${i.refund_note || ''}`.trim())].filter(Boolean).join(' · '),
       bookAmt: book.length ? sum(book, i => i.amount) : null, bookPaid: book.length > 0 && book.every(i => i.paid_at),
       weeks: days ? `${Math.max(1, Math.round(days / 7))}주` : '', track: x.track || (plan && plan.group_name) || '' };
-  }).sort((a, b) => (a.s.joined_on || '').localeCompare(b.s.joined_on || '') || a.s.name.localeCompare(b.s.name, 'ko'));
+  }).sort((a, b) => mgRank(a) - mgRank(b) || (a.s.joined_on || '').localeCompare(b.s.joined_on || '') || a.s.name.localeCompare(b.s.name, 'ko'));
 }
 // 위 요약: 구분마다 남/여 × 수강 중/취소/예정 + 결제현황
 function mgSummary(rows) {
@@ -5718,6 +5721,8 @@ function mgSummary(rows) {
 }
 function mgView() {
   const m = STU_MONTH || TODAY.slice(0, 7), rows = mgRows(m), bill = can('billing'), sm = mgSummary(rows), cur = m === TODAY.slice(0, 7);
+  const mgf = MG_F === 'all' ? () => true : MG_F === 'act' ? r => r.st === '수강 중' : (MG_GROUPS.find(g => g[0] === MG_F) || [, , () => true])[2];
+  const shown = rows.filter(mgf), smv = mgSummary(shown);
   const sumRow = (t, x, cls = '') => `<tr class="${cls}"><th scope="row">${esc(t)}</th>${x.cnt.map((n, k) => `<td class="num ${k % 3 === 1 && n ? 'neg' : ''} ${k === 3 ? 'gl' : ''}">${n || '<span class="muted">0</span>'}</td>`).join('')}${bill ? `<td class="num gl">${won(x.fee)}</td><td class="num">${won(x.book)}</td><td class="num">${won(x.disc)}</td><td class="num"><b>${won(x.net)}</b></td>` : ''}</tr>`;
   const cnt = k => rows.filter(r => r.st === k).length, act = rows.filter(r => r.st === '수강 중');
   const feeTd = r => {
@@ -5739,9 +5744,10 @@ function mgView() {
       <tbody>${sm.tracks.map(([t, x]) => sumRow(t, x)).join('')}${sumRow('합계', sm.total, 'sum')}</tbody></table></div>
     <p class="muted small mg-kind-note">${ic('help')}<span><b>신규</b>는 이번 달에 처음 온 학생, <b>재등록</b>은 지난달 이전부터 다닌 학생이에요. 원생의 <b>등록일</b>로 나누고, 등록일이 비어 있으면 지난달 이전 수강료 기록이 있으면 재등록이에요. 다르게 나오면 이름을 눌러 등록일을 고쳐 주세요.</span></p></section>
   <section class="card"><div class="card-head"><h2>${+m.slice(5)}월 수강생 정보 및 관리 현황</h2><span class="sub">이름을 누르면 정보, 수강료를 누르면 청구 · 할인 · 환불을 고쳐요</span></div>
-  ${rows.length ? `<div class="mg-table ${bill ? '' : 'nobill'}">
+  ${rows.length ? `<div class="filters mg-f">${[['all', '전체', () => true], ['act', '수강 중', r => r.st === '수강 중'], ...MG_GROUPS].map(([k, l, f]) => `<button class="${MG_F === k ? 'on' : ''}" data-mg-f="${k}">${l} ${rows.filter(f).length}</button>`).join('')}</div>` : ''}
+  ${shown.length ? `<div class="mg-table ${bill ? '' : 'nobill'}">
     <div class="mg-tr th"><span>번호</span><span>원생</span><span>구분 · 반</span><span>수강 기간</span><span>상태</span>${bill ? '<span>수강료</span><span>할인</span><span>총 납부 · 결제</span><span>교재비</span><span>환불</span>' : ''}<span>비고</span></div>
-    ${rows.map((r, n) => `<div class="mg-tr ${r.st === '수강 취소' ? 'gone' : ''}">
+    ${shown.map((r, n) => `${n === 0 || mgRank(shown[n - 1]) !== mgRank(r) ? (g => `<div class="mg-grp"><span class="chip ${g[3]}">${g[1]}</span><b>${shown.filter(g[2]).length}명</b></div>`)(MG_GROUPS[mgRank(r)] || MG_GROUPS[0]) : ''}<div class="mg-tr ${r.st === '수강 취소' ? 'gone' : ''}">
       <span class="num muted" data-l="번호">${n + 1}</span>
       <span data-l="원생"><span class="nm-link" data-edit-student="${r.s.id}" role="button" tabindex="0"><b>${esc(r.s.name)}</b></span> <small class="muted">${[r.s.gender, age(r.s.birth)].filter(Boolean).join(' · ')}</small><small class="d">${telLink(r.s.phone || r.s.parent_phone) || ''}${r.s.joined_on ? ` · ${md(r.s.joined_on)} 등록` : ''}${r.s.added_by_name ? ` · ${esc(r.s.added_by_name)}` : ''}</small></span>
       <span data-l="구분 · 반">${esc([r.track, r.s.class_name, r.s.session].filter(Boolean).join(' · ') || '-')}</span>
@@ -5752,8 +5758,8 @@ function mgView() {
       <span data-l="환불" class="num">${r.refund ? `<b class="neg">${won(r.refund)}</b>` : '<span class="muted">-</span>'}</span>` : ''}
       <span data-l="비고" class="small">${esc([r.note, r.s.memo].filter(Boolean).join(' · ')) || '<span class="muted">-</span>'}</span>
     </div>`).join('')}
-    ${bill ? `<div class="mg-tr sum"><span></span><span><b>합계 ${rows.length}명</b></span><span></span><span></span><span></span><span class="num"><b>${won(sm.total.fee)}</b></span><span class="num">-${won(sm.total.disc)}</span><span class="num"><b>${won(sum(rows, r => r.paid ? r.amt : 0))}</b> <small class="muted">받음</small></span><span class="num">${won(sm.total.book)}</span><span class="num">${won(sum(rows, r => r.refund))}</span><span></span></div>` : ''}
-  </div>` : `<p class="muted" style="margin:0">${monthLabel(m)}에 다닌 학생이 없어요. 원생을 추가하거나 다른 달을 골라 보세요.</p>`}</section>
+    ${bill ? `<div class="mg-tr sum"><span></span><span><b>${MG_F === 'all' ? '합계' : '이 묶음 합계'} ${shown.length}명</b></span><span></span><span></span><span></span><span class="num"><b>${won(smv.total.fee)}</b></span><span class="num">-${won(smv.total.disc)}</span><span class="num"><b>${won(sum(shown, r => r.paid ? r.amt : 0))}</b> <small class="muted">받음</small></span><span class="num">${won(smv.total.book)}</span><span class="num">${won(sum(shown, r => r.refund))}</span><span></span></div>` : ''}
+  </div>` : `<p class="muted" style="margin:0">${rows.length ? '이 묶음에는 학생이 없어요.' : `${monthLabel(m)}에 다닌 학생이 없어요. 원생을 추가하거나 다른 달을 골라 보세요.`}</p>`}</section>
   <p class="muted small">· 이 달에 청구서가 있거나, 다니는 중이고 등록일 · 수강 기간이 이 달에 걸친 학생이 나와요. 성별 · 구분 · 오전/오후 · 수강 기간은 원생 "수정 → 더 넣기"에서 적어요.<br>· 수강료 · 할인 · 납부 · 환불은 수납의 청구서 그대로라, 여기서 받거나 고치면 수납 · 재정에도 바로 반영돼요.</p>`;
 }
 // 관리표 엑셀(넘버스) — 위에 현황 요약(COUNTIFS · SUMIFS 수식) + 아래 표(총 납부금액 = 수강료 − 할인금액 수식) + 오른쪽 교재비 입금 O/X
@@ -9333,6 +9339,7 @@ function bind() {
   on('[data-fee-bill-m]', async b => { const [id, m] = b.dataset.feeBillM.split(':'), inv = feeInvoice(REAL.allStudents.find(x => x.id === id), m); if (!inv) return; const { error } = await SB.from('invoices').insert(inv); if (error) return toast(dbErr(error, '청구서를 만들지')); await loadInvoices(); render(); toast(`${monthLabel(m)} 청구서를 만들었어요`); });
   on('[data-stu-view]', b => { STU_VIEW = b.dataset.stuView; render(); });
   on('[data-mg-month]', b => { STU_MONTH = b.dataset.mgMonth; render(); });
+  on('[data-mg-f]', b => { MG_F = b.dataset.mgF; render(); });
   on('[data-mg-xlsx]', b => mgXlsx(+b.dataset.mgXlsx));
   // 청구 전인데 그 자리에서 받았을 때: 청구서를 만들면서 바로 납부 완료 (결제 방법은 지난번 고른 것)
   on('[data-fee-take]', async b => {

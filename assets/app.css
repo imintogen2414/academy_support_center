@@ -1875,3 +1875,9 @@ dialog:has(.bulk-dlg) { width: min(900px, calc(100vw - 32px)); }
 .mc-row b { font-size: 16px; letter-spacing: .06em; }
 .mc-row .btns { display: flex; gap: 6px; }
 @media (max-width: 560px) { .mc-row { grid-template-columns: 1fr auto; } .mc-row .btns { grid-column: 1 / -1; } }
+
+/* 관리표: 상태별 묶음 제목 줄 (.mg-grp) */
+.mg-grp { display: flex; align-items: center; gap: 8px; padding: 14px 4px 6px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.mg-grp b { color: var(--muted); font-weight: 600; }
+.mg-tr.th + .mg-grp { padding-top: 8px; }
+.mg-f { margin: -4px 0 8px; }
